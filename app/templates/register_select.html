@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sports League | Register</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="auth-body">
+    <main class="auth-card">
+        <section>
+            <h1>Register</h1>
+            <p class="subtitle">Choose your role to get started</p>
+        </section>
+
+        <div class="role-selection-page">
+            <a href="{{ url_for('register_player') }}" class="role-card">
+                <h3>Player</h3>
+                <p>Join as a player and showcase your skills</p>
+            </a>
+            <a href="{{ url_for('register_coach') }}" class="role-card">
+                <h3>Coach</h3>
+                <p>Lead and train teams to victory</p>
+            </a>
+            <a href="{{ url_for('register_referee') }}" class="role-card">
+                <h3>Referee</h3>
+                <p>Ensure fair play and officiate matches</p>
+            </a>
+            <a href="{{ url_for('register_team_owner') }}" class="role-card">
+                <h3>Team Owner</h3>
+                <p>Manage and own your team</p>
+            </a>
+            <a href="{{ url_for('register_tournament_admin') }}" class="role-card">
+                <h3>Tournament Admin</h3>
+                <p>Organize and manage tournaments</p>
+            </a>
+        </div>
+
+        <p class="signup">
+            Already have an account?
+            <a href="{{ url_for('login') }}" class="link">Log in</a>
+        </p>
+    </main>
+</body>
+</html>
+

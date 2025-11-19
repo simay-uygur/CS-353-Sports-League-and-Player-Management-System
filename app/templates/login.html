@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sports League | Login</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="auth-body">
+    <main class="auth-card">
+        <section>
+            <h1>Welcome Back</h1>
+            <p class="subtitle">Sign in to manage leagues, teams, and players.</p>
+        </section>
+        {% if message %}
+        <p class="form-message">{{ message }}</p>
+        {% endif %}
+
+        <form method="POST" action="{{ url_for('login') }}">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" placeholder="you@example.com" required>
+
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" placeholder="••••••••" required>
+
+            <div class="form-actions">
+                <label class="remember">
+                    <input type="checkbox" name="remember">
+                    Remember me
+                </label>
+                <a href="#" class="link">Forgot password?</a>
+            </div>
+
+            <button type="submit">Log in</button>
+        </form>
+        <p class="signup">
+            New to the platform?
+            <a href="{{ url_for('register_select') }}" class="link">Create an account</a>
+        </p>
+    </main>
+</body>
+</html>
+
