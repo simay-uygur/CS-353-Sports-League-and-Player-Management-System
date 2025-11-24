@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin | Create Tournament</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="dashboard-body">
+    <main class="dashboard-container">
+        <header class="admin-header">
+            <div>
+                <p class="eyebrow">Admin Console</p>
+                <h1>Create Tournament</h1>
+            </div>
+            <div class="admin-actions">
+                <div class="admin-icons">
+                    <span class="icon-button" title="Notifications">🔔</span>
+                    <span class="icon-button" title="Profile">👤</span>
+                </div>
+            </div>
+        </header>
+
+        <section class="create-layout">
+            <form class="create-card" method="POST" novalidate>
+                <div class="create-card-inner">
+                    <h2>Create Tournament</h2>
+
+                    {% if error_message %}
+                    <div class="form-message error">{{ error_message }}</div>
+                    {% else %}
+                    <p class="form-note">Fill out the details below to create a tournament. Select the teams you want to include—bracket rounds are generated automatically.</p>
+                    {% endif %}
+
+                    <label for="tournament_name">Tournament Name</label>
+                    <input type="text"
+                           id="tournament_name"
+                           name="tournament_name"
+                           placeholder="Tournament Name"
+                           required
+                           value="{{ form_data.get('tournament_name', '') }}">
+
+                    <label for="tournament_start_date">Tournament Start Date</label>
+                    <input type="date"
+                           id="tournament_start_date"
+                           name="tournament_start_date"
+                           required
+                           value="{{ form_data.get('tournament_start_date', '') }}">
+
+                    <label for="team-picker">Select Teams</label>
+                    <div class="team-picker-row">
+                        <div class="select-wrapper single">
+                            <select id="team-picker">
+                                <option value="" disabled selected>Pick a team to add</option>
+                                {% for team in teams %}
+                                <option value="{{ team.teamid }}"
+                                        {% if team.teamid|string in selected_team_ids %}disabled{% endif %}>
+                                    {{ team.teamname }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                    </div>
+
+                    <div id="selected-team-inputs">
+                        {% for team in teams %}
+                        {% if team.teamid|string in selected_team_ids %}
+                        <input type="hidden" name="team_ids" value="{{ team.teamid }}">
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+
+                    <div class="form-action-buttons">
+                        <button type="button"
+                                class="btn ghost leave-link"
+                                data-target="{{ url_for('admin.view_tournaments') }}"
+                                data-confirm-message="Leave without creating this tournament?">
+                            Cancel
+                        </button>
+                        <button type="submit" class="btn solid">Save</button>
+                    </div>
+                </div>
+            </form>
+
+            <aside class="team-list-card">
+                <div class="team-list-header">
+                    <div>
+                        <p class="eyebrow">Selected teams</p>
+                        <h3>Lineup</h3>
+                    </div>
+                    <div class="count-pill"><span id="selected-count-pill">{{ selected_team_ids|length }}</span></div>
+                </div>
+                <div id="selected-team-list" class="selected-team-list">
+                    {% for team in teams %}
+                    {% if team.teamid|string in selected_team_ids %}
+                    <button type="button" class="selected-chip" data-team-id="{{ team.teamid }}">
+                        <span class="chip-label">{{ team.teamname }}</span>
+                        <span class="chip-remove" aria-hidden="true">×</span>
+                        <span class="sr-only">Remove {{ team.teamname }}</span>
+                    </button>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+                <p id="selected-empty" class="empty-state subtle" {% if selected_team_ids|length %}style="display:none;"{% endif %}>
+                    No teams selected yet. Choose from the dropdown to build your bracket.
+                </p>
+
+            </aside>
+        </section>
+    </main>
+</body>
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const leaveTriggers = document.querySelectorAll(".leave-link");
+        const teamPicker = document.getElementById("team-picker");
+        const selectedCountEl = document.getElementById("selected-count");
+        const selectedCountPill = document.getElementById("selected-count-pill");
+        const form = document.querySelector(".create-card");
+        const selectedList = document.getElementById("selected-team-list");
+        const hiddenInputs = document.getElementById("selected-team-inputs");
+        const emptyState = document.getElementById("selected-empty");
+
+        leaveTriggers.forEach(function (el) {
+            el.addEventListener("click", function (event) {
+                const message = el.dataset.confirmMessage || "Leave without creating the tournament?";
+                if (!confirm(message)) {
+                    event.preventDefault();
+                    return;
+                }
+                if (el.dataset.target) {
+                    window.location.href = el.dataset.target;
+                }
+            });
+        });
+
+        function getSelectedCount() {
+            if (!hiddenInputs) return 0;
+            return hiddenInputs.querySelectorAll('input[name="team_ids"]').length;
+        }
+
+        function updateSelectedCount() {
+            const count = getSelectedCount();
+            if (selectedCountEl) selectedCountEl.textContent = count;
+            if (selectedCountPill) selectedCountPill.textContent = count;
+            if (emptyState) emptyState.style.display = count ? "none" : "block";
+        }
+
+        function addHiddenInput(teamId) {
+            if (!hiddenInputs || hiddenInputs.querySelector(`input[value="${teamId}"]`)) return;
+            const input = document.createElement("input");
+            input.type = "hidden";
+            input.name = "team_ids";
+            input.value = teamId;
+            hiddenInputs.appendChild(input);
+        }
+
+        function removeHiddenInput(teamId) {
+            if (!hiddenInputs) return;
+            const existing = hiddenInputs.querySelector(`input[value="${teamId}"]`);
+            if (existing) existing.remove();
+        }
+
+        function enableOption(teamId) {
+            if (!teamPicker) return;
+            const option = teamPicker.querySelector(`option[value="${teamId}"]`);
+            if (option) option.disabled = false;
+        }
+
+        function disableOption(teamId) {
+            if (!teamPicker) return;
+            const option = teamPicker.querySelector(`option[value="${teamId}"]`);
+            if (option) option.disabled = true;
+            teamPicker.value = "";
+        }
+
+        function addChip(teamId, teamName) {
+            if (!selectedList || selectedList.querySelector(`[data-team-id="${teamId}"]`)) return;
+            const chip = document.createElement("button");
+            chip.type = "button";
+            chip.className = "selected-chip";
+            chip.dataset.teamId = teamId;
+            chip.innerHTML = `
+                <span class="chip-label">${teamName}</span>
+                <span class="chip-remove" aria-hidden="true">×</span>
+                <span class="sr-only">Remove ${teamName}</span>
+            `;
+            chip.addEventListener("click", function () {
+                removeTeam(teamId);
+            });
+            selectedList.appendChild(chip);
+        }
+
+        function removeChip(teamId) {
+            if (!selectedList) return;
+            const chip = selectedList.querySelector(`[data-team-id="${teamId}"]`);
+            if (chip) chip.remove();
+        }
+
+        function addTeam(teamId, teamName) {
+            addHiddenInput(teamId);
+            addChip(teamId, teamName);
+            disableOption(teamId);
+            updateSelectedCount();
+        }
+
+        function removeTeam(teamId) {
+            removeHiddenInput(teamId);
+            removeChip(teamId);
+            enableOption(teamId);
+            updateSelectedCount();
+        }
+
+        if (teamPicker) {
+            teamPicker.addEventListener("change", function (event) {
+                const selectedOption = event.target.options[event.target.selectedIndex];
+                const teamId = selectedOption.value;
+                if (!teamId) return;
+                const teamName = selectedOption.textContent.trim();
+                addTeam(teamId, teamName);
+            });
+        }
+
+        if (leafRoundsInput) {
+            leafRoundsInput.addEventListener("input", updateComputedTeamCount);
+            updateComputedTeamCount();
+        }
+
+        if (selectedList) {
+            selectedList.querySelectorAll(".selected-chip").forEach(function (chip) {
+                chip.addEventListener("click", function () {
+                    const teamId = chip.dataset.teamId;
+                    removeTeam(teamId);
+                });
+            });
+        }
+
+        updateSelectedCount();
+
+        if (form) {
+            form.addEventListener("submit", function (event) {
+                const selectedCount = getSelectedCount();
+                if (selectedCount < 2) {
+                    event.preventDefault();
+                    alert("Please select at least two teams to create a tournament.");
+                    return;
+                }
+                if (selectedCount % 2 !== 0) {
+                    event.preventDefault();
+                    alert("Please select an even number of teams.");
+                }
+            });
+        }
+    });
+</script>
+</html>

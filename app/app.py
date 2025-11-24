@@ -1,14 +1,14 @@
-from flask import Flask, jsonify, render_template, request
 import os
-import psycopg2
+
+from flask import Flask, jsonify, render_template, request, session, redirect, url_for
+from db import get_connection
+
+from blueprints.admin import admin_bp
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-key")
 
-# ENV variable from docker-compose
-DATABASE_URL = os.environ.get("DATABASE_URL")
-
-def get_connection():
-    return psycopg2.connect(DATABASE_URL)
+app.register_blueprint(admin_bp)
 
 @app.route("/")
 def home():
@@ -21,6 +21,7 @@ def login():
         if email:
             message = f"Authentication for {email} is not set up yet, but the form is wired!"
             # TODO: Implement authentication logic
+            
         else:
             message = "Please enter a valid email address."
         return render_template("login.html", message=message)
@@ -75,6 +76,17 @@ def register_tournament_admin():
 @app.route("/register", methods=["GET"])
 def register_select():
     return render_template("register_select.html")
+
+
+@app.route("/debug/login-admin")
+def debug_login_admin():
+    """
+    Temporary helper to simulate an authenticated admin session.
+    Not intended for production deployments.
+    """
+    session["user_id"] = int(request.args.get("user_id", 1))
+    session["role"] = "admin"
+    return redirect(url_for("admin.view_tournaments"))
 
 
 @app.route("/users")

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin | View Tournaments</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="dashboard-body">
+    <main class="dashboard-container">
+        <header class="admin-header">
+            <div>
+                <p class="eyebrow">Admin Console</p>
+                <h1>View Tournaments</h1>
+            </div>
+            <div class="admin-actions">
+                <a class="add-tournament-link" href="{{ url_for('admin.create_tournament_form') }}">+ Add Tournament</a>
+                <div class="admin-icons">
+                    <span class="icon-button" title="Notifications">🔔</span>
+                    <span class="icon-button" title="Profile">👤</span>
+                </div>
+            </div>
+        </header>
+
+        <section class="tournaments-layout">
+            <aside class="tournament-sidebar">
+                <div class="sidebar-header">
+                    <h2>Tournaments</h2>
+                </div>
+                {% if tournaments %}
+                <ul class="tournament-list">
+                    {% for tournament in tournaments %}
+                    {% set is_selected = selected_tournament and tournament.tournamentid == selected_tournament.tournamentid %}
+                    <li>
+                        <a class="tournament-pill {{ 'selected' if is_selected }}" href="{{ url_for('admin.view_tournaments', tournament_id=tournament.tournamentid) }}">
+                            <span class="pill-avatar">A</span>
+                            <div>
+                                <p class="pill-name">{{ tournament.name }}</p>
+                                {% if is_selected %}
+                                <p class="pill-meta">Selected</p>
+                                {% else %}
+                                <p class="pill-meta">{{ tournament.size or 'Unknown size' }}</p>
+                                {% endif %}
+                            </div>
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="empty-state">No tournaments assigned to you yet.</p>
+                {% endif %}
+
+                <button type="button" class="add-match-btn" disabled>Add Match</button>
+            </aside>
+
+            <section class="bracket-panel">
+                {% if not selected_tournament %}
+                <div class="empty-bracket">Select a tournament to see the bracket.</div>
+                {% elif not matches_by_round %}
+                <div class="empty-bracket">No matches have been scheduled for {{ selected_tournament.name }}.</div>
+                {% else %}
+                <div class="bracket-card">
+                    {% for round_no, matches in matches_by_round.items() %}
+                    <div class="bracket-round">
+                        <h3>Round {{ round_no }}</h3>
+                        <div class="round-matches">
+                            {% for match in matches %}
+                            <div class="match-slot">
+                                <div class="match-team">
+                                    <span>{{ match.hometeamname or 'TBD' }}</span>
+                                    <span class="score">{{ match.hometeamscore if match.hometeamscore is not none else '-' }}</span>
+                                </div>
+                                <div class="match-team">
+                                    <span>{{ match.awayteamname or 'TBD' }}</span>
+                                    <span class="score">{{ match.awayteamscore if match.awayteamscore is not none else '-' }}</span>
+                                </div>
+                                <p class="match-time">{{ match.matchstartdatetime or 'Scheduled soon' }}</p>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </section>
+        </section>
+    </main>
+</body>
+</html>

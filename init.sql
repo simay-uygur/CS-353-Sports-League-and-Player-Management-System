@@ -225,7 +225,7 @@ CREATE TABLE TournamentMatch (
 );
 
 CREATE TABLE Tournament (
-  TournamentID INT,
+  TournamentID SERIAL,
   Name VARCHAR(255) UNIQUE,
   Size INT,
   PRIMARY KEY (TournamentID)
@@ -234,7 +234,7 @@ CREATE TABLE Tournament (
 CREATE TABLE Round (
   TournamentID INT,
   RoundNo INT,
-  T_MatchID INT NOT NULL UNIQUE,
+  T_MatchID INT UNIQUE,
   PRIMARY KEY (TournamentID, RoundNo),
   FOREIGN KEY (T_MatchID) REFERENCES TournamentMatch(MatchID) ON DELETE CASCADE,
   FOREIGN KEY (TournamentID) REFERENCES Tournament(TournamentID) ON DELETE CASCADE
@@ -307,3 +307,55 @@ CREATE TABLE RefereeMatchAttendance (
   FOREIGN KEY (MatchID) REFERENCES Match(MatchID) ON DELETE CASCADE,
   FOREIGN KEY (RefereeID) REFERENCES Referee(UsersID) ON DELETE CASCADE
 );
+
+-- Seed data ---------------------------------------------------------------
+INSERT INTO Users (
+  FirstName,
+  LastName,
+  Email,
+  HashedPassword,
+  Salt,
+  PasswordDate,
+  PhoneNumber,
+  BirthDate,
+  Role,
+  Nationality
+) VALUES
+  ('Ada', 'Admin', 'admin@example.com', REPEAT('a', 64), REPEAT('s', 32), NOW(), '555-0001', TO_DATE('1988-05-10','YYYY-MM-DD'), 'admin', 'USA'),
+  ('Olivia', 'Owner', 'owner1@example.com', REPEAT('b', 64), REPEAT('t', 32), NOW(), '555-0011', TO_DATE('1990-03-22','YYYY-MM-DD'), 'team_owner', 'Spain'),
+  ('Noah', 'Owner', 'owner2@example.com', REPEAT('c', 64), REPEAT('u', 32), NOW(), '555-0022', TO_DATE('1989-11-05','YYYY-MM-DD'), 'team_owner', 'Turkey'),
+  ('Mia', 'Owner', 'owner3@example.com', REPEAT('d', 64), REPEAT('v', 32), NOW(), '555-0033', TO_DATE('1992-07-14','YYYY-MM-DD'), 'team_owner', 'Italy');
+
+INSERT INTO Admin (UsersID)
+SELECT UsersID FROM Users WHERE Email = 'admin@example.com';
+
+INSERT INTO TeamOwner (UsersID, NetWorth)
+SELECT u.UsersID, data.net_worth
+FROM (
+  VALUES
+    ('owner1@example.com', 750000.000),
+    ('owner2@example.com', 680000.000),
+    ('owner3@example.com', 720000.000)
+) AS data(email, net_worth)
+JOIN Users u ON u.Email = data.email;
+
+INSERT INTO Team (
+  OwnerID,
+  TeamName,
+  EstablishedDate,
+  HomeVenue
+)
+SELECT u.UsersID,
+       data.team_name,
+       TO_DATE(data.established, 'YYYY-MM-DD'),
+       data.venue
+FROM (
+  VALUES
+    ('owner1@example.com', 'Lions FC', '2015-03-12', 'Sunrise Stadium'),
+    ('owner2@example.com', 'Falcons United', '2012-07-04', 'Riverfront Arena'),
+    ('owner3@example.com', 'Harbor City Waves', '2018-09-18', 'Bayfront Dome')
+) AS data(email, team_name, established, venue)
+JOIN Users u ON u.Email = data.email;
+
+
+
