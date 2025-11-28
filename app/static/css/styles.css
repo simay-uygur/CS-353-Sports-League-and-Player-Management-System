@@ -494,6 +494,7 @@ button:hover {
     border-radius: 24px;
     padding: 2rem;
     min-height: 420px;
+    overflow-x: auto; /* allow horizontal scroll */
 }
 
 .empty-bracket {
@@ -504,8 +505,11 @@ button:hover {
 
 .bracket-card {
     display: flex;
+    flex-direction: row-reverse; /* root on the right */
     gap: 1.5rem;
     overflow-x: auto;
+    padding-bottom: 0.5rem;
+    min-width: max-content; /* prevent wrapping and allow scroll */
 }
 
 .bracket-round {
@@ -860,11 +864,11 @@ button:hover {
 
 /* Bracket styling */
 .bracket-level {
-    margin-bottom: 2rem;
-    padding: 1.5rem;
+    min-width: 280px;
+    padding: 1.25rem;
     background: #f9fafc;
     border-radius: 12px;
-    border-left: 4px solid #2563eb;
+    border-right: 4px solid #2563eb;
 }
 
 .bracket-level h3 {
@@ -872,11 +876,12 @@ button:hover {
     margin-bottom: 1.5rem;
     color: #0d121c;
     font-size: 1.1rem;
+    text-align: right;
 }
 
 .level-rounds {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    display: flex;
+    flex-direction: column;
     gap: 1rem;
 }
 

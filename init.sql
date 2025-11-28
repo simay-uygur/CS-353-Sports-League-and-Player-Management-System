@@ -331,6 +331,11 @@ INSERT INTO Users (
   ('Olivia', 'Owner', 'owner1@example.com', REPEAT('b', 64), REPEAT('t', 32), NOW(), '555-0011', TO_DATE('1990-03-22','YYYY-MM-DD'), 'team_owner', 'Spain'),
   ('Noah', 'Owner', 'owner2@example.com', REPEAT('c', 64), REPEAT('u', 32), NOW(), '555-0022', TO_DATE('1989-11-05','YYYY-MM-DD'), 'team_owner', 'Turkey'),
   ('Mia', 'Owner', 'owner3@example.com', REPEAT('d', 64), REPEAT('v', 32), NOW(), '555-0033', TO_DATE('1992-07-14','YYYY-MM-DD'), 'team_owner', 'Italy'),
+  ('Elena', 'Owner', 'owner4@example.com', REPEAT('aa', 32), REPEAT('ww', 16), NOW(), '555-0044', TO_DATE('1987-02-19','YYYY-MM-DD'), 'team_owner', 'Germany'),
+  ('Kenan', 'Owner', 'owner5@example.com', REPEAT('bb', 32), REPEAT('xx', 16), NOW(), '555-0055', TO_DATE('1991-09-07','YYYY-MM-DD'), 'team_owner', 'France'),
+  ('Sara', 'Owner', 'owner6@example.com', REPEAT('cc', 32), REPEAT('yy', 16), NOW(), '555-0066', TO_DATE('1988-12-11','YYYY-MM-DD'), 'team_owner', 'Netherlands'),
+  ('Omar', 'Owner', 'owner7@example.com', REPEAT('dd', 32), REPEAT('zz', 16), NOW(), '555-0077', TO_DATE('1993-04-03','YYYY-MM-DD'), 'team_owner', 'Morocco'),
+  ('Priya', 'Owner', 'owner8@example.com', REPEAT('ee', 32), REPEAT('qq', 16), NOW(), '555-0088', TO_DATE('1986-08-29','YYYY-MM-DD'), 'team_owner', 'India'),
   -- Coaches
   ('John', 'Coach', 'coach1@example.com', REPEAT('e', 64), REPEAT('w', 32), NOW(), '555-0101', TO_DATE('1980-01-15','YYYY-MM-DD'), 'coach', 'USA'),
   ('Maria', 'Coach', 'coach2@example.com', REPEAT('f', 64), REPEAT('x', 32), NOW(), '555-0102', TO_DATE('1985-04-20','YYYY-MM-DD'), 'coach', 'Spain'),
@@ -350,7 +355,7 @@ INSERT INTO Users (
   ('Tournament', 'Admin', 'ta@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'tournament_admin', 'Local');
 
 INSERT INTO Admin (UsersID)
-SELECT UsersID FROM Users WHERE Email = 'admin@example.com';
+SELECT UsersID FROM Users WHERE Email IN ('admin@example.com', 'ta@gmail.com');
 
 INSERT INTO TeamOwner (UsersID, NetWorth)
 SELECT u.UsersID, data.net_worth
@@ -358,7 +363,12 @@ FROM (
   VALUES
     ('owner1@example.com', 750000.000),
     ('owner2@example.com', 680000.000),
-    ('owner3@example.com', 720000.000)
+    ('owner3@example.com', 720000.000),
+    ('owner4@example.com', 650000.000),
+    ('owner5@example.com', 700000.000),
+    ('owner6@example.com', 670000.000),
+    ('owner7@example.com', 640000.000),
+    ('owner8@example.com', 710000.000)
 ) AS data(email, net_worth)
 JOIN Users u ON u.Email = data.email;
 
@@ -376,7 +386,12 @@ FROM (
   VALUES
     ('owner1@example.com', 'Lions FC', '2015-03-12', 'Sunrise Stadium'),
     ('owner2@example.com', 'Falcons United', '2012-07-04', 'Riverfront Arena'),
-    ('owner3@example.com', 'Harbor City Waves', '2018-09-18', 'Bayfront Dome')
+    ('owner3@example.com', 'Harbor City Waves', '2018-09-18', 'Bayfront Dome'),
+    ('owner4@example.com', 'Alpine Strikers', '2014-05-21', 'Summit Park'),
+    ('owner5@example.com', 'Riviera Royals', '2016-11-02', 'Coastal Arena'),
+    ('owner6@example.com', 'Canal City Crew', '2013-08-14', 'Harborfront Field'),
+    ('owner7@example.com', 'Atlas Eagles', '2011-02-02', 'Mountain Crest'),
+    ('owner8@example.com', 'Silk Route FC', '2017-06-09', 'Bazaar Stadium')
 ) AS data(email, team_name, established, venue)
 JOIN Users u ON u.Email = data.email;
 
