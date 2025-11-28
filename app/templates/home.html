@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sports League | Home</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="auth-body">
+    <main class="auth-card">
+        <section>
+            <h1>Sports League Platform</h1>
+            <p class="subtitle">Manage tournaments, teams, and player roles.</p>
+        </section>
+
+        <div class="role-selection-page">
+            <a href="{{ url_for('register_select') }}" class="role-card">
+                <h3>Create an Account</h3>
+                <p>Register as player, coach, referee, owner, or admin.</p>
+            </a>
+            <a href="{{ url_for('login') }}" class="role-card">
+                <h3>Log In</h3>
+                <p>Already registered? Sign in to continue.</p>
+            </a>
+        </div>
+    </main>
+</body>
+</html>

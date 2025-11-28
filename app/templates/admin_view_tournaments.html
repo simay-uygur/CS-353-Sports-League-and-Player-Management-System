@@ -50,31 +50,56 @@
                 <p class="empty-state">No tournaments assigned to you yet.</p>
                 {% endif %}
 
-                <button type="button" class="add-match-btn" disabled>Add Match</button>
+                
             </aside>
 
             <section class="bracket-panel">
                 {% if not selected_tournament %}
                 <div class="empty-bracket">Select a tournament to see the bracket.</div>
                 {% elif not matches_by_round %}
-                <div class="empty-bracket">No matches have been scheduled for {{ selected_tournament.name }}.</div>
+                <div class="empty-bracket">No bracket has been created for {{ selected_tournament.name }}.</div>
                 {% else %}
                 <div class="bracket-card">
-                    {% for round_no, matches in matches_by_round.items() %}
-                    <div class="bracket-round">
-                        <h3>Round {{ round_no }}</h3>
-                        <div class="round-matches">
-                            {% for match in matches %}
-                            <div class="match-slot">
-                                <div class="match-team">
-                                    <span>{{ match.hometeamname or 'TBD' }}</span>
-                                    <span class="score">{{ match.hometeamscore if match.hometeamscore is not none else '-' }}</span>
+                    {% for level, rounds in matches_by_round.items() %}
+                    <div class="bracket-level">
+                        <h3>Level {{ level }}{% if level == 1 %} (Root){% endif %}</h3>
+                        <div class="level-rounds">
+                            {% for round_data in rounds %}
+                            <div class="round-box">
+                                <div class="round-header">
+                                    <p class="round-number">Round {{ round_data.roundno }}</p>
+                                    {% if round_data.parentroundno %}
+                                    <p class="round-meta">Parent: {{ round_data.parentroundno }}</p>
+                                    {% else %}
+                                    <p class="round-meta">ROOT</p>
+                                    {% endif %}
                                 </div>
-                                <div class="match-team">
-                                    <span>{{ match.awayteamname or 'TBD' }}</span>
-                                    <span class="score">{{ match.awayteamscore if match.awayteamscore is not none else '-' }}</span>
+                                
+                                {% if round_data.matchid %}
+                                <div class="round-match">
+                                    <div class="match-team">
+                                        <span>{{ round_data.hometeamname or 'TBD' }}</span>
+                                        <span class="score">{{ round_data.hometeamscore if round_data.hometeamscore is not none else '-' }}</span>
+                                    </div>
+                                    <div class="match-divider">vs</div>
+                                    <div class="match-team">
+                                        <span>{{ round_data.awayteamname or 'TBD' }}</span>
+                                        <span class="score">{{ round_data.awayteamscore if round_data.awayteamscore is not none else '-' }}</span>
+                                    </div>
+                                    <p class="match-time">{{ round_data.matchstartdatetime.strftime('%Y-%m-%d %H:%M') if round_data.matchstartdatetime else 'TBD' }}</p>
                                 </div>
-                                <p class="match-time">{{ match.matchstartdatetime or 'Scheduled soon' }}</p>
+                                {% else %}
+                                <div class="round-empty">
+                                    <p>No match</p>
+                                    {% if round_data.child1roundno or round_data.child2roundno %}
+                                    <p class="children-info">
+                                        Children: 
+                                        {% if round_data.child1roundno %}{{ round_data.child1roundno }}{% endif %}
+                                        {% if round_data.child2roundno %}, {{ round_data.child2roundno }}{% endif %}
+                                    </p>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
                             </div>
                             {% endfor %}
                         </div>

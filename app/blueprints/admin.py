@@ -15,7 +15,8 @@ admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
 @admin_bp.before_request
 def require_admin_session():
-    if session.get("user_id") is None or session.get("role") != "admin":
+    # Allow both full admins and tournament_admins to access admin routes
+    if session.get("user_id") is None or session.get("role") not in ("admin", "tournament_admin"):
         session["next"] = request.path
         return redirect(url_for("login"))
 
@@ -102,12 +103,19 @@ def _select_tournament(requested_id, tournaments):
 
 
 def _fetch_matches_grouped(tournament_id):
+    """
+    Fetch tournament bracket with all rounds (including those without matches).
+    Returns rounds grouped by level (for display).
+    """
     conn = get_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 """
                 SELECT r.roundno,
+                       r.child1roundno,
+                       r.child2roundno,
+                       r.parentroundno,
                        m.matchid,
                        m.hometeamname,
                        m.awayteamname,
@@ -115,10 +123,10 @@ def _fetch_matches_grouped(tournament_id):
                        m.awayteamscore,
                        m.matchstartdatetime
                 FROM Round r
-                JOIN Match m ON r.t_matchid = m.matchid
+                LEFT JOIN Match m ON r.t_matchid = m.matchid
                 WHERE r.tournamentid = %s
+                ORDER BY r.roundno;
                 """,
-                #ORDER BY r.roundno, m.matchstartdatetime;
                 (tournament_id,),
             )
             rows = cur.fetchall()
@@ -156,8 +164,9 @@ def _create_tournament_with_bracket(form_data, admin_id):
     if size < 2:
         raise ValueError("Please select at least two teams for this tournament.")
 
-    if size % 2 != 0:
-        raise ValueError("Please select an even number of teams so leaf rounds equal teams ÷ 2.")
+    # Check if size is power of 2
+    if (size & (size - 1)) != 0:
+        raise ValueError("Please select a power of 2 number of teams (2, 4, 8, 16, etc.).")
 
     if len(set(team_ids)) != len(team_ids):
         raise ValueError("Each team can only be selected once.")
@@ -185,7 +194,7 @@ def _create_tournament_with_bracket(form_data, admin_id):
                     (tournament_id, admin_id),
                 )
 
-                leaf_match_ids = _build_rounds_and_matches(cur, tournament_id, team_ids, start_date)
+                leaf_match_ids = _build_bracket_tree(cur, tournament_id, team_ids, start_date)
 
         return {"tournament_id": tournament_id, "match_ids": leaf_match_ids}
     finally:
@@ -206,86 +215,149 @@ def _lookup_team_names(cur, team_ids):
     return {row[0]: row[1] for row in cur.fetchall()}
 
 
-def _build_rounds_and_matches(cur, tournament_id, team_ids, start_date):
+def _build_bracket_tree(cur, tournament_id, team_ids, start_date):
+    """
+    Build complete binary bracket tree in memory, then INSERT all at once.
+    
+    Steps:
+    1. Validate team_count is power of 2
+    2. Calculate tree depth (leaf level)
+    3. Generate all RoundNo's with parent-child links (no DB yet)
+    4. INSERT all rounds into DB (single transaction)
+    5. CREATE matches ONLY for leaf rounds
+    6. UPDATE leaf rounds with MatchID
+    
+    Tree structure:
+    - Root: RoundNo=1, ParentRoundNo=NULL
+    - Level L: 2^L nodes, RoundNo from 2^L to 2^L + (2^L - 1)
+    - Leaves: depth level, team_count/2 nodes
+    - Each leaf has exactly 1 match
+    """
     team_count = len(team_ids)
-    total_matches = team_count - 1
-    leaf_start_index = (total_matches // 2) + 1
-
+    
+    # Validate power of 2 (already done in _create_tournament_with_bracket, but be safe)
+    if (team_count & (team_count - 1)) != 0:
+        raise ValueError("Team count must be a power of 2.")
+    
+    # Calculate depth
+    # depth = level of leaves
+    # leaf count = 2^depth = team_count / 2
+    # So depth = log2(team_count) - 1
+    depth = int(math.log2(team_count)) - 1
+    
+    # Helper functions
+    def get_round_no(level, index):
+        """Convert (level, index) to RoundNo. RoundNo = 2^level + index."""
+        return (1 << level) + index
+    
+    def get_children(level, index):
+        """Get (child1_round_no, child2_round_no) for node at (level, index)."""
+        if level == depth:
+            # Leaves have no children
+            return None, None
+        child_level = level + 1
+        child1_no = get_round_no(child_level, index * 2)
+        child2_no = get_round_no(child_level, index * 2 + 1)
+        return child1_no, child2_no
+    
+    def get_parent(level, index):
+        """Get parent_round_no for node at (level, index)."""
+        if level == 0:
+            # Root has no parent
+            return None
+        parent_level = level - 1
+        parent_index = index // 2
+        return get_round_no(parent_level, parent_index)
+    
+    # Generate all rounds in memory (no DB access yet)
+    rounds_to_insert = []  # List of tuples: (tournament_id, round_no, child1_no, child2_no, parent_no)
+    
+    for level in range(depth + 1):
+        nodes_at_level = 1 << level  # 2^level
+        for index in range(nodes_at_level):
+            round_no = get_round_no(level, index)
+            child1, child2 = get_children(level, index)
+            parent = get_parent(level, index)
+            
+            rounds_to_insert.append((tournament_id, round_no, child1, child2, parent))
+    
+    # INSERT all rounds into DB (one transaction)
+    for tournament_id_val, round_no, child1_no, child2_no, parent_no in rounds_to_insert:
+        cur.execute(
+            """
+            INSERT INTO Round (TournamentID, RoundNo, T_MatchID, Child1RoundNo, Child2RoundNo, ParentRoundNo)
+            VALUES (%s, %s, NULL, %s, %s, %s);
+            """,
+            (tournament_id_val, round_no, child1_no, child2_no, parent_no),
+        )
+    
+    # CREATE matches for leaf rounds only
+    # Shuffle teams and pair them
     shuffled_ids = team_ids[:]
     random.shuffle(shuffled_ids)
     team_names = _lookup_team_names(cur, team_ids)
-
+    
+    # Create pairs: (team0, team1), (team2, team3), ...
     leaf_pairs = [
         (shuffled_ids[i], shuffled_ids[i + 1])
         for i in range(0, len(shuffled_ids), 2)
     ]
-
-    pair_iter = iter(leaf_pairs)
-    created_matches = []
-    match_counter = 0
-
-    for round_no in range(1, total_matches + 1):
-        if round_no >= leaf_start_index:
-            try:
-                home_id, away_id = next(pair_iter)
-            except StopIteration:
-                raise ValueError("Not enough team pairs to populate leaf matches.")
-
-            home_name = team_names.get(home_id)
-            away_name = team_names.get(away_id)
-            if not home_name or not away_name:
-                raise ValueError("One or more selected teams no longer exist.")
-
-            # Her maç için 3 gün aralıkla saat 19:00'da tarih hesapla
-            match_date = start_date + timedelta(days=match_counter * 3)
-            match_datetime = match_date.replace(hour=19, minute=0, second=0)
-
-            cur.execute(
-                """
-                INSERT INTO Match (
-                    HomeTeamID,
-                    AwayTeamID,
-                    MatchStartDatetime,
-                    MatchEndDatetime,
-                    VenuePlayed,
-                    HomeTeamName,
-                    AwayTeamName,
-                    HomeTeamScore,
-                    AwayTeamScore,
-                    WinnerTeam,
-                    IsLocked
-                )
-                VALUES (%s, %s, %s, NULL, NULL, %s, %s, NULL, NULL, NULL, FALSE)
-                RETURNING MatchID;
-                """,
-                (home_id, away_id, match_datetime, home_name, away_name),
+    
+    created_match_ids = []
+    
+    for leaf_index, (home_team_id, away_team_id) in enumerate(leaf_pairs):
+        leaf_round_no = get_round_no(depth, leaf_index)
+        
+        home_team_name = team_names.get(home_team_id)
+        away_team_name = team_names.get(away_team_id)
+        if not home_team_name or not away_team_name:
+            raise ValueError("One or more selected teams no longer exist.")
+        
+        # Match datetime: start_date + (leaf_index * 1 day), 19:00
+        match_datetime = start_date + timedelta(days=leaf_index)
+        match_datetime = match_datetime.replace(hour=19, minute=0, second=0)
+        
+        # INSERT Match
+        cur.execute(
+            """
+            INSERT INTO Match (
+                HomeTeamID,
+                AwayTeamID,
+                MatchStartDatetime,
+                MatchEndDatetime,
+                VenuePlayed,
+                HomeTeamName,
+                AwayTeamName,
+                HomeTeamScore,
+                AwayTeamScore,
+                WinnerTeam,
+                IsLocked
             )
-            match_id = cur.fetchone()[0]
-            created_matches.append(match_id)
-            match_counter += 1
-
-            cur.execute(
-                "INSERT INTO TournamentMatch (MatchID) VALUES (%s);",
-                (match_id,),
-            )
-
-            cur.execute(
-                """
-                INSERT INTO Round (TournamentID, RoundNo, T_MatchID)
-                VALUES (%s, %s, %s);
-                """,
-                (tournament_id, round_no, match_id),
-            )
-        else:
-            cur.execute(
-                """
-                INSERT INTO Round (TournamentID, RoundNo, T_MatchID)
-                VALUES (%s, %s, NULL);
-                """,
-                (tournament_id, round_no),
-            )
-
-    return created_matches
+            VALUES (%s, %s, %s, NULL, NULL, %s, %s, NULL, NULL, NULL, FALSE)
+            RETURNING MatchID;
+            """,
+            (home_team_id, away_team_id, match_datetime, home_team_name, away_team_name),
+        )
+        match_id = cur.fetchone()[0]
+        created_match_ids.append(match_id)
+        
+        # INSERT into TournamentMatch
+        cur.execute(
+            "INSERT INTO TournamentMatch (MatchID) VALUES (%s);",
+            (match_id,),
+        )
+        
+        # UPDATE leaf round with match ID
+        cur.execute(
+            """
+            UPDATE Round
+            SET T_MatchID = %s
+            WHERE TournamentID = %s AND RoundNo = %s;
+            """,
+            (match_id, tournament_id, leaf_round_no),
+        )
+    
+    return created_match_ids
 
 
 def _to_int(value, label, required=False, min_value=None):

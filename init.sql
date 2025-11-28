@@ -235,9 +235,15 @@ CREATE TABLE Round (
   TournamentID INT,
   RoundNo INT,
   T_MatchID INT UNIQUE,
+  Child1RoundNo INT,
+  Child2RoundNo INT,
+  ParentRoundNo INT,
   PRIMARY KEY (TournamentID, RoundNo),
   FOREIGN KEY (T_MatchID) REFERENCES TournamentMatch(MatchID) ON DELETE CASCADE,
-  FOREIGN KEY (TournamentID) REFERENCES Tournament(TournamentID) ON DELETE CASCADE
+  FOREIGN KEY (TournamentID) REFERENCES Tournament(TournamentID) ON DELETE CASCADE,
+  FOREIGN KEY (TournamentID, Child1RoundNo) REFERENCES Round(TournamentID, RoundNo) ON DELETE SET NULL,
+  FOREIGN KEY (TournamentID, Child2RoundNo) REFERENCES Round(TournamentID, RoundNo) ON DELETE SET NULL,
+  FOREIGN KEY (TournamentID, ParentRoundNo) REFERENCES Round(TournamentID, RoundNo) ON DELETE CASCADE
 );
 
 CREATE TABLE Offer (
@@ -324,7 +330,21 @@ INSERT INTO Users (
   ('Ada', 'Admin', 'admin@example.com', REPEAT('a', 64), REPEAT('s', 32), NOW(), '555-0001', TO_DATE('1988-05-10','YYYY-MM-DD'), 'admin', 'USA'),
   ('Olivia', 'Owner', 'owner1@example.com', REPEAT('b', 64), REPEAT('t', 32), NOW(), '555-0011', TO_DATE('1990-03-22','YYYY-MM-DD'), 'team_owner', 'Spain'),
   ('Noah', 'Owner', 'owner2@example.com', REPEAT('c', 64), REPEAT('u', 32), NOW(), '555-0022', TO_DATE('1989-11-05','YYYY-MM-DD'), 'team_owner', 'Turkey'),
-  ('Mia', 'Owner', 'owner3@example.com', REPEAT('d', 64), REPEAT('v', 32), NOW(), '555-0033', TO_DATE('1992-07-14','YYYY-MM-DD'), 'team_owner', 'Italy');
+  ('Mia', 'Owner', 'owner3@example.com', REPEAT('d', 64), REPEAT('v', 32), NOW(), '555-0033', TO_DATE('1992-07-14','YYYY-MM-DD'), 'team_owner', 'Italy'),
+  -- Coaches
+  ('John', 'Coach', 'coach1@example.com', REPEAT('e', 64), REPEAT('w', 32), NOW(), '555-0101', TO_DATE('1980-01-15','YYYY-MM-DD'), 'coach', 'USA'),
+  ('Maria', 'Coach', 'coach2@example.com', REPEAT('f', 64), REPEAT('x', 32), NOW(), '555-0102', TO_DATE('1985-04-20','YYYY-MM-DD'), 'coach', 'Spain'),
+  ('Carlos', 'Coach', 'coach3@example.com', REPEAT('g', 64), REPEAT('y', 32), NOW(), '555-0103', TO_DATE('1982-06-10','YYYY-MM-DD'), 'coach', 'Italy'),
+  ('Sofia', 'Coach', 'coach4@example.com', REPEAT('h', 64), REPEAT('z', 32), NOW(), '555-0104', TO_DATE('1987-09-05','YYYY-MM-DD'), 'coach', 'Turkey'),
+  -- Players
+  ('Liam', 'Player', 'player1@example.com', REPEAT('i', 64), REPEAT('a', 32), NOW(), '555-0201', TO_DATE('2002-02-14','YYYY-MM-DD'), 'player', 'USA'),
+  ('Emma', 'Player', 'player2@example.com', REPEAT('j', 64), REPEAT('b', 32), NOW(), '555-0202', TO_DATE('2003-03-22','YYYY-MM-DD'), 'player', 'Spain'),
+  ('Lucas', 'Player', 'player3@example.com', REPEAT('k', 64), REPEAT('c', 32), NOW(), '555-0203', TO_DATE('2001-05-11','YYYY-MM-DD'), 'player', 'Italy'),
+  ('Sophia', 'Player', 'player4@example.com', REPEAT('l', 64), REPEAT('d', 32), NOW(), '555-0204', TO_DATE('2002-07-19','YYYY-MM-DD'), 'player', 'Turkey'),
+  ('James', 'Player', 'player5@example.com', REPEAT('m', 64), REPEAT('e', 32), NOW(), '555-0205', TO_DATE('2003-08-25','YYYY-MM-DD'), 'player', 'USA'),
+  ('Olivia', 'Player', 'player6@example.com', REPEAT('n', 64), REPEAT('f', 32), NOW(), '555-0206', TO_DATE('2002-01-03','YYYY-MM-DD'), 'player', 'Spain'),
+  ('Michael', 'Player', 'player7@example.com', REPEAT('o', 64), REPEAT('g', 32), NOW(), '555-0207', TO_DATE('2001-10-30','YYYY-MM-DD'), 'player', 'Italy'),
+  ('Isabella', 'Player', 'player8@example.com', REPEAT('p', 64), REPEAT('h', 32), NOW(), '555-0208', TO_DATE('2003-12-12','YYYY-MM-DD'), 'player', 'Turkey');
 
 INSERT INTO Admin (UsersID)
 SELECT UsersID FROM Users WHERE Email = 'admin@example.com';
@@ -338,6 +358,51 @@ FROM (
     ('owner3@example.com', 720000.000)
 ) AS data(email, net_worth)
 JOIN Users u ON u.Email = data.email;
+
+INSERT INTO Coach (UsersID, Certification)
+SELECT u.UsersID, 'UEFA A License'
+FROM Users u
+WHERE u.Email IN ('coach1@example.com', 'coach2@example.com', 'coach3@example.com', 'coach4@example.com');
+
+INSERT INTO Employee (UsersID, TeamID)
+SELECT u.UsersID, t.TeamID
+FROM Users u
+JOIN Team t ON t.OwnerID = (SELECT UsersID FROM Users WHERE Email = CASE 
+  WHEN u.Email = 'coach1@example.com' THEN 'owner1@example.com'
+  WHEN u.Email = 'coach2@example.com' THEN 'owner2@example.com'
+  WHEN u.Email = 'coach3@example.com' THEN 'owner3@example.com'
+  WHEN u.Email = 'coach4@example.com' THEN 'owner1@example.com'
+END)
+WHERE u.Email IN ('coach1@example.com', 'coach2@example.com', 'coach3@example.com', 'coach4@example.com');
+
+INSERT INTO Player (UsersID, Height, Weight, Overall, Position, IsEligible)
+SELECT u.UsersID, 
+       180 + (ROW_NUMBER() OVER () % 20),
+       75 + (ROW_NUMBER() OVER () % 10),
+       '85',
+       CASE (ROW_NUMBER() OVER () % 5)
+         WHEN 0 THEN 'Forward'
+         WHEN 1 THEN 'Midfielder'
+         WHEN 2 THEN 'Defender'
+         WHEN 3 THEN 'Goalkeeper'
+         ELSE 'Forward'
+       END,
+       'Yes'
+FROM Users u
+WHERE u.Email IN ('player1@example.com', 'player2@example.com', 'player3@example.com', 'player4@example.com',
+                   'player5@example.com', 'player6@example.com', 'player7@example.com', 'player8@example.com');
+
+INSERT INTO Employee (UsersID, TeamID)
+SELECT u.UsersID, t.TeamID
+FROM Users u
+JOIN Team t ON t.OwnerID = (SELECT UsersID FROM Users WHERE Email = CASE 
+  WHEN u.Email IN ('player1@example.com', 'player2@example.com') THEN 'owner1@example.com'
+  WHEN u.Email IN ('player3@example.com', 'player4@example.com') THEN 'owner2@example.com'
+  WHEN u.Email IN ('player5@example.com', 'player6@example.com') THEN 'owner3@example.com'
+  ELSE 'owner1@example.com'
+END)
+WHERE u.Email IN ('player1@example.com', 'player2@example.com', 'player3@example.com', 'player4@example.com',
+                   'player5@example.com', 'player6@example.com', 'player7@example.com', 'player8@example.com');
 
 INSERT INTO Team (
   OwnerID,

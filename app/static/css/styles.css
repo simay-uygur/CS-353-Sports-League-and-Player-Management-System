@@ -858,6 +858,107 @@ button:hover {
     border: 0;
 }
 
+/* Bracket styling */
+.bracket-level {
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    background: #f9fafc;
+    border-radius: 12px;
+    border-left: 4px solid #2563eb;
+}
+
+.bracket-level h3 {
+    margin-top: 0;
+    margin-bottom: 1.5rem;
+    color: #0d121c;
+    font-size: 1.1rem;
+}
+
+.level-rounds {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+}
+
+.round-box {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 1rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.round-header {
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.round-number {
+    margin: 0;
+    font-weight: 600;
+    color: #0d121c;
+}
+
+.round-meta {
+    margin: 0.25rem 0 0;
+    font-size: 0.85rem;
+    color: #6b7280;
+}
+
+.round-match {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.round-match .match-team {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    background: #f3f4f6;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    font-weight: 500;
+}
+
+.match-divider {
+    text-align: center;
+    color: #9ca3af;
+    font-size: 0.85rem;
+}
+
+.round-match .score {
+    font-weight: 700;
+    color: #2563eb;
+    min-width: 30px;
+    text-align: right;
+}
+
+.round-match .match-time {
+    margin: 0.5rem 0 0;
+    font-size: 0.8rem;
+    color: #6b7280;
+    text-align: center;
+}
+
+.round-empty {
+    padding: 1rem;
+    background: #fafafa;
+    border: 1px dashed #d1d5db;
+    border-radius: 6px;
+    text-align: center;
+    color: #9ca3af;
+    font-size: 0.9rem;
+}
+
+.children-info {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    color: #6b7280;
+}
+
 @media (max-width: 900px) {
     .create-layout {
         grid-template-columns: 1fr;
@@ -881,5 +982,9 @@ button:hover {
 
     .dashboard-container {
         padding: 1.5rem;
+    }
+
+    .level-rounds {
+        grid-template-columns: 1fr;
     }
 }
