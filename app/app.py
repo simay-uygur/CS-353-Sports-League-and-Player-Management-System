@@ -271,7 +271,7 @@ def _extract_user_fields(form, role):
         raise ValueError("Passwords do not match.")
 
     salt = secrets.token_hex(16)
-    hashed_password = generate_password_hash(password + salt)
+    hashed_password = generate_password_hash(password + salt, method="pbkdf2:sha256")
 
     return {
         "first_name": first_name,

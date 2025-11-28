@@ -344,7 +344,10 @@ INSERT INTO Users (
   ('James', 'Player', 'player5@example.com', REPEAT('m', 64), REPEAT('e', 32), NOW(), '555-0205', TO_DATE('2003-08-25','YYYY-MM-DD'), 'player', 'USA'),
   ('Olivia', 'Player', 'player6@example.com', REPEAT('n', 64), REPEAT('f', 32), NOW(), '555-0206', TO_DATE('2002-01-03','YYYY-MM-DD'), 'player', 'Spain'),
   ('Michael', 'Player', 'player7@example.com', REPEAT('o', 64), REPEAT('g', 32), NOW(), '555-0207', TO_DATE('2001-10-30','YYYY-MM-DD'), 'player', 'Italy'),
-  ('Isabella', 'Player', 'player8@example.com', REPEAT('p', 64), REPEAT('h', 32), NOW(), '555-0208', TO_DATE('2003-12-12','YYYY-MM-DD'), 'player', 'Turkey');
+  ('Isabella', 'Player', 'player8@example.com', REPEAT('p', 64), REPEAT('h', 32), NOW(), '555-0208', TO_DATE('2003-12-12','YYYY-MM-DD'), 'player', 'Turkey'),
+  -- real test users (can log in with password '123')
+  ('Test', 'Player', 'p@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963', '555-1001', TO_DATE('2000-01-01','YYYY-MM-DD'), 'player', 'Local'),
+  ('Tournament', 'Admin', 'ta@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'tournament_admin', 'Local');
 
 INSERT INTO Admin (UsersID)
 SELECT UsersID FROM Users WHERE Email = 'admin@example.com';
@@ -358,51 +361,6 @@ FROM (
     ('owner3@example.com', 720000.000)
 ) AS data(email, net_worth)
 JOIN Users u ON u.Email = data.email;
-
-INSERT INTO Coach (UsersID, Certification)
-SELECT u.UsersID, 'UEFA A License'
-FROM Users u
-WHERE u.Email IN ('coach1@example.com', 'coach2@example.com', 'coach3@example.com', 'coach4@example.com');
-
-INSERT INTO Employee (UsersID, TeamID)
-SELECT u.UsersID, t.TeamID
-FROM Users u
-JOIN Team t ON t.OwnerID = (SELECT UsersID FROM Users WHERE Email = CASE 
-  WHEN u.Email = 'coach1@example.com' THEN 'owner1@example.com'
-  WHEN u.Email = 'coach2@example.com' THEN 'owner2@example.com'
-  WHEN u.Email = 'coach3@example.com' THEN 'owner3@example.com'
-  WHEN u.Email = 'coach4@example.com' THEN 'owner1@example.com'
-END)
-WHERE u.Email IN ('coach1@example.com', 'coach2@example.com', 'coach3@example.com', 'coach4@example.com');
-
-INSERT INTO Player (UsersID, Height, Weight, Overall, Position, IsEligible)
-SELECT u.UsersID, 
-       180 + (ROW_NUMBER() OVER () % 20),
-       75 + (ROW_NUMBER() OVER () % 10),
-       '85',
-       CASE (ROW_NUMBER() OVER () % 5)
-         WHEN 0 THEN 'Forward'
-         WHEN 1 THEN 'Midfielder'
-         WHEN 2 THEN 'Defender'
-         WHEN 3 THEN 'Goalkeeper'
-         ELSE 'Forward'
-       END,
-       'Yes'
-FROM Users u
-WHERE u.Email IN ('player1@example.com', 'player2@example.com', 'player3@example.com', 'player4@example.com',
-                   'player5@example.com', 'player6@example.com', 'player7@example.com', 'player8@example.com');
-
-INSERT INTO Employee (UsersID, TeamID)
-SELECT u.UsersID, t.TeamID
-FROM Users u
-JOIN Team t ON t.OwnerID = (SELECT UsersID FROM Users WHERE Email = CASE 
-  WHEN u.Email IN ('player1@example.com', 'player2@example.com') THEN 'owner1@example.com'
-  WHEN u.Email IN ('player3@example.com', 'player4@example.com') THEN 'owner2@example.com'
-  WHEN u.Email IN ('player5@example.com', 'player6@example.com') THEN 'owner3@example.com'
-  ELSE 'owner1@example.com'
-END)
-WHERE u.Email IN ('player1@example.com', 'player2@example.com', 'player3@example.com', 'player4@example.com',
-                   'player5@example.com', 'player6@example.com', 'player7@example.com', 'player8@example.com');
 
 INSERT INTO Team (
   OwnerID,
@@ -422,5 +380,55 @@ FROM (
 ) AS data(email, team_name, established, venue)
 JOIN Users u ON u.Email = data.email;
 
+INSERT INTO Employee (UsersID, TeamID)
+SELECT u.UsersID, t.TeamID
+FROM Users u
+JOIN Team t ON t.OwnerID = (SELECT UsersID FROM Users WHERE Email = CASE 
+  WHEN u.Email = 'coach1@example.com' THEN 'owner1@example.com'
+  WHEN u.Email = 'coach2@example.com' THEN 'owner2@example.com'
+  WHEN u.Email = 'coach3@example.com' THEN 'owner3@example.com'
+  WHEN u.Email = 'coach4@example.com' THEN 'owner1@example.com'
+END)
+WHERE u.Email IN ('coach1@example.com', 'coach2@example.com', 'coach3@example.com', 'coach4@example.com');
+
+INSERT INTO Coach (UsersID, Certification)
+SELECT u.UsersID, 'UEFA A License'
+FROM Users u
+WHERE u.Email IN ('coach1@example.com', 'coach2@example.com', 'coach3@example.com', 'coach4@example.com');
 
 
+INSERT INTO Employee (UsersID, TeamID)
+SELECT u.UsersID, t.TeamID
+FROM Users u
+JOIN Team t ON t.OwnerID = (SELECT UsersID FROM Users WHERE Email = CASE 
+  WHEN u.Email IN ('player1@example.com', 'player2@example.com') THEN 'owner1@example.com'
+  WHEN u.Email IN ('player3@example.com', 'player4@example.com') THEN 'owner2@example.com'
+  WHEN u.Email IN ('player5@example.com', 'player6@example.com') THEN 'owner3@example.com'
+  ELSE 'owner1@example.com'
+END)
+WHERE u.Email IN ('player1@example.com', 'player2@example.com', 'player3@example.com', 'player4@example.com',
+                   'player5@example.com', 'player6@example.com', 'player7@example.com', 'player8@example.com');
+
+INSERT INTO Player (UsersID, Height, Weight, Overall, Position, IsEligible)
+SELECT u.UsersID, 
+       180 + (ROW_NUMBER() OVER () % 20),
+       75 + (ROW_NUMBER() OVER () % 10),
+       '85',
+       CASE (ROW_NUMBER() OVER () % 5)
+         WHEN 0 THEN 'Forward'
+         WHEN 1 THEN 'Midfielder'
+         WHEN 2 THEN 'Defender'
+         WHEN 3 THEN 'Goalkeeper'
+         ELSE 'Forward'
+       END,
+       'Yes'
+FROM Users u
+WHERE u.Email IN ('player1@example.com', 'player2@example.com', 'player3@example.com', 'player4@example.com',
+                   'player5@example.com', 'player6@example.com', 'player7@example.com', 'player8@example.com');
+
+
+-- Migrate password storage away from CHAR padding
+ALTER TABLE Users ALTER COLUMN HashedPassword TYPE TEXT;
+ALTER TABLE Users ALTER COLUMN Salt TYPE TEXT;
+UPDATE Users SET HashedPassword = RTRIM(HashedPassword);
+UPDATE Users SET Salt = RTRIM(Salt);

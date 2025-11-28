@@ -281,14 +281,26 @@ def _build_bracket_tree(cur, tournament_id, team_ids, start_date):
             
             rounds_to_insert.append((tournament_id, round_no, child1, child2, parent))
     
-    # INSERT all rounds into DB (one transaction)
+    # INSERT all rounds with links left NULL, then set them after all rows exist
     for tournament_id_val, round_no, child1_no, child2_no, parent_no in rounds_to_insert:
         cur.execute(
             """
             INSERT INTO Round (TournamentID, RoundNo, T_MatchID, Child1RoundNo, Child2RoundNo, ParentRoundNo)
-            VALUES (%s, %s, NULL, %s, %s, %s);
+            VALUES (%s, %s, NULL, NULL, NULL, NULL);
             """,
-            (tournament_id_val, round_no, child1_no, child2_no, parent_no),
+            (tournament_id_val, round_no),
+        )
+
+    for tournament_id_val, round_no, child1_no, child2_no, parent_no in rounds_to_insert:
+        cur.execute(
+            """
+            UPDATE Round
+            SET Child1RoundNo = %s,
+                Child2RoundNo = %s,
+                ParentRoundNo = %s
+            WHERE TournamentID = %s AND RoundNo = %s;
+            """,
+            (child1_no, child2_no, parent_no, tournament_id_val, round_no),
         )
     
     # CREATE matches for leaf rounds only
