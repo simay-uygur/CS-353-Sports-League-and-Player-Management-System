@@ -248,7 +248,6 @@ CREATE TABLE Round (
 
 CREATE TABLE Offer (
   OfferID SERIAL,
-  MatchID INT NOT NULL,
   RequestingCoach INT NOT NULL,
   RequestedPlayer INT NOT NULL,
   ResponsibleCoach INT,
