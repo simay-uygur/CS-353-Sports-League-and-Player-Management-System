@@ -55,37 +55,6 @@ def view_tournaments():
     )
 
 
-@admin_bp.route("/tournaments/create", methods=["GET", "POST"])
-def create_tournament_form():
-    if session.get("role") != "superadmin":
-        return abort(403)
-
-    teams = fetch_all_teams()
-    error_message = None
-    form_data = request.form if request.method == "POST" else {}
-    selected_team_ids = form_data.getlist("team_ids") if request.method == "POST" else []
-
-    if request.method == "POST":
-        try:
-            result = create_tournament_with_bracket(form_data, session.get("user_id"))
-            return redirect(url_for("admin.view_tournaments", tournament_id=result["tournament_id"]))
-        except ValueError as exc:
-            error_message = str(exc)
-        except psycopg2.Error as exc:
-            error_message = getattr(exc.diag, "message_primary", str(exc))
-
-    return render_template(
-        "admin_create_tournament.html",
-        teams=teams,
-        admins=None,
-        error_message=error_message,
-        form_data=form_data,
-        selected_team_ids=set(selected_team_ids),
-        selected_admin_ids=set(),
-        cancel_endpoint="admin.view_tournaments",
-    )
-
-
 def _select_tournament(requested_id, tournaments):
     if requested_id:
         for tournament in tournaments:

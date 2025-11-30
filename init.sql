@@ -313,7 +313,160 @@ CREATE TABLE RefereeMatchAttendance (
   FOREIGN KEY (RefereeID) REFERENCES Referee(UsersID) ON DELETE CASCADE
 );
 
--- Seed data ---------------------------------------------------------------
+-- --views 
+
+-- functions 
+CREATE OR REPLACE FUNCTION fill_parent_match()
+RETURNS TRIGGER AS $$
+DECLARE
+    child_round INT;
+    tournament_id INT;
+
+    parent_round INT;
+    child1_round INT;
+    child2_round INT;
+
+    child1_match INT;
+    child2_match INT;
+
+    child1_winner VARCHAR(100);
+    child2_winner VARCHAR(100);
+
+    new_parent_match_id INT;
+BEGIN
+    ----------------------------------------------------------------
+    -- 0. Ignore matches that are NOT part of tournaments
+    ----------------------------------------------------------------
+    IF NOT EXISTS (SELECT 1 FROM TournamentMatch WHERE MatchID = NEW.MatchID) THEN
+        RETURN NULL;
+    END IF;
+
+    ----------------------------------------------------------------
+    -- 1. Identify the round for the updated tournament match
+    ----------------------------------------------------------------
+    SELECT RoundNo, TournamentID
+    INTO child_round, tournament_id
+    FROM Round
+    WHERE T_MatchID = NEW.MatchID;
+
+    IF child_round IS NULL THEN
+        -- Match not assigned to any round
+        RETURN NULL;
+    END IF;
+
+    ----------------------------------------------------------------
+    -- 2. Find parent round
+    ----------------------------------------------------------------
+    SELECT ParentRoundNo
+    INTO parent_round
+    FROM Round
+    WHERE TournamentID = tournament_id
+      AND RoundNo = child_round;
+
+    IF parent_round IS NULL THEN
+        -- This is the FINAL round (root). No parent to fill.
+        RETURN NULL;
+    END IF;
+
+    ----------------------------------------------------------------
+    -- 3. Check if parent round already has a match
+    ----------------------------------------------------------------
+    SELECT T_MatchID
+    INTO new_parent_match_id
+    FROM Round
+    WHERE TournamentID = tournament_id
+      AND RoundNo = parent_round;
+
+    IF new_parent_match_id IS NOT NULL THEN
+        RETURN NULL;  -- Parent already created
+    END IF;
+
+    ----------------------------------------------------------------
+    -- 4. Get the two child rounds of the parent
+    ----------------------------------------------------------------
+    SELECT Child1RoundNo, Child2RoundNo
+    INTO child1_round, child2_round
+    FROM Round
+    WHERE TournamentID = tournament_id
+      AND RoundNo = parent_round;
+
+    IF child1_round IS NULL OR child2_round IS NULL THEN
+        RETURN NULL;
+    END IF;
+
+    ----------------------------------------------------------------
+    -- 5. Get match IDs of the two child rounds
+    ----------------------------------------------------------------
+    SELECT T_MatchID INTO child1_match
+    FROM Round WHERE TournamentID = tournament_id AND RoundNo = child1_round;
+
+    SELECT T_MatchID INTO child2_match
+    FROM Round WHERE TournamentID = tournament_id AND RoundNo = child2_round;
+
+    IF child1_match IS NULL OR child2_match IS NULL THEN
+        RETURN NULL;
+    END IF;
+
+    ----------------------------------------------------------------
+    -- 6. Check if both children have winners
+    ----------------------------------------------------------------
+    SELECT winnerteam INTO child1_winner
+    FROM AllTournamentMatchInfo WHERE matchid = child1_match;
+
+    SELECT winnerteam INTO child2_winner
+    FROM AllTournamentMatchInfo WHERE matchid = child2_match;
+
+    IF child1_winner IS NULL OR child2_winner IS NULL THEN
+        RETURN NULL;
+    END IF;
+
+    ----------------------------------------------------------------
+    -- 7. Create parent match
+    ----------------------------------------------------------------
+    INSERT INTO Match (
+        HomeTeamID, AwayTeamID, MatchStartDatetime,
+        HomeTeamName, AwayTeamName,
+        HomeTeamScore, AwayTeamScore, WinnerTeam, IsLocked
+    )
+    VALUES (
+        (SELECT TeamID FROM Team WHERE TeamName = child1_winner),
+        (SELECT TeamID FROM Team WHERE TeamName = child2_winner),
+        NOW() + INTERVAL '1 week',
+        child1_winner, child2_winner,
+        NULL, NULL, NULL, TRUE
+    )
+    RETURNING MatchID INTO new_parent_match_id;
+
+    ----------------------------------------------------------------
+    -- 8. Attach match to parent round
+    ----------------------------------------------------------------
+    UPDATE Round
+    SET T_MatchID = new_parent_match_id
+    WHERE TournamentID = tournament_id
+      AND RoundNo = parent_round;
+
+    ----------------------------------------------------------------
+    -- 9. Insert into TournamentMatch
+    ----------------------------------------------------------------
+    INSERT INTO TournamentMatch (MatchID)
+    VALUES (new_parent_match_id);
+
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+
+CREATE TRIGGER trg_fill_parent_match
+AFTER UPDATE OF winnerteam ON Match
+FOR EACH ROW
+EXECUTE FUNCTION fill_parent_match();
+
+
+-- triggers
+
+
+
+-- sample data ---------------------------------------------------------------
 INSERT INTO Users (
   FirstName,
   LastName,

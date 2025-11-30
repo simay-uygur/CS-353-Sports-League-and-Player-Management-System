@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 import psycopg2
-from flask import Flask, jsonify, render_template, request, session, redirect, url_for
+from flask import Flask, jsonify, render_template, request, session, redirect, url_for, g
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from db import get_connection
@@ -17,6 +17,18 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-key")
 
 app.register_blueprint(admin_bp)
 app.register_blueprint(superadmin_bp)
+
+@app.before_request
+def _set_default_banner():
+    role = session.get("role")
+    if role == "superadmin":
+        g.banner_view_endpoint = "superadmin.view_tournaments"
+    elif role in ("admin", "tournament_admin"):
+        g.banner_view_endpoint = "admin.view_tournaments"
+    else:
+        g.banner_view_endpoint = None
+    g.banner_create_endpoint = None
+    g.banner_allow_create = False
 
 # Role to home endpoint mapping - tournamnet-admin is now also league admin 
 ROLE_HOME_ENDPOINTS = {
@@ -148,15 +160,10 @@ def register_select():
     return render_template("register_select.html")
 
 
-@app.route("/debug/login-admin")
-def debug_login_admin():
-    """
-    Temporary helper to simulate an authenticated admin session.
-    Not intended for production deployments.
-    """
-    session["user_id"] = int(request.args.get("user_id", 1))
-    session["role"] = "admin"
-    return redirect(url_for("admin.view_tournaments"))
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
 
 
 @app.route("/users")

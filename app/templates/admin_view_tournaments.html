@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 <body class="dashboard-body">
+    {% include "_banner.html" %}
     <main class="dashboard-container">
         <header class="admin-header">
             <div>
@@ -17,10 +18,7 @@
                 {% if allow_create %}
                 <a class="add-tournament-link" href="{{ url_for(create_endpoint) }}">+ Add Tournament</a>
                 {% endif %}
-                <div class="admin-icons">
-                    <span class="icon-button" title="Notifications">🔔</span>
-                    <span class="icon-button" title="Profile">👤</span>
-                </div>
+                
             </div>
         </header>
 

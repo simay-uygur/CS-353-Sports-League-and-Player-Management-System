@@ -1,0 +1,18 @@
+<header class="top-banner">
+    <div class="top-banner__brand">
+        <span class="brand-mark">SL</span>
+        <div>
+            <p class="eyebrow">Sports League</p>
+            <strong>Dashboard</strong>
+        </div>
+    </div>
+    <nav class="top-banner__nav">
+        {% if g.get("banner_view_endpoint") %}
+        <a href="{{ url_for(g.banner_view_endpoint) }}" class="nav-link">View Tournaments</a>
+        {% endif %}
+    </nav>
+    <div class="top-banner__actions">
+        <span class="role-pill">{{ session.get("role", "guest")|capitalize }}</span>
+        <a class="nav-link logout" href="{{ url_for('logout') }}">Log out</a>
+    </div>
+</header>
