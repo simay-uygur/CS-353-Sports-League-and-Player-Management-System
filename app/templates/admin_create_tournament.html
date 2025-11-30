@@ -24,7 +24,7 @@
         <section class="create-layout">
             <form class="create-card" method="POST" novalidate>
                 <div class="create-card-inner">
-                    <h2>Create Tournament</h2>
+                   
 
                     {% if error_message %}
                     <div class="form-message error">{{ error_message }}</div>
@@ -47,34 +47,57 @@
                            required
                            value="{{ form_data.get('tournament_start_date', '') }}">
 
-                    <label for="team-picker">Select Teams</label>
-                    <div class="team-picker-row">
-                        <div class="select-wrapper single">
-                            <select id="team-picker">
-                                <option value="" disabled selected>Pick a team to add</option>
-                                {% for team in teams %}
-                                <option value="{{ team.teamid }}"
-                                        {% if team.teamid|string in selected_team_ids %}disabled{% endif %}>
-                                    {{ team.teamname }}
-                                </option>
-                                {% endfor %}
-                            </select>
+                    {% if admins %}
+                    <label>Assign Admins</label>
+                    <p class="select-hint subtle">Selected admins will moderate this tournament.</p>
+                    <div class="admin-picker">
+                        <div class="search-box">
+                            <input type="search"
+                                   id="admin-search"
+                                   placeholder="Search admins by name or email"
+                                   aria-label="Search admins">
                         </div>
-                        
+                        <div class="checkbox-list" id="admin-checkbox-list">
+                            {% for admin in admins %}
+                            <label class="checkbox-line" data-admin-search="{{ (admin.firstname ~ ' ' ~ admin.lastname ~ ' ' ~ admin.email)|lower }}">
+                                <input type="checkbox"
+                                       name="moderator_ids"
+                                       value="{{ admin.usersid }}"
+                                       {% if admin.usersid|string in selected_admin_ids %}checked{% endif %}>
+                                <span>{{ admin.firstname }} {{ admin.lastname }} ({{ admin.email }})</span>
+                            </label>
+                            {% endfor %}
+                        </div>
                     </div>
+                    {% endif %}
 
-                    <div id="selected-team-inputs">
-                        {% for team in teams %}
-                        {% if team.teamid|string in selected_team_ids %}
-                        <input type="hidden" name="team_ids" value="{{ team.teamid }}">
-                        {% endif %}
-                        {% endfor %}
+                    <label>Select Teams</label>
+                    <div class="admin-picker">
+                        <div class="search-box">
+                            <input type="search"
+                                   id="team-search"
+                                   placeholder="Search teams"
+                                   aria-label="Search teams">
+                        </div>
+                        <div class="checkbox-list" id="team-checkbox-list">
+                            {% for team in teams %}
+                            <label class="checkbox-line" data-team-search="{{ team.teamname|lower }}">
+                                <input type="checkbox"
+                                       name="team_ids"
+                                       value="{{ team.teamid }}"
+                                       {% if team.teamid|string in selected_team_ids %}checked{% endif %}>
+                                <span>{{ team.teamname }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                        <p class="select-hint">Selected: <span id="selected-count">{{ selected_team_ids|length }}</span></p>
+                        <p class="select-hint error" id="team-validation" aria-live="polite"></p>
                     </div>
 
                     <div class="form-action-buttons">
                         <button type="button"
                                 class="btn ghost leave-link"
-                                data-target="{{ url_for('admin.view_tournaments') }}"
+                                data-target="{{ url_for(cancel_endpoint) }}"
                                 data-confirm-message="Leave without creating this tournament?">
                             Cancel
                         </button>
@@ -83,43 +106,21 @@
                 </div>
             </form>
 
-            <aside class="team-list-card">
-                <div class="team-list-header">
-                    <div>
-                        <p class="eyebrow">Selected teams</p>
-                        <h3>Lineup</h3>
-                    </div>
-                    <div class="count-pill"><span id="selected-count-pill">{{ selected_team_ids|length }}</span></div>
-                </div>
-                <div id="selected-team-list" class="selected-team-list">
-                    {% for team in teams %}
-                    {% if team.teamid|string in selected_team_ids %}
-                    <button type="button" class="selected-chip" data-team-id="{{ team.teamid }}">
-                        <span class="chip-label">{{ team.teamname }}</span>
-                        <span class="chip-remove" aria-hidden="true">×</span>
-                        <span class="sr-only">Remove {{ team.teamname }}</span>
-                    </button>
-                    {% endif %}
-                    {% endfor %}
-                </div>
-                <p id="selected-empty" class="empty-state subtle" {% if selected_team_ids|length %}style="display:none;"{% endif %}>
-                    No teams selected yet. Choose from the dropdown to build your bracket.
-                </p>
-
-            </aside>
         </section>
     </main>
 </body>
 <script>
     document.addEventListener("DOMContentLoaded", function () {
         const leaveTriggers = document.querySelectorAll(".leave-link");
-        const teamPicker = document.getElementById("team-picker");
+        const teamSearch = document.getElementById("team-search");
+        const teamCheckboxList = document.getElementById("team-checkbox-list");
+        const teamRows = teamCheckboxList ? Array.from(teamCheckboxList.querySelectorAll(".checkbox-line")) : [];
         const selectedCountEl = document.getElementById("selected-count");
-        const selectedCountPill = document.getElementById("selected-count-pill");
         const form = document.querySelector(".create-card");
-        const selectedList = document.getElementById("selected-team-list");
-        const hiddenInputs = document.getElementById("selected-team-inputs");
-        const emptyState = document.getElementById("selected-empty");
+        const adminSearch = document.getElementById("admin-search");
+        const adminCheckboxList = document.getElementById("admin-checkbox-list");
+        const adminRows = adminCheckboxList ? Array.from(adminCheckboxList.querySelectorAll(".checkbox-line")) : [];
+        const teamValidation = document.getElementById("team-validation");
 
         leaveTriggers.forEach(function (el) {
             el.addEventListener("click", function (event) {
@@ -135,104 +136,64 @@
         });
 
         function getSelectedCount() {
-            if (!hiddenInputs) return 0;
-            return hiddenInputs.querySelectorAll('input[name="team_ids"]').length;
+            if (!teamCheckboxList) return 0;
+            return teamCheckboxList.querySelectorAll('input[name="team_ids"]:checked').length;
+        }
+
+        function isPowerOfTwo(value) {
+            return value > 0 && (value & (value - 1)) === 0;
         }
 
         function updateSelectedCount() {
             const count = getSelectedCount();
             if (selectedCountEl) selectedCountEl.textContent = count;
-            if (selectedCountPill) selectedCountPill.textContent = count;
-            if (emptyState) emptyState.style.display = count ? "none" : "block";
+            if (teamValidation) {
+                if (count === 0) {
+                    teamValidation.textContent = "";
+                } else if (count < 2) {
+                    teamValidation.textContent = "Select at least two teams.";
+                } else if (!isPowerOfTwo(count)) {
+                    teamValidation.textContent = "Team count must be a power of 2 (2, 4, 8, 16, ...).";
+                } else {
+                    teamValidation.textContent = "";
+                }
+            }
         }
 
-        function addHiddenInput(teamId) {
-            if (!hiddenInputs || hiddenInputs.querySelector(`input[value="${teamId}"]`)) return;
-            const input = document.createElement("input");
-            input.type = "hidden";
-            input.name = "team_ids";
-            input.value = teamId;
-            hiddenInputs.appendChild(input);
-        }
-
-        function removeHiddenInput(teamId) {
-            if (!hiddenInputs) return;
-            const existing = hiddenInputs.querySelector(`input[value="${teamId}"]`);
-            if (existing) existing.remove();
-        }
-
-        function enableOption(teamId) {
-            if (!teamPicker) return;
-            const option = teamPicker.querySelector(`option[value="${teamId}"]`);
-            if (option) option.disabled = false;
-        }
-
-        function disableOption(teamId) {
-            if (!teamPicker) return;
-            const option = teamPicker.querySelector(`option[value="${teamId}"]`);
-            if (option) option.disabled = true;
-            teamPicker.value = "";
-        }
-
-        function addChip(teamId, teamName) {
-            if (!selectedList || selectedList.querySelector(`[data-team-id="${teamId}"]`)) return;
-            const chip = document.createElement("button");
-            chip.type = "button";
-            chip.className = "selected-chip";
-            chip.dataset.teamId = teamId;
-            chip.innerHTML = `
-                <span class="chip-label">${teamName}</span>
-                <span class="chip-remove" aria-hidden="true">×</span>
-                <span class="sr-only">Remove ${teamName}</span>
-            `;
-            chip.addEventListener("click", function () {
-                removeTeam(teamId);
-            });
-            selectedList.appendChild(chip);
-        }
-
-        function removeChip(teamId) {
-            if (!selectedList) return;
-            const chip = selectedList.querySelector(`[data-team-id="${teamId}"]`);
-            if (chip) chip.remove();
-        }
-
-        function addTeam(teamId, teamName) {
-            addHiddenInput(teamId);
-            addChip(teamId, teamName);
-            disableOption(teamId);
-            updateSelectedCount();
-        }
-
-        function removeTeam(teamId) {
-            removeHiddenInput(teamId);
-            removeChip(teamId);
-            enableOption(teamId);
-            updateSelectedCount();
-        }
-
-        if (teamPicker) {
-            teamPicker.addEventListener("change", function (event) {
-                const selectedOption = event.target.options[event.target.selectedIndex];
-                const teamId = selectedOption.value;
-                if (!teamId) return;
-                const teamName = selectedOption.textContent.trim();
-                addTeam(teamId, teamName);
+        function filterAdmins(query) {
+            const normalized = (query || "").toLowerCase().trim();
+            adminRows.forEach(function (row) {
+                const haystack = (row.dataset.adminSearch || row.innerText || "").toLowerCase();
+                const match = !normalized || haystack.includes(normalized);
+                row.classList.toggle("is-hidden", !match);
             });
         }
 
-        if (leafRoundsInput) {
-            leafRoundsInput.addEventListener("input", updateComputedTeamCount);
-            updateComputedTeamCount();
+        if (adminSearch && adminCheckboxList) {
+            adminSearch.addEventListener("input", function (event) {
+                filterAdmins(event.target.value);
+            });
+            filterAdmins("");
         }
 
-        if (selectedList) {
-            selectedList.querySelectorAll(".selected-chip").forEach(function (chip) {
-                chip.addEventListener("click", function () {
-                    const teamId = chip.dataset.teamId;
-                    removeTeam(teamId);
-                });
+        function filterTeams(query) {
+            const normalized = (query || "").toLowerCase().trim();
+            teamRows.forEach(function (row) {
+                const haystack = (row.dataset.teamSearch || row.innerText || "").toLowerCase();
+                const match = !normalized || haystack.includes(normalized);
+                row.classList.toggle("is-hidden", !match);
             });
+        }
+
+        if (teamSearch && teamCheckboxList) {
+            teamSearch.addEventListener("input", function (event) {
+                filterTeams(event.target.value);
+            });
+            filterTeams("");
+        }
+
+        if (teamCheckboxList) {
+            teamCheckboxList.addEventListener("change", updateSelectedCount);
         }
 
         updateSelectedCount();
@@ -245,9 +206,9 @@
                     alert("Please select at least two teams to create a tournament.");
                     return;
                 }
-                if (selectedCount % 2 !== 0) {
+                if (!isPowerOfTwo(selectedCount)) {
                     event.preventDefault();
-                    alert("Please select an even number of teams.");
+                    alert("Please select a power of 2 number of teams (2, 4, 8, 16, ...).");
                 }
             });
         }

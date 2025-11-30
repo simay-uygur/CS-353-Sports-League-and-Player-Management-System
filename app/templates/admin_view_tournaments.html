@@ -14,7 +14,9 @@
                 <h1>View Tournaments</h1>
             </div>
             <div class="admin-actions">
-                <a class="add-tournament-link" href="{{ url_for('admin.create_tournament_form') }}">+ Add Tournament</a>
+                {% if allow_create %}
+                <a class="add-tournament-link" href="{{ url_for(create_endpoint) }}">+ Add Tournament</a>
+                {% endif %}
                 <div class="admin-icons">
                     <span class="icon-button" title="Notifications">🔔</span>
                     <span class="icon-button" title="Profile">👤</span>
@@ -32,7 +34,7 @@
                     {% for tournament in tournaments %}
                     {% set is_selected = selected_tournament and tournament.tournamentid == selected_tournament.tournamentid %}
                     <li>
-                        <a class="tournament-pill {{ 'selected' if is_selected }}" href="{{ url_for('admin.view_tournaments', tournament_id=tournament.tournamentid) }}">
+                        <a class="tournament-pill {{ 'selected' if is_selected }}" href="{{ url_for(list_endpoint, tournament_id=tournament.tournamentid) }}">
                             <span class="pill-avatar">A</span>
                             <div>
                                 <p class="pill-name">{{ tournament.name }}</p>

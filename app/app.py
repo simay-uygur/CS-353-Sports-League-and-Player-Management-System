@@ -10,20 +10,22 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from db import get_connection
 
 from blueprints.admin import admin_bp
+from blueprints.superadmin import superadmin_bp
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-key")
 
 app.register_blueprint(admin_bp)
+app.register_blueprint(superadmin_bp)
 
-# Role to home endpoint mapping
+# Role to home endpoint mapping - tournamnet-admin is now also league admin 
 ROLE_HOME_ENDPOINTS = {
     "player": "home_player",
     "coach": "home_coach",
     "referee": "home_referee",
     "team_owner": "home_team_owner",
-    "tournament_admin": "admin.view_tournaments",
     "admin": "admin.view_tournaments", 
+    "superadmin": "superadmin.view_tournaments",
 }
 
 @app.route("/")
@@ -54,6 +56,11 @@ def home_team_owner():
 @app.route("/home/tournament-admin")
 def home_tournament_admin():
     return render_template("home_tournament_admin.html")
+
+
+@app.route("/home/superadmin")
+def home_superadmin():
+    return redirect(url_for("superadmin.view_tournaments"))
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -229,7 +236,7 @@ def _register_team_owner(form):
 
 
 def _register_tournament_admin(form):
-    user_data = _extract_user_fields(form, role="tournament_admin")
+    user_data = _extract_user_fields(form, role="admin")
 
     conn = get_connection()
     try:
@@ -237,6 +244,7 @@ def _register_tournament_admin(form):
             with conn.cursor() as cur:
                 user_id = _insert_user(cur, user_data)
                 _insert_admin(cur, user_id)
+                _assign_league_moderation(cur, user_id)
     finally:
         conn.close()
 
@@ -366,6 +374,22 @@ def _insert_admin(cur, user_id):
     )
 
 
+def _assign_league_moderation(cur, admin_id):
+    cur.execute(
+        "SELECT LeagueID, SeasonNo, SeasonYear FROM Season;"
+    )
+    seasons = cur.fetchall()
+    for league_id, season_no, season_year in seasons:
+        cur.execute(
+            """
+            INSERT INTO SeasonModeration (LeagueID, SeasonNo, SeasonYear, AdminID)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT DO NOTHING;
+            """,
+            (league_id, season_no, season_year, admin_id),
+        )
+
+
 def _parse_decimal(raw_value, label, minimum=None, allow_empty=False):
     if raw_value in (None, ""):
         if allow_empty:
@@ -416,6 +440,8 @@ def _safe_next_path(user, next_path):
         return None
     # Block admin pages for non-admins to avoid redirect loops
     if next_path.startswith("/admin") and user.get("role") != "admin":
+        return None
+    if next_path.startswith("/superadmin") and user.get("role") != "superadmin":
         return None
     return next_path
 

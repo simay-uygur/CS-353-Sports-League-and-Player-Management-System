@@ -94,6 +94,8 @@ input[type="date"] {
     font-size: 1rem;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
     font-family: inherit;
+    background: #ffffff;
+    color: #0f172a;
 }
 
 input[type="email"]:focus,
@@ -598,8 +600,11 @@ button:hover {
 
 .create-layout {
     display: grid;
-    grid-template-columns: minmax(0, 2fr) minmax(220px, 1fr);
+    grid-template-columns: 1fr;
     gap: 2rem;
+    max-width: 960px;
+    margin: 0 auto;
+    width: 100%;
 }
 
 .create-card {
@@ -607,6 +612,7 @@ button:hover {
     border-radius: 28px;
     background: #ffffff;
     padding: 2.5rem;
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
 }
 
 .create-card-inner {
@@ -658,8 +664,8 @@ button:hover {
     border: 1px solid #dbe2ef;
     border-radius: 12px;
     font-size: 1rem;
-    background: #f8fafc;
-    color: #94a3b8;
+    background: #ffffff;
+    color: #0f172a;
 }
 
 .select-wrapper {
@@ -766,6 +772,11 @@ button:hover {
     margin-top: 0.35rem;
 }
 
+.select-hint.error {
+    color: #b91c1c;
+    font-weight: 600;
+}
+
 .select-hint.subtle {
     margin: 0;
     color: #94a3b8;
@@ -848,6 +859,49 @@ button:hover {
 
 .empty-state.subtle {
     color: #94a3b8;
+}
+
+.checkbox-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    background: #f8fafc;
+    max-height: 220px;
+    overflow: auto;
+}
+
+.checkbox-line {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-weight: 600;
+    color: #0f172a;
+}
+
+.checkbox-line input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+}
+
+.checkbox-line.is-hidden {
+    display: none;
+}
+
+.admin-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.search-box input[type="search"] {
+    width: 100%;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid #dbe2ef;
+    border-radius: 10px;
+    font-size: 0.95rem;
 }
 
 .sr-only {

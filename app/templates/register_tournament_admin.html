@@ -3,20 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sports League | Register as Tournament Admin</title>
+    <title>Sports League | Register as Admin</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 <body class="auth-body">
     <main class="auth-card register-card">
         <section>
-            <h1>Register as Tournament Admin</h1>
+            <h1>Register as Admin</h1>
         </section>
         {% if message %}
         <p class="form-message">{{ message }}</p>
         {% endif %}
 
         <form method="POST" action="{{ url_for('register_tournament_admin') }}" class="register-form">
-            <input type="hidden" name="role" value="tournament_admin">
+            <input type="hidden" name="role" value="admin">
             <div class="form-row">
                 <div class="form-group">
                     <label for="first_name">First Name</label>
@@ -71,4 +71,3 @@
     </main>
 </body>
 </html>
-
