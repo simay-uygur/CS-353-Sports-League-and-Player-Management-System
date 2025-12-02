@@ -28,5 +28,22 @@ def view_transfer_market():
     min_age = request.args.get("minAge")
     max_age = request.args.get("maxAge")
 
+    # nationality, position, min_age, and max_age
+    # do not have sanitation because I didn't care
+
     if name is not None:
         name = name.strip()
+    # execute the query, based on which arguments were given
+    
+    
+@coach_bp.route("/transfer_offer/<player_id>", methods=["GET", "POST"])
+def transfer_offer(player_id):
+    if not player_id:
+        # return an error and redirect to view_transfer_offer
+        pass
+    if request.method == "POST":
+        amount = request.args.get("amount")
+        available_until = request.args.get("availableUntil")
+        if not amount or not available_until or player_id:
+            # return an error and rerender transfer_offer
+            pass

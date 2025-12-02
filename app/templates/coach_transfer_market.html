@@ -10,19 +10,28 @@
 </head>
 
 <body>
+  <h1>Transfer Market</h1>
   <!-- Player filtering Section -->
   <form>
     <div style="display: flex;">
-      <select name="nationality" id="nationality-filter">
-        {{ for nationality in nationalities }}
-        <option value="{{ nationality['id'] }}">{{ nationality['name'] }}</option>
-        {{ endfor }}
-      </select>
-      <select name="pos" id="position-filter">
-        {{ for position in positions }}
-        <option value="{{ position['id'] }}">{{ position['name'] }}</option>
-        {{ endfor }}
-      </select>
+      <div>
+        <label for="nationality">Nationality</label>
+        <select name="nationality" id="nationality-filter">
+          <option value="" selected>Any</option>
+          {{ for nationality in nationalities }}
+          <option value="{{ nationality['id'] }}">{{ nationality['name'] }}</option>
+          {{ endfor }}
+        </select>
+      </div>
+      <div>
+        <label for="pos">Position</label>
+        <select name="pos" id="position-filter">
+          <option value="" selected>Any</option>
+          {{ for position in positions }}
+          <option value="{{ position['id'] }}">{{ position['name'] }}</option>
+          {{ endfor }}
+        </select>
+      </div>
       <div>
         <label for="minAge">Minimum Age</label>
         <input type="number" id="minAge" name="minAge" min="15" max="200">
@@ -35,11 +44,15 @@
         <label for="Contact Expiration Date">Contact Expiration Date</label>
         <input type="date" id="contactExpirationDate" name="contactExpirationDate">
       </div>
-      <select name="team" id="team-filter">
-        {{ for team in teams }}
-        <option value="{{ team['id'] }}">{{ team['name'] }}</option>
-        {{ endfor }}
-      </select>
+      <div>
+        <label for="team">Team</label>
+        <select name="team" id="team-filter">
+          <option value="" selected>-</option>
+          {{ for team in teams }}
+          <option value="{{ team['id'] }}">{{ team['name'] }}</option>
+          {{ endfor }}
+        </select>
+      </div>
       <button id="filter-button">Filter</button>
     </div>
     <!-- Search by name -->
@@ -71,7 +84,7 @@
         <td>{{ player['position'] }}</td>
         <td>{{ player['team'] }}</td>
         <td>{{ player['salary'] }}</td>
-        <td><button data-player-id="{{ player['id'] }}" class="buy-button">Offer</button></td>
+        <td><button><a href="{{url_for('transfer_offer')}}?playerId={{ player['id']}}">Offer</a></button></td>
       </tr>
       {{ endfor}}
     </tbody>

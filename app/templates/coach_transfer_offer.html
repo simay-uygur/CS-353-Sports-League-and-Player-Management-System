@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Transfer Offer</title>
+</head>
+
+<body>
+  <h1>Transfer Offer</h1>
+  <h2>Player</h2>
+  <ul>
+    <li>Name: {{ player['name']}}</li>
+    <li>Position: {{ player['position'] }}</li>
+  </ul>
+  <form>
+    
+    <label for="amount">Offer Amount</label>
+    <input name="amount" type="number" min="0">
+    <label for="availableUntil">Available Until</label>
+    <input type="date" name="availableUntil" id="availableUntil">
+    <button type="submit">Send Offer</button>
+  </form>
+  <script>
+    const dateInput = document.getElementById('availableUntil')
+    const date = new Date()
+    dateInput.min = date.toISOString().substring(0, 10)
+  </script>
+</body>
+
+</html>
