@@ -314,8 +314,22 @@ CREATE TABLE RefereeMatchAttendance (
 );
 
 -- --views 
+CREATE OR REPLACE VIEW AllTournamentMatchInfo AS
+SELECT
+  M1.*,
+  R1.*,
+  T1.Name,
+  T1.Size
+FROM Match M1
+JOIN TournamentMatch TM1 USING (MatchID)
+JOIN Round R1 ON R1.T_MatchID = TM1.MatchID
+JOIN Tournament T1 USING (TournamentID)
+ORDER BY M1.MatchStartDatetime;
 
 -- functions 
+
+
+-- trigger to fill parent match when both child matches have winners
 CREATE OR REPLACE FUNCTION fill_parent_match()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -438,18 +452,18 @@ BEGIN
     RETURNING MatchID INTO new_parent_match_id;
 
     ----------------------------------------------------------------
-    -- 8. Attach match to parent round
+    -- 8. Insert into TournamentMatch first to satisfy FK
+    ----------------------------------------------------------------
+    INSERT INTO TournamentMatch (MatchID)
+    VALUES (new_parent_match_id);
+
+    ----------------------------------------------------------------
+    -- 9. Attach match to parent round
     ----------------------------------------------------------------
     UPDATE Round
     SET T_MatchID = new_parent_match_id
     WHERE TournamentID = tournament_id
       AND RoundNo = parent_round;
-
-    ----------------------------------------------------------------
-    -- 9. Insert into TournamentMatch
-    ----------------------------------------------------------------
-    INSERT INTO TournamentMatch (MatchID)
-    VALUES (new_parent_match_id);
 
     RETURN NULL;
 END;
