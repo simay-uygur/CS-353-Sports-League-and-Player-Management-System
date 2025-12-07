@@ -313,7 +313,31 @@ CREATE TABLE RefereeMatchAttendance (
   FOREIGN KEY (RefereeID) REFERENCES Referee(UsersID) ON DELETE CASCADE
 );
 
--- --views 
+-- --views -----------------------------------------------------------------------------
+-- view for all matches with seasonal and tournament info 
+CREATE OR REPLACE VIEW AllMatchInfo AS
+SELECT
+  M1.*,
+  SMa1.*,
+  T1.*
+FROM Match M1
+LEFT JOIN SeasonalMatch SMa1 USING (MatchID)
+LEFT JOIN TournamentMatch TM1 USING (MatchID)
+LEFT JOIN Round R1 ON R1.T_MatchID = TM1.MatchID
+LEFT JOIN Tournament T1 USING (TournamentID)
+ORDER BY M1.MatchStartDatetime;
+
+CREATE OR REPLACE VIEW AllSeasonMatchInfo AS
+SELECT
+  L1.*,
+  SMa1.*,
+  M1.*
+FROM Match M1
+JOIN SeasonalMatch SMa1 USING (MatchID)
+JOIN League L1 USING (LeagueID)
+ORDER BY M1.MatchStartDatetime;
+
+-- view for all tournament matches with round info - WORKS
 CREATE OR REPLACE VIEW AllTournamentMatchInfo AS
 SELECT
   M1.*,
@@ -326,10 +350,132 @@ JOIN Round R1 ON R1.T_MatchID = TM1.MatchID
 JOIN Tournament T1 USING (TournamentID)
 ORDER BY M1.MatchStartDatetime;
 
+CREATE OR REPLACE VIEW RefereeMatchView AS
+SELECT *
+FROM (
+  SELECT
+    m.MatchID,
+    home.TeamName AS HomeTeamName,
+    away.TeamName AS AwayTeamName,
+    m.MatchStartDatetime,
+    l.Name AS CompetitionName,
+    rma.RefereeID,
+    TRUE AS IsLeague
+  FROM Match m
+  JOIN Team home ON m.HomeTeamID = home.TeamID
+  JOIN Team away ON m.AwayTeamID = away.TeamID
+  JOIN RefereeMatchAttendance rma ON m.MatchID = rma.MatchID
+  JOIN SeasonalMatch sm ON m.MatchID = sm.MatchID
+  JOIN League l USING (LeagueID)
+
+  UNION
+
+  SELECT
+    m.MatchID,
+    home.TeamName AS HomeTeamName,
+    away.TeamName AS AwayTeamName,
+    m.MatchStartDatetime,
+    t.Name AS CompetitionName,
+    rma.RefereeID,
+    FALSE AS IsLeague
+  FROM Match m
+  JOIN Team home ON m.HomeTeamID = home.TeamID
+  JOIN Team away ON m.AwayTeamID = away.TeamID
+  JOIN RefereeMatchAttendance rma ON m.MatchID = rma.MatchID
+  JOIN TournamentMatch tm ON m.MatchID = tm.MatchID
+  JOIN Round r ON r.T_MatchID = tm.MatchID
+  JOIN Tournament t USING (TournamentID)
+) AS combined
+ORDER BY MatchStartDatetime;
+
+CREATE OR REPLACE VIEW AllEmploymentInfo AS
+SELECT *
+FROM Employed
+JOIN Employment USING (EmploymentID)
+JOIN Team USING (TeamID)
+JOIN Employee USING (UsersID);
+
+CREATE OR REPLACE VIEW PlayerStatsAll AS
+SELECT
+  U1.UsersID,
+  U1.FirstName,
+  U1.LastName,
+  COUNT(DISTINCT M1.MatchID) AS total_appearances,
+  SUM(P1.GoalsScored) AS total_goals,
+  SUM(P1.PenaltiesScored) AS total_penalties,
+  SUM(COALESCE(P1.StopTime, 0) - COALESCE(P1.StartTime, 0)) / 60 AS total_minutes,
+  SUM(P1.YellowCards) AS total_yellowcards,
+  SUM(P1.RedCards) AS total_redcards,
+  SUM(P1.Saves) AS total_saves,
+  SUM(P1.SuccessfulPasses) AS total_successfulpasses,
+  SUM(P1.TotalPasses) AS total_totalpasses,
+  SUM(P1.AssistsMade) AS total_assistsmade
+FROM Match M1
+JOIN Play P1 USING (MatchID)
+JOIN Users U1 ON U1.UsersID = P1.PlayerID
+LEFT JOIN SeasonalMatch SMa1 USING (MatchID)
+LEFT JOIN TournamentMatch TM1 USING (MatchID)
+LEFT JOIN Round R1 ON R1.T_MatchID = TM1.MatchID
+LEFT JOIN Tournament T1 USING (TournamentID)
+GROUP BY U1.UsersID, U1.FirstName, U1.LastName;
+
+CREATE OR REPLACE VIEW PlayerSeasonStats AS
+SELECT
+  U1.UsersID,
+  U1.FirstName,
+  U1.LastName,
+  L1.Name,
+  SMa1.LeagueID,
+  SMa1.SeasonNo,
+  SMa1.SeasonYear,
+  COUNT(DISTINCT M1.MatchID) AS total_appearances,
+  SUM(P1.GoalsScored) AS total_goals,
+  SUM(P1.PenaltiesScored) AS total_penalties,
+  SUM(COALESCE(P1.StopTime, 0) - COALESCE(P1.StartTime, 0)) / 60 AS total_minutes,
+  SUM(P1.YellowCards) AS total_yellowcards,
+  SUM(P1.RedCards) AS total_redcards,
+  SUM(P1.Saves) AS total_saves,
+  SUM(P1.SuccessfulPasses) AS total_successfulpasses,
+  SUM(P1.TotalPasses) AS total_totalpasses,
+  SUM(P1.AssistsMade) AS total_assistsmade
+FROM SeasonalMatch SMa1
+JOIN Match M1 USING (MatchID)
+JOIN Play P1 USING (MatchID)
+JOIN Users U1 ON U1.UsersID = P1.PlayerID
+JOIN League L1 USING (LeagueID)
+GROUP BY
+  U1.UsersID, U1.FirstName, U1.LastName,
+  L1.Name, SMa1.LeagueID, SMa1.SeasonNo, SMa1.SeasonYear;
+
+CREATE OR REPLACE VIEW PlayerTournamentStats AS
+SELECT
+  U1.UsersID,
+  U1.FirstName,
+  U1.LastName,
+  T1.TournamentID,
+  T1.Name,
+  COUNT(DISTINCT M1.MatchID) AS total_appearances,
+  SUM(P1.GoalsScored) AS total_goals,
+  SUM(P1.PenaltiesScored) AS total_penalties,
+  SUM(COALESCE(P1.StopTime, 0) - COALESCE(P1.StartTime, 0)) / 60 AS total_minutes,
+  SUM(P1.YellowCards) AS total_yellowcards,
+  SUM(P1.RedCards) AS total_redcards,
+  SUM(P1.Saves) AS total_saves,
+  SUM(P1.SuccessfulPasses) AS total_successfulpasses,
+  SUM(P1.TotalPasses) AS total_totalpasses,
+  SUM(P1.AssistsMade) AS total_assistsmade
+FROM TournamentMatch TM1
+JOIN Match M1 USING (MatchID)
+JOIN Play P1 USING (MatchID)
+JOIN Users U1 ON U1.UsersID = P1.PlayerID
+JOIN Round R1 ON R1.T_MatchID = TM1.MatchID
+JOIN Tournament T1 USING (TournamentID)
+GROUP BY U1.UsersID, U1.FirstName, U1.LastName, T1.TournamentID, T1.Name;
+
 -- functions 
 
-
--- trigger to fill parent match when both child matches have winners
+-- triggers
+-- trigger to fill parent match when both child matches have winners -  WORKS
 CREATE OR REPLACE FUNCTION fill_parent_match()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -476,9 +622,147 @@ FOR EACH ROW
 EXECUTE FUNCTION fill_parent_match();
 
 
--- triggers
 
 
+
+
+-- trigger to update scores on play insert, excluding tournament matches
+CREATE OR REPLACE FUNCTION update_all_after_play_insertion()
+RETURNS TRIGGER AS $$
+DECLARE
+    player_team_id INT;
+    match_time TIMESTAMP;
+BEGIN
+    IF EXISTS (SELECT 1 FROM TournamentMatch WHERE MatchID = NEW.MatchID) THEN
+        RETURN NULL;
+    END IF;
+
+    IF NEW.StartTime IS NULL THEN
+        RETURN NULL;
+    END IF;
+
+    SELECT MatchStartDatetime INTO match_time
+    FROM Match
+    WHERE MatchID = NEW.MatchID;
+
+    IF match_time IS NULL THEN
+        RETURN NULL;
+    END IF;
+
+    SELECT TeamID INTO player_team_id
+    FROM AllEmploymentInfo
+    WHERE UsersID = NEW.PlayerID
+      AND match_time BETWEEN StartDate AND EndDate
+    LIMIT 1;
+
+    IF player_team_id IS NULL THEN
+        RETURN NULL;
+    END IF;
+
+    UPDATE Match
+    SET HomeTeamScore = COALESCE(HomeTeamScore, 0) +
+                        CASE WHEN HomeTeamID = player_team_id THEN COALESCE(NEW.GoalsScored, 0) ELSE 0 END,
+        AwayTeamScore = COALESCE(AwayTeamScore, 0) +
+                        CASE WHEN AwayTeamID = player_team_id THEN COALESCE(NEW.GoalsScored, 0) ELSE 0 END
+    WHERE MatchID = NEW.MatchID;
+
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER play_insert
+AFTER INSERT ON Play
+FOR EACH ROW
+WHEN (NOT EXISTS (SELECT 1 FROM TournamentMatch tm WHERE tm.MatchID = NEW.MatchID))
+EXECUTE FUNCTION update_all_after_play_insertion();
+
+-- trigger to update scores on play update, excluding tournament matches
+CREATE OR REPLACE FUNCTION update_all_after_play_update()
+RETURNS TRIGGER AS $$
+DECLARE
+    player_team_id INT;
+    match_time TIMESTAMP;
+    goal_delta INT;
+BEGIN
+    IF EXISTS (SELECT 1 FROM TournamentMatch WHERE MatchID = NEW.MatchID) THEN
+        RETURN NULL;
+    END IF;
+
+    IF NEW.StartTime IS NULL THEN
+        RETURN NULL;
+    END IF;
+
+    goal_delta := COALESCE(NEW.GoalsScored, 0) - COALESCE(OLD.GoalsScored, 0);
+    IF goal_delta = 0 THEN
+        RETURN NULL;
+    END IF;
+
+    SELECT MatchStartDatetime INTO match_time
+    FROM Match
+    WHERE MatchID = NEW.MatchID;
+
+    IF match_time IS NULL THEN
+        RETURN NULL;
+    END IF;
+
+    SELECT TeamID INTO player_team_id
+    FROM AllEmploymentInfo
+    WHERE UsersID = NEW.PlayerID
+      AND match_time BETWEEN StartDate AND EndDate
+    LIMIT 1;
+
+    IF player_team_id IS NULL THEN
+        RETURN NULL;
+    END IF;
+
+    UPDATE Match
+    SET HomeTeamScore = COALESCE(HomeTeamScore, 0) +
+                        CASE WHEN HomeTeamID = player_team_id THEN goal_delta ELSE 0 END,
+        AwayTeamScore = COALESCE(AwayTeamScore, 0) +
+                        CASE WHEN AwayTeamID = player_team_id THEN goal_delta ELSE 0 END
+    WHERE MatchID = NEW.MatchID;
+
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER play_update
+AFTER UPDATE ON Play
+FOR EACH ROW
+WHEN (NOT EXISTS (SELECT 1 FROM TournamentMatch tm WHERE tm.MatchID = NEW.MatchID))
+EXECUTE FUNCTION update_all_after_play_update();
+
+-- trigger to update match winner when scores change, excluding tournament matches
+CREATE OR REPLACE FUNCTION update_match_winner()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM TournamentMatch WHERE MatchID = NEW.MatchID) THEN
+        RETURN NULL;
+    END IF;
+
+    IF NEW.HomeTeamScore IS NULL OR NEW.AwayTeamScore IS NULL THEN
+        RETURN NULL;
+    END IF;
+
+    IF NEW.HomeTeamScore <> OLD.HomeTeamScore OR NEW.AwayTeamScore <> OLD.AwayTeamScore THEN
+        UPDATE Match M
+        SET WinnerTeam = CASE
+            WHEN NEW.HomeTeamScore > NEW.AwayTeamScore THEN NEW.HomeTeamName
+            WHEN NEW.HomeTeamScore < NEW.AwayTeamScore THEN NEW.AwayTeamName
+            ELSE NULL
+        END
+        WHERE M.MatchID = NEW.MatchID;
+    END IF;
+
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER match_update
+AFTER UPDATE ON Match
+FOR EACH ROW
+WHEN (NOT EXISTS (SELECT 1 FROM TournamentMatch tm WHERE tm.MatchID = NEW.MatchID))
+EXECUTE FUNCTION update_match_winner();
 
 -- sample data ---------------------------------------------------------------
 INSERT INTO Users (
