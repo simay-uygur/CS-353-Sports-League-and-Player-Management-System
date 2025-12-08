@@ -35,3 +35,7 @@ docker compose down -v
 
 ## Notes
 - All database interactions are implemented with raw SQL per project specification; no ORM is used.
+
+## Features
+- Superadmin can create tournaments and assign admins.
+- Admins and superadmins can delete tournaments from the tournament view; deletion also cleans up bracket matches safely.

@@ -398,6 +398,133 @@ def fetch_tournaments(admin_id):
         conn.close()
 
 
+def delete_tournament_and_matches(tournament_id):
+    """
+    Delete a tournament and its associated tournament matches (and their Match rows) safely.
+    Orders deletes to avoid FK issues:
+    - collect match IDs from rounds
+    - delete TournamentMatch entries for those matches (cascades Round rows via FK)
+    - delete the Match rows
+    - delete the Tournament
+    """
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    WITH match_ids AS (
+                        SELECT r.t_matchid AS matchid
+                        FROM Round r
+                        WHERE r.tournamentid = %s
+                          AND r.t_matchid IS NOT NULL
+                    ),
+                    deleted_tm AS (
+                        DELETE FROM TournamentMatch tm
+                        USING match_ids m
+                        WHERE tm.matchid = m.matchid
+                        RETURNING tm.matchid
+                    ),
+                    deleted_matches AS (
+                        DELETE FROM Match m
+                        USING match_ids mi
+                        WHERE m.matchid = mi.matchid
+                        RETURNING m.matchid
+                    )
+                    DELETE FROM Tournament
+                    WHERE tournamentid = %s;
+                    """,
+                    (tournament_id, tournament_id),
+                )
+    finally:
+        conn.close()
+
+        
+def _insert_play_rows_for_match(match_id, include_tournament_matches=False):
+    """
+    Shared insertion logic to add Play rows for a match.
+    If include_tournament_matches is False, tournament matches are ignored.
+    """
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT HomeTeamID, AwayTeamID, MatchStartDatetime
+                    FROM Match
+                    WHERE MatchID = %s;
+                    """,
+                    (match_id,),
+                )
+                row = cur.fetchone()
+                if not row:
+                    return 0
+
+                home_team_id, away_team_id, match_time = row
+
+                if not include_tournament_matches:
+                    cur.execute(
+                        "SELECT 1 FROM TournamentMatch WHERE MatchID = %s;",
+                        (match_id,),
+                    )
+                    if cur.fetchone():
+                        return 0
+
+                cur.execute(
+                    """
+                    WITH active_players AS (
+                        SELECT em.UsersID AS player_id
+                        FROM Employed em
+                        JOIN Employment e ON e.EmploymentID = em.EmploymentID
+                        JOIN Player p ON p.UsersID = em.UsersID
+                        WHERE em.TeamID IN (%s, %s)
+                          AND e.StartDate <= %s
+                          AND e.EndDate >= %s
+                          AND COALESCE(LOWER(p.IsEligible), '') = 'eligible'
+                    ), to_insert AS (
+                        SELECT %s AS match_id, ap.player_id
+                        FROM active_players ap
+                        WHERE NOT EXISTS (
+                            SELECT 1 FROM Play pl
+                            WHERE pl.MatchID = %s AND pl.PlayerID = ap.player_id
+                        )
+                    )
+                    INSERT INTO Play (MatchID, PlayerID)
+                    SELECT match_id, player_id FROM to_insert;
+                    """,
+                    (
+                        home_team_id,
+                        away_team_id,
+                        match_time,
+                        match_time,
+                        match_id,
+                        match_id,
+                    ),
+                )
+                return cur.rowcount
+    finally:
+        conn.close()
+
+
+def create_plays_for_match_players(match_id):
+    """
+    For a given match, auto-insert Play rows for all players on the home and away teams
+    whose employment is active at the match start time. Skips tournaments and existing plays.
+    Returns the number of Play rows inserted.
+    """
+    return _insert_play_rows_for_match(match_id, include_tournament_matches=False)
+
+
+def create_plays_for_match_players_on_insert(match_id):
+    """
+    Call immediately after inserting any match to add Play rows for all eligible players
+    on the home and away teams at the match start time. Works for league and tournament matches.
+    Returns the number of Play rows inserted.
+    """
+    return _insert_play_rows_for_match(match_id, include_tournament_matches=True)
+
+
 def fetch_all_admins():
     """
     Returns all admins (including superadmins persisted in Admin) with names and emails.

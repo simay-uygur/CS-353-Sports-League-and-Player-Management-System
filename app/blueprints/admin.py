@@ -51,6 +51,7 @@ def view_tournaments():
         matches_by_round=matches_by_round,
         create_endpoint="admin.create_tournament_form",
         list_endpoint="admin.view_tournaments",
+        delete_endpoint="admin.delete_tournament",
         allow_create=False,
     )
 
@@ -84,3 +85,17 @@ def _normalize_datetime(raw_value):
     if len(value) == 16:
         value += ":00"
     return value
+
+
+@admin_bp.route("/tournaments/<int:tournament_id>/delete", methods=["POST"])
+def delete_tournament(tournament_id):
+    admin_id = session.get("user_id")
+    if not admin_id:
+        return redirect(url_for("login"))
+
+    tournaments = fetch_tournaments(admin_id)
+    if not any(t["tournamentid"] == tournament_id for t in tournaments):
+        abort(403)
+
+    delete_tournament_and_matches(tournament_id)
+    return redirect(url_for("admin.view_tournaments"))

@@ -318,8 +318,12 @@ CREATE TABLE RefereeMatchAttendance (
 CREATE OR REPLACE VIEW AllMatchInfo AS
 SELECT
   M1.*,
-  SMa1.*,
-  T1.*
+  SMa1.LeagueID,
+  SMa1.SeasonNo,
+  SMa1.SeasonYear,
+  T1.TournamentID,
+  T1.Name AS TournamentName,
+  T1.Size AS TournamentSize
 FROM Match M1
 LEFT JOIN SeasonalMatch SMa1 USING (MatchID)
 LEFT JOIN TournamentMatch TM1 USING (MatchID)
@@ -329,9 +333,11 @@ ORDER BY M1.MatchStartDatetime;
 
 CREATE OR REPLACE VIEW AllSeasonMatchInfo AS
 SELECT
-  L1.*,
-  SMa1.*,
-  M1.*
+  M1.*,
+  SMa1.LeagueID,
+  L1.Name AS LeagueName,
+  SMa1.SeasonNo,
+  SMa1.SeasonYear
 FROM Match M1
 JOIN SeasonalMatch SMa1 USING (MatchID)
 JOIN League L1 USING (LeagueID)
@@ -389,11 +395,21 @@ FROM (
 ORDER BY MatchStartDatetime;
 
 CREATE OR REPLACE VIEW AllEmploymentInfo AS
-SELECT *
-FROM Employed
-JOIN Employment USING (EmploymentID)
-JOIN Team USING (TeamID)
-JOIN Employee USING (UsersID);
+SELECT
+  em.EmploymentID,
+  em.UsersID,
+  em.TeamID,
+  e.StartDate,
+  e.EndDate,
+  e.Salary,
+  t.TeamName,
+  t.OwnerID,
+  t.EstablishedDate,
+  t.HomeVenue
+FROM Employed em
+JOIN Employment e ON e.EmploymentID = em.EmploymentID
+JOIN Team t ON t.TeamID = em.TeamID
+JOIN Employee emp ON emp.UsersID = em.UsersID;
 
 CREATE OR REPLACE VIEW PlayerStatsAll AS
 SELECT
@@ -633,6 +649,7 @@ DECLARE
     player_team_id INT;
     match_time TIMESTAMP;
 BEGIN
+-- if it is a tournament match, do nothing - SKIP 
     IF EXISTS (SELECT 1 FROM TournamentMatch WHERE MatchID = NEW.MatchID) THEN
         RETURN NULL;
     END IF;
@@ -673,7 +690,6 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER play_insert
 AFTER INSERT ON Play
 FOR EACH ROW
-WHEN (NOT EXISTS (SELECT 1 FROM TournamentMatch tm WHERE tm.MatchID = NEW.MatchID))
 EXECUTE FUNCTION update_all_after_play_insertion();
 
 -- trigger to update scores on play update, excluding tournament matches
@@ -729,7 +745,6 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER play_update
 AFTER UPDATE ON Play
 FOR EACH ROW
-WHEN (NOT EXISTS (SELECT 1 FROM TournamentMatch tm WHERE tm.MatchID = NEW.MatchID))
 EXECUTE FUNCTION update_all_after_play_update();
 
 -- trigger to update match winner when scores change, excluding tournament matches
@@ -761,7 +776,6 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER match_update
 AFTER UPDATE ON Match
 FOR EACH ROW
-WHEN (NOT EXISTS (SELECT 1 FROM TournamentMatch tm WHERE tm.MatchID = NEW.MatchID))
 EXECUTE FUNCTION update_match_winner();
 
 -- sample data ---------------------------------------------------------------
@@ -802,7 +816,7 @@ INSERT INTO Users (
   ('Isabella', 'Player', 'player8@example.com', REPEAT('p', 64), REPEAT('h', 32), NOW(), '555-0208', TO_DATE('2003-12-12','YYYY-MM-DD'), 'player', 'Turkey'),
   -- real test users (can log in with password '123')
   ('Test', 'Player', 'p@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963', '555-1001', TO_DATE('2000-01-01','YYYY-MM-DD'), 'player', 'Local'),
-  ('tl', 'Admin', 'ta@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'admin', 'Local'),
+  ('tl', 'Admin', 'a@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'admin', 'Local'),
   ('super', 'super', 'sa@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'superadmin', 'Local');
 
 INSERT INTO SuperAdmin (UsersID)
@@ -810,7 +824,7 @@ SELECT UsersID FROM Users WHERE Email = 'sa@gmail.com';
 
 
 INSERT INTO Admin (UsersID)
-SELECT UsersID FROM Users WHERE Email IN ('admin@example.com', 'ta@gmail.com');
+SELECT UsersID FROM Users WHERE Email IN ('admin@example.com', 'a@gmail.com');
 
 INSERT INTO TeamOwner (UsersID, NetWorth)
 SELECT u.UsersID, data.net_worth

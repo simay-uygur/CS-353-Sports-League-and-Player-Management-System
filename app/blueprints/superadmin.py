@@ -7,6 +7,7 @@ from db_helper import (
     fetch_all_teams,
     fetch_all_tournaments,
     fetch_matches_grouped,
+    delete_tournament_and_matches,
 )
 
 superadmin_bp = Blueprint("superadmin", __name__, url_prefix="/superadmin")
@@ -30,6 +31,7 @@ def view_tournaments():
             matches_by_round={},
             create_endpoint="superadmin.create_tournament_form",
             list_endpoint="superadmin.view_tournaments",
+            delete_endpoint="superadmin.delete_tournament",
             allow_create=True,
         )
 
@@ -44,6 +46,7 @@ def view_tournaments():
         matches_by_round=matches_by_round,
         create_endpoint="superadmin.create_tournament_form",
         list_endpoint="superadmin.view_tournaments",
+        delete_endpoint="superadmin.delete_tournament",
         allow_create=True,
     )
 
@@ -88,3 +91,9 @@ def _select_tournament(requested_id, tournaments):
             if str(tournament["tournamentid"]) == requested_id:
                 return tournament
     return tournaments[0]
+
+
+@superadmin_bp.route("/tournaments/<int:tournament_id>/delete", methods=["POST"])
+def delete_tournament(tournament_id):
+    delete_tournament_and_matches(tournament_id)
+    return redirect(url_for("superadmin.view_tournaments"))
