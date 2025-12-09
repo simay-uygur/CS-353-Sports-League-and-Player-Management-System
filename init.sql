@@ -313,9 +313,185 @@ CREATE TABLE RefereeMatchAttendance (
   FOREIGN KEY (RefereeID) REFERENCES Referee(UsersID) ON DELETE CASCADE
 );
 
--- --views 
+-- --views -----------------------------------------------------------------------------
+-- view for all matches with seasonal and tournament info 
+CREATE OR REPLACE VIEW AllMatchInfo AS
+SELECT
+  M1.*,
+  SMa1.LeagueID,
+  SMa1.SeasonNo,
+  SMa1.SeasonYear,
+  T1.TournamentID,
+  T1.Name AS TournamentName,
+  T1.Size AS TournamentSize
+FROM Match M1
+LEFT JOIN SeasonalMatch SMa1 USING (MatchID)
+LEFT JOIN TournamentMatch TM1 USING (MatchID)
+LEFT JOIN Round R1 ON R1.T_MatchID = TM1.MatchID
+LEFT JOIN Tournament T1 USING (TournamentID)
+ORDER BY M1.MatchStartDatetime;
+
+CREATE OR REPLACE VIEW AllSeasonMatchInfo AS
+SELECT
+  M1.*,
+  SMa1.LeagueID,
+  L1.Name AS LeagueName,
+  SMa1.SeasonNo,
+  SMa1.SeasonYear
+FROM Match M1
+JOIN SeasonalMatch SMa1 USING (MatchID)
+JOIN League L1 USING (LeagueID)
+ORDER BY M1.MatchStartDatetime;
+
+-- view for all tournament matches with round info - WORKS
+CREATE OR REPLACE VIEW AllTournamentMatchInfo AS
+SELECT
+  M1.*,
+  R1.*,
+  T1.Name,
+  T1.Size
+FROM Match M1
+JOIN TournamentMatch TM1 USING (MatchID)
+JOIN Round R1 ON R1.T_MatchID = TM1.MatchID
+JOIN Tournament T1 USING (TournamentID)
+ORDER BY M1.MatchStartDatetime;
+
+CREATE OR REPLACE VIEW RefereeMatchView AS
+SELECT *
+FROM (
+  SELECT
+    m.MatchID,
+    home.TeamName AS HomeTeamName,
+    away.TeamName AS AwayTeamName,
+    m.MatchStartDatetime,
+    l.Name AS CompetitionName,
+    rma.RefereeID,
+    TRUE AS IsLeague
+  FROM Match m
+  JOIN Team home ON m.HomeTeamID = home.TeamID
+  JOIN Team away ON m.AwayTeamID = away.TeamID
+  JOIN RefereeMatchAttendance rma ON m.MatchID = rma.MatchID
+  JOIN SeasonalMatch sm ON m.MatchID = sm.MatchID
+  JOIN League l USING (LeagueID)
+
+  UNION
+
+  SELECT
+    m.MatchID,
+    home.TeamName AS HomeTeamName,
+    away.TeamName AS AwayTeamName,
+    m.MatchStartDatetime,
+    t.Name AS CompetitionName,
+    rma.RefereeID,
+    FALSE AS IsLeague
+  FROM Match m
+  JOIN Team home ON m.HomeTeamID = home.TeamID
+  JOIN Team away ON m.AwayTeamID = away.TeamID
+  JOIN RefereeMatchAttendance rma ON m.MatchID = rma.MatchID
+  JOIN TournamentMatch tm ON m.MatchID = tm.MatchID
+  JOIN Round r ON r.T_MatchID = tm.MatchID
+  JOIN Tournament t USING (TournamentID)
+) AS combined
+ORDER BY MatchStartDatetime;
+
+CREATE OR REPLACE VIEW AllEmploymentInfo AS
+SELECT
+  em.EmploymentID,
+  em.UsersID,
+  em.TeamID,
+  e.StartDate,
+  e.EndDate,
+  e.Salary,
+  t.TeamName,
+  t.OwnerID,
+  t.EstablishedDate,
+  t.HomeVenue
+FROM Employed em
+JOIN Employment e ON e.EmploymentID = em.EmploymentID
+JOIN Team t ON t.TeamID = em.TeamID
+JOIN Employee emp ON emp.UsersID = em.UsersID;
+
+CREATE OR REPLACE VIEW PlayerStatsAll AS
+SELECT
+  U1.UsersID,
+  U1.FirstName,
+  U1.LastName,
+  COUNT(DISTINCT M1.MatchID) AS total_appearances,
+  SUM(P1.GoalsScored) AS total_goals,
+  SUM(P1.PenaltiesScored) AS total_penalties,
+  SUM(COALESCE(P1.StopTime, 0) - COALESCE(P1.StartTime, 0)) / 60 AS total_minutes,
+  SUM(P1.YellowCards) AS total_yellowcards,
+  SUM(P1.RedCards) AS total_redcards,
+  SUM(P1.Saves) AS total_saves,
+  SUM(P1.SuccessfulPasses) AS total_successfulpasses,
+  SUM(P1.TotalPasses) AS total_totalpasses,
+  SUM(P1.AssistsMade) AS total_assistsmade
+FROM Match M1
+JOIN Play P1 USING (MatchID)
+JOIN Users U1 ON U1.UsersID = P1.PlayerID
+LEFT JOIN SeasonalMatch SMa1 USING (MatchID)
+LEFT JOIN TournamentMatch TM1 USING (MatchID)
+LEFT JOIN Round R1 ON R1.T_MatchID = TM1.MatchID
+LEFT JOIN Tournament T1 USING (TournamentID)
+GROUP BY U1.UsersID, U1.FirstName, U1.LastName;
+
+CREATE OR REPLACE VIEW PlayerSeasonStats AS
+SELECT
+  U1.UsersID,
+  U1.FirstName,
+  U1.LastName,
+  L1.Name,
+  SMa1.LeagueID,
+  SMa1.SeasonNo,
+  SMa1.SeasonYear,
+  COUNT(DISTINCT M1.MatchID) AS total_appearances,
+  SUM(P1.GoalsScored) AS total_goals,
+  SUM(P1.PenaltiesScored) AS total_penalties,
+  SUM(COALESCE(P1.StopTime, 0) - COALESCE(P1.StartTime, 0)) / 60 AS total_minutes,
+  SUM(P1.YellowCards) AS total_yellowcards,
+  SUM(P1.RedCards) AS total_redcards,
+  SUM(P1.Saves) AS total_saves,
+  SUM(P1.SuccessfulPasses) AS total_successfulpasses,
+  SUM(P1.TotalPasses) AS total_totalpasses,
+  SUM(P1.AssistsMade) AS total_assistsmade
+FROM SeasonalMatch SMa1
+JOIN Match M1 USING (MatchID)
+JOIN Play P1 USING (MatchID)
+JOIN Users U1 ON U1.UsersID = P1.PlayerID
+JOIN League L1 USING (LeagueID)
+GROUP BY
+  U1.UsersID, U1.FirstName, U1.LastName,
+  L1.Name, SMa1.LeagueID, SMa1.SeasonNo, SMa1.SeasonYear;
+
+CREATE OR REPLACE VIEW PlayerTournamentStats AS
+SELECT
+  U1.UsersID,
+  U1.FirstName,
+  U1.LastName,
+  T1.TournamentID,
+  T1.Name,
+  COUNT(DISTINCT M1.MatchID) AS total_appearances,
+  SUM(P1.GoalsScored) AS total_goals,
+  SUM(P1.PenaltiesScored) AS total_penalties,
+  SUM(COALESCE(P1.StopTime, 0) - COALESCE(P1.StartTime, 0)) / 60 AS total_minutes,
+  SUM(P1.YellowCards) AS total_yellowcards,
+  SUM(P1.RedCards) AS total_redcards,
+  SUM(P1.Saves) AS total_saves,
+  SUM(P1.SuccessfulPasses) AS total_successfulpasses,
+  SUM(P1.TotalPasses) AS total_totalpasses,
+  SUM(P1.AssistsMade) AS total_assistsmade
+FROM TournamentMatch TM1
+JOIN Match M1 USING (MatchID)
+JOIN Play P1 USING (MatchID)
+JOIN Users U1 ON U1.UsersID = P1.PlayerID
+JOIN Round R1 ON R1.T_MatchID = TM1.MatchID
+JOIN Tournament T1 USING (TournamentID)
+GROUP BY U1.UsersID, U1.FirstName, U1.LastName, T1.TournamentID, T1.Name;
 
 -- functions 
+
+-- triggers
+-- trigger to fill parent match when both child matches have winners -  WORKS
 CREATE OR REPLACE FUNCTION fill_parent_match()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -438,18 +614,18 @@ BEGIN
     RETURNING MatchID INTO new_parent_match_id;
 
     ----------------------------------------------------------------
-    -- 8. Attach match to parent round
+    -- 8. Insert into TournamentMatch first to satisfy FK
+    ----------------------------------------------------------------
+    INSERT INTO TournamentMatch (MatchID)
+    VALUES (new_parent_match_id);
+
+    ----------------------------------------------------------------
+    -- 9. Attach match to parent round
     ----------------------------------------------------------------
     UPDATE Round
     SET T_MatchID = new_parent_match_id
     WHERE TournamentID = tournament_id
       AND RoundNo = parent_round;
-
-    ----------------------------------------------------------------
-    -- 9. Insert into TournamentMatch
-    ----------------------------------------------------------------
-    INSERT INTO TournamentMatch (MatchID)
-    VALUES (new_parent_match_id);
 
     RETURN NULL;
 END;
@@ -462,9 +638,145 @@ FOR EACH ROW
 EXECUTE FUNCTION fill_parent_match();
 
 
--- triggers
 
 
+
+
+-- trigger to update scores on play insert, excluding tournament matches
+CREATE OR REPLACE FUNCTION update_all_after_play_insertion()
+RETURNS TRIGGER AS $$
+DECLARE
+    player_team_id INT;
+    match_time TIMESTAMP;
+BEGIN
+-- if it is a tournament match, do nothing - SKIP 
+    IF EXISTS (SELECT 1 FROM TournamentMatch WHERE MatchID = NEW.MatchID) THEN
+        RETURN NULL;
+    END IF;
+
+    IF NEW.StartTime IS NULL THEN
+        RETURN NULL;
+    END IF;
+
+    SELECT MatchStartDatetime INTO match_time
+    FROM Match
+    WHERE MatchID = NEW.MatchID;
+
+    IF match_time IS NULL THEN
+        RETURN NULL;
+    END IF;
+
+    SELECT TeamID INTO player_team_id
+    FROM AllEmploymentInfo
+    WHERE UsersID = NEW.PlayerID
+      AND match_time BETWEEN StartDate AND EndDate
+    LIMIT 1;
+
+    IF player_team_id IS NULL THEN
+        RETURN NULL;
+    END IF;
+
+    UPDATE Match
+    SET HomeTeamScore = COALESCE(HomeTeamScore, 0) +
+                        CASE WHEN HomeTeamID = player_team_id THEN COALESCE(NEW.GoalsScored, 0) ELSE 0 END,
+        AwayTeamScore = COALESCE(AwayTeamScore, 0) +
+                        CASE WHEN AwayTeamID = player_team_id THEN COALESCE(NEW.GoalsScored, 0) ELSE 0 END
+    WHERE MatchID = NEW.MatchID;
+
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER play_insert
+AFTER INSERT ON Play
+FOR EACH ROW
+EXECUTE FUNCTION update_all_after_play_insertion();
+
+-- trigger to update scores on play update, excluding tournament matches
+CREATE OR REPLACE FUNCTION update_all_after_play_update()
+RETURNS TRIGGER AS $$
+DECLARE
+    player_team_id INT;
+    match_time TIMESTAMP;
+    goal_delta INT;
+BEGIN
+    IF EXISTS (SELECT 1 FROM TournamentMatch WHERE MatchID = NEW.MatchID) THEN
+        RETURN NULL;
+    END IF;
+
+    IF NEW.StartTime IS NULL THEN
+        RETURN NULL;
+    END IF;
+
+    goal_delta := COALESCE(NEW.GoalsScored, 0) - COALESCE(OLD.GoalsScored, 0);
+    IF goal_delta = 0 THEN
+        RETURN NULL;
+    END IF;
+
+    SELECT MatchStartDatetime INTO match_time
+    FROM Match
+    WHERE MatchID = NEW.MatchID;
+
+    IF match_time IS NULL THEN
+        RETURN NULL;
+    END IF;
+
+    SELECT TeamID INTO player_team_id
+    FROM AllEmploymentInfo
+    WHERE UsersID = NEW.PlayerID
+      AND match_time BETWEEN StartDate AND EndDate
+    LIMIT 1;
+
+    IF player_team_id IS NULL THEN
+        RETURN NULL;
+    END IF;
+
+    UPDATE Match
+    SET HomeTeamScore = COALESCE(HomeTeamScore, 0) +
+                        CASE WHEN HomeTeamID = player_team_id THEN goal_delta ELSE 0 END,
+        AwayTeamScore = COALESCE(AwayTeamScore, 0) +
+                        CASE WHEN AwayTeamID = player_team_id THEN goal_delta ELSE 0 END
+    WHERE MatchID = NEW.MatchID;
+
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER play_update
+AFTER UPDATE ON Play
+FOR EACH ROW
+EXECUTE FUNCTION update_all_after_play_update();
+
+-- trigger to update match winner when scores change, excluding tournament matches
+CREATE OR REPLACE FUNCTION update_match_winner()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM TournamentMatch WHERE MatchID = NEW.MatchID) THEN
+        RETURN NULL;
+    END IF;
+
+    IF NEW.HomeTeamScore IS NULL OR NEW.AwayTeamScore IS NULL THEN
+        RETURN NULL;
+    END IF;
+
+    IF NEW.HomeTeamScore <> OLD.HomeTeamScore OR NEW.AwayTeamScore <> OLD.AwayTeamScore THEN
+        UPDATE Match M
+        SET WinnerTeam = CASE
+            WHEN NEW.HomeTeamScore > NEW.AwayTeamScore THEN NEW.HomeTeamName
+            WHEN NEW.HomeTeamScore < NEW.AwayTeamScore THEN NEW.AwayTeamName
+            ELSE NULL
+        END
+        WHERE M.MatchID = NEW.MatchID;
+    END IF;
+
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER match_update
+AFTER UPDATE ON Match
+FOR EACH ROW
+EXECUTE FUNCTION update_match_winner();
 
 -- sample data ---------------------------------------------------------------
 INSERT INTO Users (
@@ -493,18 +805,7 @@ INSERT INTO Users (
   ('Maria', 'Coach', 'coach2@example.com', REPEAT('f', 64), REPEAT('x', 32), NOW(), '555-0102', TO_DATE('1985-04-20','YYYY-MM-DD'), 'coach', 'Spain'),
   ('Carlos', 'Coach', 'coach3@example.com', REPEAT('g', 64), REPEAT('y', 32), NOW(), '555-0103', TO_DATE('1982-06-10','YYYY-MM-DD'), 'coach', 'Italy'),
   ('Sofia', 'Coach', 'coach4@example.com', REPEAT('h', 64), REPEAT('z', 32), NOW(), '555-0104', TO_DATE('1987-09-05','YYYY-MM-DD'), 'coach', 'Turkey'),
-  -- Players
-  ('Liam', 'Player', 'player1@example.com', REPEAT('i', 64), REPEAT('a', 32), NOW(), '555-0201', TO_DATE('2002-02-14','YYYY-MM-DD'), 'player', 'USA'),
-  ('Emma', 'Player', 'player2@example.com', REPEAT('j', 64), REPEAT('b', 32), NOW(), '555-0202', TO_DATE('2003-03-22','YYYY-MM-DD'), 'player', 'Spain'),
-  ('Lucas', 'Player', 'player3@example.com', REPEAT('k', 64), REPEAT('c', 32), NOW(), '555-0203', TO_DATE('2001-05-11','YYYY-MM-DD'), 'player', 'Italy'),
-  ('Sophia', 'Player', 'player4@example.com', REPEAT('l', 64), REPEAT('d', 32), NOW(), '555-0204', TO_DATE('2002-07-19','YYYY-MM-DD'), 'player', 'Turkey'),
-  ('James', 'Player', 'player5@example.com', REPEAT('m', 64), REPEAT('e', 32), NOW(), '555-0205', TO_DATE('2003-08-25','YYYY-MM-DD'), 'player', 'USA'),
-  ('Olivia', 'Player', 'player6@example.com', REPEAT('n', 64), REPEAT('f', 32), NOW(), '555-0206', TO_DATE('2002-01-03','YYYY-MM-DD'), 'player', 'Spain'),
-  ('Michael', 'Player', 'player7@example.com', REPEAT('o', 64), REPEAT('g', 32), NOW(), '555-0207', TO_DATE('2001-10-30','YYYY-MM-DD'), 'player', 'Italy'),
-  ('Isabella', 'Player', 'player8@example.com', REPEAT('p', 64), REPEAT('h', 32), NOW(), '555-0208', TO_DATE('2003-12-12','YYYY-MM-DD'), 'player', 'Turkey'),
-  -- real test users (can log in with password '123')
-  ('Test', 'Player', 'p@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963', '555-1001', TO_DATE('2000-01-01','YYYY-MM-DD'), 'player', 'Local'),
-  ('tl', 'Admin', 'ta@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'admin', 'Local'),
+  ('tl', 'Admin', 'a@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'admin', 'Local'),
   ('super', 'super', 'sa@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'superadmin', 'Local'),
   ('coach', 'coach', 'c@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'coach', 'Local');
 
@@ -513,7 +814,7 @@ SELECT UsersID FROM Users WHERE Email = 'sa@gmail.com';
 
 
 INSERT INTO Admin (UsersID)
-SELECT UsersID FROM Users WHERE Email IN ('admin@example.com', 'ta@gmail.com');
+SELECT UsersID FROM Users WHERE Email IN ('admin@example.com', 'a@gmail.com');
 
 INSERT INTO TeamOwner (UsersID, NetWorth)
 SELECT u.UsersID, data.net_worth
@@ -569,35 +870,178 @@ SELECT u.UsersID, 'UEFA A License'
 FROM Users u
 WHERE u.Email IN ('coach1@example.com', 'coach2@example.com', 'coach3@example.com', 'coach4@example.com');
 
-
-INSERT INTO Employee (UsersID, TeamID)
-SELECT u.UsersID, t.TeamID
-FROM Users u
-JOIN Team t ON t.OwnerID = (SELECT UsersID FROM Users WHERE Email = CASE 
-  WHEN u.Email IN ('player1@example.com', 'player2@example.com') THEN 'owner1@example.com'
-  WHEN u.Email IN ('player3@example.com', 'player4@example.com') THEN 'owner2@example.com'
-  WHEN u.Email IN ('player5@example.com', 'player6@example.com') THEN 'owner3@example.com'
-  ELSE 'owner1@example.com'
-END)
-WHERE u.Email IN ('player1@example.com', 'player2@example.com', 'player3@example.com', 'player4@example.com',
-                   'player5@example.com', 'player6@example.com', 'player7@example.com', 'player8@example.com');
-
+-- 112 players (14 per team) with ongoing employment
+WITH player_data AS (
+  SELECT * FROM (VALUES
+    ('Lions FC','Noah','Keller','p1@gmail.com','Forward',183,77),
+    ('Lions FC','Liam','Brooks','p2@gmail.com','Midfielder',180,74),
+    ('Lions FC','Ethan','Miles','p3@gmail.com','Defender',185,79),
+    ('Lions FC','Mason','Carter','p4@gmail.com','Goalkeeper',191,84),
+    ('Lions FC','Henry','Doyle','p5@gmail.com','Forward',182,76),
+    ('Lions FC','Owen','Blake','p6@gmail.com','Midfielder',179,73),
+    ('Lions FC','Isaac','Turner','p7@gmail.com','Defender',186,81),
+    ('Lions FC','Julian','Hayes','p8@gmail.com','Forward',181,75),
+    ('Lions FC','Caleb','Foster','p9@gmail.com','Midfielder',178,72),
+    ('Lions FC','Adrian','Pierce','p10@gmail.com','Defender',187,82),
+    ('Lions FC','Miles','Barrett','p11@gmail.com','Forward',184,78),
+    ('Lions FC','Felix','Rowe','p12@gmail.com','Midfielder',180,74),
+    ('Lions FC','Leo','Harmon','p13@gmail.com','Defender',188,83),
+    ('Lions FC','Nolan','Pratt','p14@gmail.com','Goalkeeper',192,86),
+    ('Falcons United','Aiden','Walsh','p15@gmail.com','Forward',182,76),
+    ('Falcons United','Logan','Hart','p16@gmail.com','Midfielder',179,72),
+    ('Falcons United','Gavin','Rhodes','p17@gmail.com','Defender',187,81),
+    ('Falcons United','Connor','Tate','p18@gmail.com','Goalkeeper',190,85),
+    ('Falcons United','Parker','Vance','p19@gmail.com','Forward',183,77),
+    ('Falcons United','Cole','Mercer','p20@gmail.com','Midfielder',181,74),
+    ('Falcons United','Dylan','Briggs','p21@gmail.com','Defender',186,80),
+    ('Falcons United','Ryder','Flynn','p22@gmail.com','Forward',182,75),
+    ('Falcons United','Chase','Dalton','p23@gmail.com','Midfielder',180,73),
+    ('Falcons United','Tyler','McKee','p24@gmail.com','Defender',188,82),
+    ('Falcons United','Max','Holden','p25@gmail.com','Forward',184,78),
+    ('Falcons United','Evan','Draper','p26@gmail.com','Midfielder',179,72),
+    ('Falcons United','Blake','Sutton','p27@gmail.com','Defender',186,81),
+    ('Falcons United','Reid','Lowry','p28@gmail.com','Goalkeeper',191,85),
+    ('Harbor City Waves','Luca','Marino','p29@gmail.com','Forward',181,75),
+    ('Harbor City Waves','Mateo','Costa','p30@gmail.com','Midfielder',178,72),
+    ('Harbor City Waves','Diego','Alvarez','p31@gmail.com','Defender',185,79),
+    ('Harbor City Waves','Marco','Russo','p32@gmail.com','Goalkeeper',190,84),
+    ('Harbor City Waves','Rafael','Silva','p33@gmail.com','Forward',183,77),
+    ('Harbor City Waves','Bruno','Santos','p34@gmail.com','Midfielder',180,74),
+    ('Harbor City Waves','Thiago','Ramos','p35@gmail.com','Defender',187,81),
+    ('Harbor City Waves','Enzo','Ferreira','p36@gmail.com','Forward',182,76),
+    ('Harbor City Waves','Gabriel','Mendes','p37@gmail.com','Midfielder',179,73),
+    ('Harbor City Waves','Santiago','Rios','p38@gmail.com','Defender',186,80),
+    ('Harbor City Waves','Julian','Herrera','p39@gmail.com','Forward',184,78),
+    ('Harbor City Waves','Adrian','Vargas','p40@gmail.com','Midfielder',180,74),
+    ('Harbor City Waves','Nicolas','Duarte','p41@gmail.com','Defender',188,82),
+    ('Harbor City Waves','Martin','Paredes','p42@gmail.com','Goalkeeper',192,86),
+    ('Alpine Strikers','Lukas','Steiner','p43@gmail.com','Forward',183,77),
+    ('Alpine Strikers','Leon','Schneider','p44@gmail.com','Midfielder',179,72),
+    ('Alpine Strikers','Jonas','Keller','p45@gmail.com','Defender',186,81),
+    ('Alpine Strikers','Fabian','Vogel','p46@gmail.com','Goalkeeper',191,85),
+    ('Alpine Strikers','Simon','Weber','p47@gmail.com','Forward',182,76),
+    ('Alpine Strikers','Moritz','Brandt','p48@gmail.com','Midfielder',180,74),
+    ('Alpine Strikers','Felix','Kruger','p49@gmail.com','Defender',187,82),
+    ('Alpine Strikers','Emil','Hofmann','p50@gmail.com','Forward',183,77),
+    ('Alpine Strikers','Niklas','Berger','p51@gmail.com','Midfielder',179,73),
+    ('Alpine Strikers','Tobias','Frank','p52@gmail.com','Defender',186,80),
+    ('Alpine Strikers','Marcel','Winkler','p53@gmail.com','Forward',184,78),
+    ('Alpine Strikers','Pascal','Neumann','p54@gmail.com','Midfielder',180,74),
+    ('Alpine Strikers','Dennis','Koch','p55@gmail.com','Defender',188,82),
+    ('Alpine Strikers','Oliver','Busch','p56@gmail.com','Goalkeeper',192,86),
+    ('Riviera Royals','Antoine','Laurent','p57@gmail.com','Forward',182,76),
+    ('Riviera Royals','Lucas','Bernard','p58@gmail.com','Midfielder',179,72),
+    ('Riviera Royals','Hugo','Moreau','p59@gmail.com','Defender',186,81),
+    ('Riviera Royals','Maxime','Girard','p60@gmail.com','Goalkeeper',190,85),
+    ('Riviera Royals','Julien','Lefevre','p61@gmail.com','Forward',183,77),
+    ('Riviera Royals','Theo','Dubois','p62@gmail.com','Midfielder',180,74),
+    ('Riviera Royals','Pierre','Lambert','p63@gmail.com','Defender',187,82),
+    ('Riviera Royals','Adrien','Roche','p64@gmail.com','Forward',182,76),
+    ('Riviera Royals','Clement','Faure','p65@gmail.com','Midfielder',179,73),
+    ('Riviera Royals','Leo','Marchand','p66@gmail.com','Defender',186,80),
+    ('Riviera Royals','Baptiste','Noel','p67@gmail.com','Forward',184,78),
+    ('Riviera Royals','Arthur','Perrot','p68@gmail.com','Midfielder',180,74),
+    ('Riviera Royals','Remy','Colin','p69@gmail.com','Defender',188,83),
+    ('Riviera Royals','Paul','Garnier','p70@gmail.com','Goalkeeper',192,86),
+    ('Canal City Crew','Mehmet','Arslan','p71@gmail.com','Forward',183,77),
+    ('Canal City Crew','Emir','Demir','p72@gmail.com','Midfielder',179,72),
+    ('Canal City Crew','Kerem','Yilmaz','p73@gmail.com','Defender',186,81),
+    ('Canal City Crew','Can','Kaya','p74@gmail.com','Goalkeeper',190,85),
+    ('Canal City Crew','Deniz','Aydin','p75@gmail.com','Forward',182,76),
+    ('Canal City Crew','Burak','Sahin','p76@gmail.com','Midfielder',180,74),
+    ('Canal City Crew','Alp','Yildiz','p77@gmail.com','Defender',187,82),
+    ('Canal City Crew','Eren','Kaplan','p78@gmail.com','Forward',182,76),
+    ('Canal City Crew','Serkan','Kurt','p79@gmail.com','Midfielder',179,73),
+    ('Canal City Crew','Mert','Ozdemir','p80@gmail.com','Defender',186,80),
+    ('Canal City Crew','Onur','Tekin','p81@gmail.com','Forward',184,78),
+    ('Canal City Crew','Baran','Aksoy','p82@gmail.com','Midfielder',180,74),
+    ('Canal City Crew','Arda','Ceylan','p83@gmail.com','Defender',188,82),
+    ('Canal City Crew','Furkan','Gunes','p84@gmail.com','Goalkeeper',192,86),
+    ('Atlas Eagles','Carlos','Navarro','p85@gmail.com','Forward',182,76),
+    ('Atlas Eagles','Miguel','Torres','p86@gmail.com','Midfielder',179,72),
+    ('Atlas Eagles','Javier','Castillo','p87@gmail.com','Defender',186,81),
+    ('Atlas Eagles','Luis','Herrera','p88@gmail.com','Goalkeeper',190,85),
+    ('Atlas Eagles','Sergio','Molina','p89@gmail.com','Forward',183,77),
+    ('Atlas Eagles','Andres','Cabrera','p90@gmail.com','Midfielder',180,74),
+    ('Atlas Eagles','Pedro','Salas','p91@gmail.com','Defender',187,82),
+    ('Atlas Eagles','Diego','Campos','p92@gmail.com','Forward',182,76),
+    ('Atlas Eagles','Raul','Dominguez','p93@gmail.com','Midfielder',179,73),
+    ('Atlas Eagles','Ignacio','Ponce','p94@gmail.com','Defender',186,80),
+    ('Atlas Eagles','Esteban','Flores','p95@gmail.com','Forward',184,78),
+    ('Atlas Eagles','Mateo','Serrano','p96@gmail.com','Midfielder',180,74),
+    ('Atlas Eagles','Bruno','Aguilar','p97@gmail.com','Defender',188,83),
+    ('Atlas Eagles','Tomas','Rojas','p98@gmail.com','Goalkeeper',192,86),
+    ('Silk Route FC','Aarav','Patel','p99@gmail.com','Forward',182,76),
+    ('Silk Route FC','Rohan','Sharma','p100@gmail.com','Midfielder',179,72),
+    ('Silk Route FC','Vihaan','Kapoor','p101@gmail.com','Defender',186,81),
+    ('Silk Route FC','Arjun','Mehta','p102@gmail.com','Goalkeeper',190,85),
+    ('Silk Route FC','Ishaan','Nair','p103@gmail.com','Forward',183,77),
+    ('Silk Route FC','Reyansh','Gupta','p104@gmail.com','Midfielder',180,74),
+    ('Silk Route FC','Advait','Khanna','p105@gmail.com','Defender',187,82),
+    ('Silk Route FC','Kabir','Bose','p106@gmail.com','Forward',182,76),
+    ('Silk Route FC','Arnav','Malhotra','p107@gmail.com','Midfielder',179,73),
+    ('Silk Route FC','Dhruv','Verma','p108@gmail.com','Defender',186,80),
+    ('Silk Route FC','Vivaan','Iyer','p109@gmail.com','Forward',184,78),
+    ('Silk Route FC','Kian','Desai','p110@gmail.com','Midfielder',180,74),
+    ('Silk Route FC','Shaan','Batra','p111@gmail.com','Defender',188,82),
+    ('Silk Route FC','Ayaan','Sethi','p112@gmail.com','Goalkeeper',192,86)
+  ) AS v(team_name, first_name, last_name, email, position, height_cm, weight_kg)
+),
+numbered_players AS (
+  SELECT pd.*, ROW_NUMBER() OVER () AS rn
+  FROM player_data pd
+),
+insert_users AS (
+  INSERT INTO Users (
+    FirstName, LastName, Email, HashedPassword, Salt, PasswordDate,
+    PhoneNumber, BirthDate, Role, Nationality
+  )
+  SELECT
+    first_name,
+    last_name,
+    email,
+    'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'),
+    'player',
+    'Local'
+  FROM numbered_players
+  RETURNING UsersID, Email
+),
+players_with_ids AS (
+  SELECT np.*, iu.UsersID
+  FROM numbered_players np
+  JOIN insert_users iu ON iu.Email = np.email
+),
+player_employees AS (
+  INSERT INTO Employee (UsersID, TeamID)
+  SELECT pwi.UsersID, t.TeamID
+  FROM players_with_ids pwi
+  JOIN Team t ON t.TeamName = pwi.team_name
+  RETURNING UsersID, TeamID
+),
+numbered_employee AS (
+  SELECT pe.*, ROW_NUMBER() OVER (ORDER BY pe.UsersID) AS rn
+  FROM player_employees pe
+),
+insert_employment AS (
+  INSERT INTO Employment (StartDate, EndDate, Salary)
+  SELECT DATE '2024-01-01', TIMESTAMP '2026-12-30 00:00:00', 60000 + ((rn - 1) % 5) * 2000
+  FROM numbered_employee
+  ORDER BY rn
+  RETURNING EmploymentID
+),
+employment_with_rn AS (
+  SELECT ie.EmploymentID, ROW_NUMBER() OVER (ORDER BY ie.EmploymentID) AS rn
+  FROM insert_employment ie
+),
+insert_employed AS (
+  INSERT INTO Employed (EmploymentID, UsersID, TeamID)
+  SELECT ewr.EmploymentID, ne.UsersID, ne.TeamID
+  FROM employment_with_rn ewr
+  JOIN numbered_employee ne USING (rn)
+)
 INSERT INTO Player (UsersID, Height, Weight, Overall, Position, IsEligible)
-SELECT u.UsersID, 
-       180 + (ROW_NUMBER() OVER () % 20),
-       75 + (ROW_NUMBER() OVER () % 10),
-       '85',
-       CASE (ROW_NUMBER() OVER () % 5)
-         WHEN 0 THEN 'Forward'
-         WHEN 1 THEN 'Midfielder'
-         WHEN 2 THEN 'Defender'
-         WHEN 3 THEN 'Goalkeeper'
-         ELSE 'Forward'
-       END,
-       'Yes'
-FROM Users u
-WHERE u.Email IN ('player1@example.com', 'player2@example.com', 'player3@example.com', 'player4@example.com',
-                   'player5@example.com', 'player6@example.com', 'player7@example.com', 'player8@example.com');
+SELECT pwi.UsersID, pwi.height_cm, pwi.weight_kg, '85', pwi.position, 'eligible'
+FROM players_with_ids pwi;
 
 
 -- Migrate password storage away from CHAR padding

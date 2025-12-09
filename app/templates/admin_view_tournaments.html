@@ -106,9 +106,25 @@
                     </div>
                     {% endfor %}
                 </div>
+                <div class="bracket-footer">
+                    <form class="delete-tournament-form" method="post" action="{{ url_for(delete_endpoint, tournament_id=selected_tournament.tournamentid) }}">
+                        <button type="submit" class="delete-tournament-btn">Delete Tournament</button>
+                    </form>
+                </div>
                 {% endif %}
             </section>
         </section>
     </main>
+    <script>
+        const deleteForm = document.querySelector('.delete-tournament-form');
+        if (deleteForm) {
+            deleteForm.addEventListener('submit', (event) => {
+                const confirmed = confirm('Do you want to delete this tournament?');
+                if (!confirmed) {
+                    event.preventDefault();
+                }
+            });
+        }
+    </script>
 </body>
 </html>
