@@ -11,12 +11,14 @@ from db import get_connection
 
 from blueprints.admin import admin_bp
 from blueprints.superadmin import superadmin_bp
+from blueprints.coach import coach_bp
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-key")
 
 app.register_blueprint(admin_bp)
 app.register_blueprint(superadmin_bp)
+app.register_blueprint(coach_bp)
 
 @app.before_request
 def _set_default_banner():

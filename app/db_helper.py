@@ -1,7 +1,7 @@
 # this is a mediator file that talks with the database and does common database tasks 
 import math
 import random
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from collections import defaultdict
@@ -89,8 +89,99 @@ def fetch_all_players():
             return cur.fetchall()
     finally:
         conn.close()
+
+def fetch_filtered_players(filters):
+    conn = get_connection()
+    try:
+        name = filters.get("name")
+        nationality = filters.get("nationality")
+        min_age = filters.get("min_age")
+        max_age = filters.get("max_age")
+        current_team = filters.get("team") 
+        position = filters.get("position")
         
+        min_birthdate = None
+        max_birthdate = None
+        if min_age and max_age:
+            today = date.today()
+            min_birthdate = date(today.year - max_age, today.month, today.day)
+            max_birthdate = date(today.year - min_age, today.month, today.day)
+
+        params = []
+        conditions = []
+        if name and name.strip() != "":
+            stripped_name = name.strip()
+            name_parts = stripped_name.split()
+            if len(name_parts) == 2:
+                conditions.append("(u.firstname ILIKE %s AND u.lastname ILIKE %s)")
+                params.append(name_parts[0])
+                params.append(name_parts[1])
+            else:
+                conditions.append("(u.firstname ILIKE %s OR u.lastname ILIKE %s)")
+                params.append(stripped_name)
+                params.append(stripped_name)
+        if nationality:
+            conditions.append("u.nationality = %s")
+            params.append(nationality)
+        if min_birthdate:
+            conditions.append("u.birthdate <= %s")
+            params.append(min_birthdate)
+        if max_birthdate:
+            conditions.append("u.birthdate >= %s")
+            params.append(max_birthdate)
+        if current_team:
+            conditions.append("t.teamid = %s")
+            params.append(current_team)
+        if position:
+            conditions.append("p.position = %s")
+            params.append(position)
+
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
         
+        query = f"""
+            SELECT u.usersid,
+                   u.firstname,
+                   u.lastname,
+                   u.nationality,
+                   u.birthdate,
+                   p.height,
+                   p.weight,
+                   p.overall,
+                   p.position,
+                   p.iseligible,
+                   t.teamid,
+                   t.teamname
+            FROM Player p
+            JOIN Employee e ON p.usersid = e.usersid
+            JOIN Users u ON p.usersid = u.usersid
+            LEFT JOIN Team t ON e.teamid = t.teamid
+            WHERE {where_clause}
+            ORDER BY u.lastname, u.firstname;
+        """
+        
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(query, params)
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_all_nationalities():
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT nationality
+                FROM Users
+                WHERE nationality IS NOT NULL
+                ORDER BY nationality;
+                """
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
 def fetch_matches_grouped(tournament_id):
     """
     Fetch tournament bracket with all rounds (including those without matches).

@@ -18,18 +18,18 @@
         <label for="nationality">Nationality</label>
         <select name="nationality" id="nationality-filter">
           <option value="" selected>Any</option>
-          {{ for nationality in nationalities }}
-          <option value="{{ nationality['id'] }}">{{ nationality['name'] }}</option>
-          {{ endfor }}
+          {% for nationality in nationalities %}
+          <option value="{{ nationality['nationality'] }}">{{ nationality['nationality'] }}</option>
+          {% endfor %}
         </select>
       </div>
       <div>
         <label for="pos">Position</label>
         <select name="pos" id="position-filter">
           <option value="" selected>Any</option>
-          {{ for position in positions }}
+          {% for position in positions %}
           <option value="{{ position['id'] }}">{{ position['name'] }}</option>
-          {{ endfor }}
+          {% endfor %}
         </select>
       </div>
       <div>
@@ -48,16 +48,16 @@
         <label for="team">Team</label>
         <select name="team" id="team-filter">
           <option value="" selected>-</option>
-          {{ for team in teams }}
+          {% for team in teams %}
           <option value="{{ team['id'] }}">{{ team['name'] }}</option>
-          {{ endfor }}
+          {% endfor %}
         </select>
       </div>
       <button id="filter-button">Filter</button>
     </div>
     <!-- Search by name -->
     <search style="display: flex;">
-      <input type="text" id="search-input" placeholder="Search...">
+      <input type="text" id="search-input" name="name" placeholder="Search...">
       <button id="search-button">Search</button>
     </search>
   </form>
@@ -76,17 +76,17 @@
       </tr>
     </thead>
     <tbody>
-      {{ for player in players }}
+      {% for player in players %}
       <tr>
-        <td>{{ player['name'] }}</td>
+        <td>{{ player['firstname'] }} {{player['lastname']}}</td>
         <td>{{ player['age'] }}</td>
         <td>{{ player['nationality'] }}</td>
         <td>{{ player['position'] }}</td>
         <td>{{ player['team'] }}</td>
         <td>{{ player['salary'] }}</td>
-        <td><button><a href="{{url_for('transfer_offer')}}?playerId={{ player['id']}}">Offer</a></button></td>
+        <td><button><a href="{{url_for('coach.transfer_offer', player_id=player['id'])}}">Offer</a></button></td>
       </tr>
-      {{ endfor}}
+      {% endfor %}
     </tbody>
   </table>
   <div id="calendar"></div>

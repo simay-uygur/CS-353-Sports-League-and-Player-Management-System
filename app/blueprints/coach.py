@@ -1,15 +1,6 @@
-
-import math
-from datetime import datetime, timedelta
-
-import psycopg2
-
 from flask import Blueprint, render_template, request, redirect, url_for, session, abort
-from psycopg2.extras import RealDictCursor
 
 from db_helper import * 
-
-from db import get_connection
 
 coach_bp = Blueprint("coach", __name__, url_prefix="/coach")
 
@@ -24,16 +15,30 @@ def require_coach_session():
 def view_transfer_market():
     name = request.args.get("name")
     nationality = request.args.get("nationality")
-    position = request.args.get("position")
+    position = request.args.get("pos")
     min_age = request.args.get("minAge")
     max_age = request.args.get("maxAge")
+    current_team = request.args.get("team")
 
     # nationality, position, min_age, and max_age
     # do not have sanitation because I didn't care
 
     if name is not None:
         name = name.strip()
-    # execute the query, based on which arguments were given
+
+    filters = {
+        'name': name,
+        'nationality': nationality,
+        'min_age': min_age,
+        'max_age': max_age,
+        'team': current_team,
+        'position': position
+    }
+
+    players = fetch_filtered_players(filters)
+    nationalities = fetch_all_nationalities()
+
+    return render_template("coach_transfer_market.html", players=players, nationalities=nationalities)
     
     
 @coach_bp.route("/transfer_offer/<player_id>", methods=["GET", "POST"])
