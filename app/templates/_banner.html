@@ -10,6 +10,12 @@
         {% if g.get("banner_view_endpoint") %}
         <a href="{{ url_for(g.banner_view_endpoint) }}" class="nav-link">View Tournaments</a>
         {% endif %}
+        {% if g.get("banner_league_endpoint") %}
+        <a href="{{ url_for(g.banner_league_endpoint) }}" class="nav-link">View Leagues</a>
+        {% endif %}
+        {% if g.get("banner_create_league_endpoint") %}
+        <a href="{{ url_for(g.banner_create_league_endpoint) }}" class="nav-link">Create League</a>
+        {% endif %}
     </nav>
     <div class="top-banner__actions">
         <span class="role-pill">{{ session.get("role", "guest")|capitalize }}</span>

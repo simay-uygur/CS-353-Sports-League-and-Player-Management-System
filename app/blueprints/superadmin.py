@@ -117,37 +117,67 @@ def view_leagues():
 
 @superadmin_bp.route("/leagues/create", methods=["GET", "POST"])
 def create_league_form():
+    teams = fetch_all_teams()
+    admins = fetch_all_admins()
     error_message = None
     form_data = request.form if request.method == "POST" else {}
+    selected_team_ids = form_data.getlist("team_ids") if request.method == "POST" else []
+    selected_admin_ids = form_data.getlist("global_admin_ids") if request.method == "POST" else []
     
     if request.method == "POST":
         try:
             league_name = form_data.get("league_name", "").strip()
+            team_ids = form_data.getlist("team_ids")
+            admin_assignment_mode = form_data.get("admin_assignment_mode", "all_seasons")
+            
+            # Validate teams
+            if len(team_ids) < 2:
+                raise ValueError("Please select at least 2 teams for the league.")
             
             # Collect seasons from form (season_no is auto-generated)
             season_count = int(form_data.get("season_count", 1))
             seasons_data = []
+            seasons_admins = []  # Store admin assignments per season
             
             for i in range(season_count):
-                season_year = form_data.get(f"season_year_{i}")
                 start_date = form_data.get(f"start_date_{i}")
                 start_time = form_data.get(f"start_time_{i}", "00:00")
                 end_date = form_data.get(f"end_date_{i}")
                 end_time = form_data.get(f"end_time_{i}", "23:59")
                 prize_pool = form_data.get(f"prize_pool_{i}")
                 
-                if season_year and start_date and end_date:
+                if start_date and end_date:
                     seasons_data.append({
-                        "season_year": season_year,
+                        "season_year": start_date,  # keep key for downstream, derived from start date
                         "start_date": start_date,
                         "start_time": start_time,
                         "end_date": end_date,
                         "end_time": end_time,
                         "prize_pool": prize_pool or 0,
                     })
+                    
+                    # Collect admin assignments for this season
+                    if admin_assignment_mode == "all_seasons":
+                        # Use global admins for all seasons
+                        season_admin_ids = form_data.getlist("global_admin_ids")
+                    else:
+                        # Use per-season admins
+                        season_admin_ids = form_data.getlist(f"season_admins_{i}")
+                    
+                    seasons_admins.append(season_admin_ids)
             
-            result = create_league_with_seasons(league_name, seasons_data)
-            return redirect(url_for("superadmin.assign_admins_form", league_id=result["league_id"]))
+            # Create league with seasons and teams
+            result = create_league_with_seasons(league_name, seasons_data, team_ids=team_ids)
+            league_id = result["league_id"]
+            
+            # Assign admins to seasons
+            for i, season_admin_ids in enumerate(seasons_admins):
+                if season_admin_ids:
+                    season_no = i + 1
+                    season_year = seasons_data[i]["season_year"]
+                    assign_admins_to_season(league_id, season_no, season_year, season_admin_ids)
+            
+            return redirect(url_for("superadmin.view_leagues"))
         except ValueError as exc:
             error_message = str(exc)
         except psycopg2.Error as exc:
@@ -155,8 +185,12 @@ def create_league_form():
     
     return render_template(
         "admin_create_league.html",
+        teams=teams,
+        admins=admins,
         error_message=error_message,
         form_data=form_data,
+        selected_team_ids=set(selected_team_ids),
+        selected_admin_ids=set(selected_admin_ids),
         cancel_endpoint="superadmin.view_leagues",
     )
 

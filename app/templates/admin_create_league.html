@@ -33,8 +33,57 @@
                            required
                            value="{{ form_data.get('league_name', '') }}">
 
-                    <label>Seasons</label>
-                    <p class="select-hint subtle">Add one or more seasons for this league. Each season requires a year, start date/time, and end date/time.</p>
+                    <label>Select Teams</label>
+                    <p class="select-hint subtle">Select at least 2 teams to participate in this league.</p>
+                    <div class="admin-picker">
+                        <div class="search-box">
+                            <input type="search"
+                                   id="team-search"
+                                   placeholder="Search teams"
+                                   aria-label="Search teams">
+                        </div>
+                        <div class="checkbox-list" id="team-checkbox-list">
+                            {% for team in teams %}
+                            <label class="checkbox-line" data-team-search="{{ team.teamname|lower }}">
+                                <input type="checkbox"
+                                       name="team_ids"
+                                       value="{{ team.teamid }}"
+                                       {% if team.teamid|string in selected_team_ids %}checked{% endif %}>
+                                <span>{{ team.teamname }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    <p class="select-hint">Selected: <span id="selected-count">{{ selected_team_ids|length }}</span></p>
+                    <p class="select-hint error" id="team-validation" aria-live="polite"></p>
+                </div>
+
+                    {% set admin_mode = form_data.get('admin_assignment_mode', 'all_seasons') %}
+                    <div class="admin-assignment-card">
+                        <label class="admin-assignment-label">Admin Assignment Mode</label>
+                        <div class="admin-mode-options" role="group" aria-label="Admin assignment mode">
+                            <label class="admin-mode-option">
+                                <input type="radio"
+                                       name="admin_assignment_mode"
+                                       value="all_seasons"
+                                       id="admin-mode-all"
+                                       {% if admin_mode == 'all_seasons' %}checked{% endif %}>
+                                <span class="admin-mode-text">Same admins for all seasons</span>
+                            </label>
+                            <label class="admin-mode-option">
+                                <input type="radio"
+                                       name="admin_assignment_mode"
+                                       value="per_season"
+                                       id="admin-mode-per-season"
+                                       {% if admin_mode == 'per_season' %}checked{% endif %}>
+                                <span class="admin-mode-text">Different admins per season</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="admin-selection-container" style="margin-top: 10px;"></div>
+
+                    <label style="margin-top: 12px; margin-bottom: 4px;">Seasons</label>
+                    <p class="select-hint subtle" style="margin-top: 0;">Add one or more seasons for this league. Each season requires start date/time and end date/time.</p>
                     
                     <div id="seasons-container"></div>
 
@@ -63,7 +112,17 @@
         const seasonsContainer = document.getElementById("seasons-container");
         const addSeasonBtn = document.getElementById("add-season-btn");
         const form = document.querySelector(".create-card");
+        const teamSearch = document.getElementById("team-search");
+        const teamCheckboxList = document.getElementById("team-checkbox-list");
+        const teamRows = teamCheckboxList ? Array.from(teamCheckboxList.querySelectorAll(".checkbox-line")) : [];
+        const selectedCountEl = document.getElementById("selected-count");
+        const teamValidation = document.getElementById("team-validation");
+        const adminModeAllRadio = document.getElementById("admin-mode-all");
+        const adminModePerSeasonRadio = document.getElementById("admin-mode-per-season");
+        const adminSelectionContainer = document.getElementById("admin-selection-container");
+        
         let seasonCount = 0;
+        let admins = {{ admins | tojson if admins else '[]' }};
 
         leaveTriggers.forEach(function (el) {
             el.addEventListener("click", function (event) {
@@ -78,10 +137,139 @@
             });
         });
 
+        function getSelectedCount() {
+            if (!teamCheckboxList) return 0;
+            return teamCheckboxList.querySelectorAll('input[name="team_ids"]:checked').length;
+        }
+
+        function updateSelectedCount() {
+            const count = getSelectedCount();
+            if (selectedCountEl) selectedCountEl.textContent = count;
+            if (teamValidation) {
+                if (count === 0) {
+                    teamValidation.textContent = "";
+                } else if (count < 2) {
+                    teamValidation.textContent = "Select at least 2 teams.";
+                } else {
+                    teamValidation.textContent = "";
+                }
+            }
+        }
+
+        function filterTeams(query) {
+            const normalized = (query || "").toLowerCase().trim();
+            teamRows.forEach(function (row) {
+                const haystack = (row.dataset.teamSearch || row.innerText || "").toLowerCase();
+                const match = !normalized || haystack.includes(normalized);
+                row.classList.toggle("is-hidden", !match);
+            });
+        }
+
+        if (teamSearch && teamCheckboxList) {
+            teamSearch.addEventListener("input", function (event) {
+                filterTeams(event.target.value);
+            });
+            filterTeams("");
+        }
+
+        if (teamCheckboxList) {
+            teamCheckboxList.addEventListener("change", updateSelectedCount);
+        }
+
+        updateSelectedCount();
+
+        function createAdminSelectionComponent(label = "Select Admins for All Seasons", fieldName = "global_admin_ids") {
+            const component = document.createElement("div");
+            component.className = "admin-selection-component";
+            component.innerHTML = `
+                <label>${label}</label>
+                <p class="select-hint subtle">Selected admins will moderate the league/seasons.</p>
+                <div class="admin-picker">
+                    <div class="search-box">
+                        <input type="search"
+                               class="admin-search"
+                               placeholder="Search admins by name or email"
+                               aria-label="Search admins">
+                    </div>
+                    <div class="checkbox-list admin-checkbox-list">
+                        ${admins.map(admin => `
+                            <label class="checkbox-line" data-admin-search="${(admin.firstname + ' ' + admin.lastname + ' ' + admin.email).toLowerCase()}">
+                                <input type="checkbox"
+                                       name="${fieldName}"
+                                       value="${admin.usersid}">
+                                <span>${admin.firstname} ${admin.lastname} (${admin.email})</span>
+                            </label>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+
+            // Add search functionality
+            const searchInput = component.querySelector(".admin-search");
+            const adminRows = component.querySelectorAll(".checkbox-line");
+            if (searchInput) {
+                searchInput.addEventListener("input", function (event) {
+                    const query = (event.target.value || "").toLowerCase().trim();
+                    adminRows.forEach(row => {
+                        const haystack = (row.dataset.adminSearch || "").toLowerCase();
+                        const match = !query || haystack.includes(query);
+                        row.classList.toggle("is-hidden", !match);
+                    });
+                });
+            }
+
+            return component;
+        }
+
+        function renderAdminSelectionMode() {
+            adminSelectionContainer.innerHTML = "";
+            const mode = document.querySelector("input[name='admin_assignment_mode']:checked")?.value;
+
+            if (mode === "all_seasons") {
+                const component = createAdminSelectionComponent("Select Admins for All Seasons", "global_admin_ids");
+                adminSelectionContainer.appendChild(component);
+            } else if (mode === "per_season") {
+                const cards = seasonsContainer.querySelectorAll(".season-card");
+                if (cards.length > 0) {
+                    const container = document.createElement("div");
+                    container.style.marginTop = "6px";
+                    container.innerHTML = "<p class='select-hint subtle' style='margin-bottom: 8px;'>Admin selection for each season will appear with the season details below.</p>";
+                    adminSelectionContainer.appendChild(container);
+                }
+            }
+        }
+
         function createSeasonCard(index) {
             const card = document.createElement("div");
             card.className = "season-card";
             card.dataset.seasonIndex = index;
+            
+            const mode = document.querySelector("input[name='admin_assignment_mode']:checked")?.value || "all_seasons";
+            const adminSectionHTML = mode === "per_season" ? `
+                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
+                    <label>Admins for Season ${index + 1}</label>
+                    <p class="select-hint subtle">Select admins to moderate this season.</p>
+                    <div class="admin-picker">
+                        <div class="search-box">
+                            <input type="search"
+                                   class="season-admin-search"
+                                   placeholder="Search admins by name or email"
+                                   aria-label="Search admins">
+                        </div>
+                        <div class="checkbox-list season-admin-checkbox-list">
+                            ${admins.map(admin => `
+                                <label class="checkbox-line" data-admin-search="${(admin.firstname + ' ' + admin.lastname + ' ' + admin.email).toLowerCase()}">
+                                    <input type="checkbox"
+                                           name="season_admins_${index}"
+                                           value="${admin.usersid}">
+                                    <span>${admin.firstname} ${admin.lastname} (${admin.email})</span>
+                                </label>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            ` : "";
+
             card.innerHTML = `
                 <div class="season-card-header">
                     <h3>Season ${index + 1}</h3>
@@ -90,16 +278,6 @@
                     </button>
                 </div>
                 <div class="season-card-content">
-                    <div class="form-row">
-                        <div class="form-col">
-                            <label for="season_year_${index}">Season Year</label>
-                            <input type="date"
-                                   id="season_year_${index}"
-                                   name="season_year_${index}"
-                                   required>
-                        </div>
-                    </div>
-
                     <div class="form-row">
                         <div class="form-col">
                             <label for="start_date_${index}">Start Date</label>
@@ -145,6 +323,7 @@
                                    value="0">
                         </div>
                     </div>
+                    ${adminSectionHTML}
                 </div>
             `;
 
@@ -154,6 +333,22 @@
                 card.remove();
                 updateSeasonNumbers();
             });
+
+            // Add search functionality for per-season admins
+            if (mode === "per_season") {
+                const seasonAdminSearch = card.querySelector(".season-admin-search");
+                const seasonAdminRows = card.querySelectorAll(".season-admin-checkbox-list .checkbox-line");
+                if (seasonAdminSearch) {
+                    seasonAdminSearch.addEventListener("input", function (event) {
+                        const query = (event.target.value || "").toLowerCase().trim();
+                        seasonAdminRows.forEach(row => {
+                            const haystack = (row.dataset.adminSearch || "").toLowerCase();
+                            const match = !query || haystack.includes(query);
+                            row.classList.toggle("is-hidden", !match);
+                        });
+                    });
+                }
+            }
 
             return card;
         }
@@ -171,12 +366,35 @@
             });
         }
 
+        function recreateSeasonCards() {
+            const cards = seasonsContainer.querySelectorAll(".season-card");
+            const savedCount = cards.length;
+            seasonsContainer.innerHTML = "";
+            seasonCount = 0;
+            for (let i = 0; i < savedCount; i++) {
+                const newCard = createSeasonCard(i);
+                seasonsContainer.appendChild(newCard);
+                seasonCount++;
+            }
+        }
+
         addSeasonBtn.addEventListener("click", function (e) {
             e.preventDefault();
             const cards = seasonsContainer.querySelectorAll(".season-card");
             const newIndex = cards.length;
             const newCard = createSeasonCard(newIndex);
             seasonsContainer.appendChild(newCard);
+        });
+
+        // Handle admin assignment mode radio button changes
+        adminModeAllRadio.addEventListener("change", function () {
+            renderAdminSelectionMode();
+            recreateSeasonCards(); // strip per-season admin selectors when switching to global
+        });
+
+        adminModePerSeasonRadio.addEventListener("change", function () {
+            renderAdminSelectionMode();
+            recreateSeasonCards(); // add per-season admin selectors when switching to per-season
         });
 
         // Add initial season
@@ -186,10 +404,21 @@
             seasonCount = 1;
         }
 
+        // Initial admin selection rendering
+        renderAdminSelectionMode();
+
         // Store season count in hidden field for form submission
         if (form) {
             form.addEventListener("submit", function (event) {
                 const cards = seasonsContainer.querySelectorAll(".season-card");
+                const selectedTeams = getSelectedCount();
+
+                if (selectedTeams < 2) {
+                    event.preventDefault();
+                    alert("Please select at least 2 teams.");
+                    return;
+                }
+
                 if (cards.length === 0) {
                     event.preventDefault();
                     alert("Please add at least one season.");
@@ -287,54 +516,69 @@
         border-color: #007bff;
         box-shadow: 0 0 4px rgba(0, 123, 255, 0.25);
     }
+
+    .admin-assignment-card {
+        margin-top: 20px;
+        padding-top: 12px;
+        border-top: 1px solid #e5e7eb;
+    }
+
+    .admin-assignment-label {
+        display: block;
+        font-weight: 700;
+        color: #0f172a;
+        margin-bottom: 12px;
+    }
+
+    .admin-mode-options {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .admin-mode-option {
+        position: relative;
+        display: inline-flex;
+        align-items: stretch;
+        cursor: pointer;
+    }
+
+    .admin-mode-option input[type="radio"] {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .admin-mode-text {
+        display: inline-flex;
+        align-items: center;
+        padding: 10px 14px;
+        border: 1px solid #dbe2ef;
+        border-radius: 12px;
+        background: #f8fafc;
+        font-weight: 600;
+        color: #334155;
+        transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+        min-height: 42px;
+    }
+
+    .admin-mode-option input[type="radio"]:checked + .admin-mode-text {
+        border-color: #111827;
+        background: #111827;
+        color: #ffffff;
+        box-shadow: 0 8px 20px rgba(17, 24, 39, 0.15);
+    }
+
+    .admin-mode-option input[type="radio"]:checked + .admin-mode-text::before {
+        background: #ffffff;
+        border-color: #ffffff;
+        box-shadow: inset 0 0 0 5px #111827;
+    }
+
+    .admin-mode-option input[type="radio"]:focus-visible + .admin-mode-text {
+        outline: 3px solid rgba(79, 124, 255, 0.35);
+        outline-offset: 2px;
+    }
 </style>
 </html>
-                                           name="season_no_0"
-                                           placeholder="1"
-                                           required
-                                           min="1"
-                                           value="{{ form_data.get('season_no_0', '1') }}">
-                                </div>
-                                <div>
-                                    <label for="season_year_0">Season Year</label>
-                                    <input type="date"
-                                           id="season_year_0"
-                                           name="season_year_0"
-                                           required
-                                           value="{{ form_data.get('season_year_0', '') }}">
-                                </div>
-                            </div>
-
-                            <div class="form-row">
-                                <div>
-                                    <label for="start_date_0">Start Date</label>
-                                    <input type="date"
-                                           id="start_date_0"
-                                           name="start_date_0"
-                                           required
-                                           value="{{ form_data.get('start_date_0', '') }}">
-                                </div>
-                                <div>
-                                    <label for="start_time_0">Start Time</label>
-                                    <input type="time"
-                                           id="start_time_0"
-                                           name="start_time_0"
-                                           value="{{ form_data.get('start_time_0', '00:00') }}">
-                                </div>
-                            </div>
-
-                            <div class="form-row">
-                                <div>
-                                    <label for="end_date_0">End Date</label>
-                                    <input type="date"
-                                           id="end_date_0"
-                                           name="end_date_0"
-                                           required
-                                           value="{{ form_data.get('end_date_0', '') }}">
-                                </div>
-                                <div>
-                                    <label for="end_time_0">End Time</label>
-                                    <input type="time"
-                                           id="end_time_0"
-                                           name="end_time_0"
-    

@@ -631,17 +631,18 @@ def fetch_league_by_id(league_id):
         conn.close()
 
 
-def create_league_with_seasons(league_name, seasons_data):
+def create_league_with_seasons(league_name, seasons_data, team_ids=None):
     """
     Create a league and its seasons in a single transaction.
     
     seasons_data: List of dicts with keys:
-        - season_year: Year (YYYY-MM-DD format date string)
         - start_date: Start date (YYYY-MM-DD format)
         - start_time: Start time (HH:MM format)
         - end_date: End date (YYYY-MM-DD format)
         - end_time: End time (HH:MM format)
         - prize_pool: Prize pool amount (int)
+    
+    team_ids: List of team IDs to associate with this league (optional)
     
     Returns: {'league_id': int}
     """
@@ -654,18 +655,16 @@ def create_league_with_seasons(league_name, seasons_data):
     validated_seasons = []
     for i, season in enumerate(seasons_data):
         season_no = i + 1
-        season_year_str = season.get("season_year", "").strip()
         start_date_str = season.get("start_date", "").strip()
         start_time_str = season.get("start_time", "00:00").strip()
         end_date_str = season.get("end_date", "").strip()
         end_time_str = season.get("end_time", "23:59").strip()
         prize_pool = season.get("prize_pool", 0)
         
-        if not season_year_str or not start_date_str or not end_date_str:
-            raise ValueError(f"Season {season_no}: Year, start date, and end date are required.")
+        if not start_date_str or not end_date_str:
+            raise ValueError(f"Season {season_no}: Start date and end date are required.")
         
         try:
-            season_year = datetime.strptime(season_year_str, "%Y-%m-%d").date()
             start_datetime = datetime.strptime(f"{start_date_str} {start_time_str}", "%Y-%m-%d %H:%M")
             end_datetime = datetime.strptime(f"{end_date_str} {end_time_str}", "%Y-%m-%d %H:%M")
         except ValueError:
@@ -679,7 +678,7 @@ def create_league_with_seasons(league_name, seasons_data):
         
         validated_seasons.append({
             "season_no": season_no,
-            "season_year": season_year,
+            "season_year": start_datetime.date(),
             "start_datetime": start_datetime,
             "end_datetime": end_datetime,
             "prize_pool": int(prize_pool),
@@ -716,6 +715,17 @@ def create_league_with_seasons(league_name, seasons_data):
                             season["prize_pool"],
                         ),
                     )
+                
+                # Insert team-league associations if provided
+                if team_ids:
+                    for team_id in team_ids:
+                        cur.execute(
+                            """
+                            INSERT INTO LeagueTeam (LeagueID, TeamID)
+                            VALUES (%s, %s);
+                            """,
+                            (league_id, int(team_id)),
+                        )
         
         return {"league_id": league_id}
     finally:
