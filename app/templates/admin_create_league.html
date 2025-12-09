@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin | Create League</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="dashboard-body">
+    {% include "_banner.html" %}
+    <main class="dashboard-container">
+        <header class="admin-header">
+            <div>
+                <p class="eyebrow">Admin Console</p>
+                <h1>Create League</h1>
+            </div>
+        </header>
+
+        <section class="create-layout">
+            <form class="create-card" method="POST" novalidate>
+                <div class="create-card-inner">
+                    {% if error_message %}
+                    <div class="form-message error">{{ error_message }}</div>
+                    {% else %}
+                    <p class="form-note">Fill out the details below to create a league. Add one or more seasons with their respective dates and prize pools.</p>
+                    {% endif %}
+
+                    <label for="league_name">League Name</label>
+                    <input type="text"
+                           id="league_name"
+                           name="league_name"
+                           placeholder="League Name"
+                           required
+                           value="{{ form_data.get('league_name', '') }}">
+
+                    <label>Seasons</label>
+                    <p class="select-hint subtle">Add one or more seasons for this league. Each season requires a year, start date/time, and end date/time.</p>
+                    
+                    <div id="seasons-container"></div>
+
+                    <button type="button" id="add-season-btn" class="btn outline" style="margin-bottom: 20px;">
+                        + Add Season
+                    </button>
+
+                    <div class="form-action-buttons">
+                        <button type="button"
+                                class="btn ghost leave-link"
+                                data-target="{{ url_for(cancel_endpoint) }}"
+                                data-confirm-message="Leave without creating this league?">
+                            Cancel
+                        </button>
+                        <button type="submit" class="btn solid">Save</button>
+                    </div>
+                </div>
+            </form>
+
+        </section>
+    </main>
+</body>
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const leaveTriggers = document.querySelectorAll(".leave-link");
+        const seasonsContainer = document.getElementById("seasons-container");
+        const addSeasonBtn = document.getElementById("add-season-btn");
+        const form = document.querySelector(".create-card");
+        let seasonCount = 0;
+
+        leaveTriggers.forEach(function (el) {
+            el.addEventListener("click", function (event) {
+                const message = el.dataset.confirmMessage || "Leave without creating the league?";
+                if (!confirm(message)) {
+                    event.preventDefault();
+                    return;
+                }
+                if (el.dataset.target) {
+                    window.location.href = el.dataset.target;
+                }
+            });
+        });
+
+        function createSeasonCard(index) {
+            const card = document.createElement("div");
+            card.className = "season-card";
+            card.dataset.seasonIndex = index;
+            card.innerHTML = `
+                <div class="season-card-header">
+                    <h3>Season ${index + 1}</h3>
+                    <button type="button" class="btn-remove-season" data-index="${index}" title="Remove this season">
+                        ✕
+                    </button>
+                </div>
+                <div class="season-card-content">
+                    <div class="form-row">
+                        <div class="form-col">
+                            <label for="season_year_${index}">Season Year</label>
+                            <input type="date"
+                                   id="season_year_${index}"
+                                   name="season_year_${index}"
+                                   required>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-col">
+                            <label for="start_date_${index}">Start Date</label>
+                            <input type="date"
+                                   id="start_date_${index}"
+                                   name="start_date_${index}"
+                                   required>
+                        </div>
+                        <div class="form-col">
+                            <label for="start_time_${index}">Start Time</label>
+                            <input type="time"
+                                   id="start_time_${index}"
+                                   name="start_time_${index}"
+                                   value="00:00">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-col">
+                            <label for="end_date_${index}">End Date</label>
+                            <input type="date"
+                                   id="end_date_${index}"
+                                   name="end_date_${index}"
+                                   required>
+                        </div>
+                        <div class="form-col">
+                            <label for="end_time_${index}">End Time</label>
+                            <input type="time"
+                                   id="end_time_${index}"
+                                   name="end_time_${index}"
+                                   value="23:59">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-col">
+                            <label for="prize_pool_${index}">Prize Pool</label>
+                            <input type="number"
+                                   id="prize_pool_${index}"
+                                   name="prize_pool_${index}"
+                                   placeholder="0"
+                                   min="0"
+                                   value="0">
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            const removeBtn = card.querySelector(".btn-remove-season");
+            removeBtn.addEventListener("click", function (e) {
+                e.preventDefault();
+                card.remove();
+                updateSeasonNumbers();
+            });
+
+            return card;
+        }
+
+        function updateSeasonNumbers() {
+            const cards = seasonsContainer.querySelectorAll(".season-card");
+            cards.forEach((card, index) => {
+                card.dataset.seasonIndex = index;
+                card.querySelector("h3").textContent = `Season ${index + 1}`;
+                
+                const removeBtn = card.querySelector(".btn-remove-season");
+                if (removeBtn) {
+                    removeBtn.dataset.index = index;
+                }
+            });
+        }
+
+        addSeasonBtn.addEventListener("click", function (e) {
+            e.preventDefault();
+            const cards = seasonsContainer.querySelectorAll(".season-card");
+            const newIndex = cards.length;
+            const newCard = createSeasonCard(newIndex);
+            seasonsContainer.appendChild(newCard);
+        });
+
+        // Add initial season
+        if (seasonCount === 0) {
+            const newCard = createSeasonCard(0);
+            seasonsContainer.appendChild(newCard);
+            seasonCount = 1;
+        }
+
+        // Store season count in hidden field for form submission
+        if (form) {
+            form.addEventListener("submit", function (event) {
+                const cards = seasonsContainer.querySelectorAll(".season-card");
+                if (cards.length === 0) {
+                    event.preventDefault();
+                    alert("Please add at least one season.");
+                    return;
+                }
+
+                // Create hidden input for season count
+                let seasonCountInput = form.querySelector('input[name="season_count"]');
+                if (!seasonCountInput) {
+                    seasonCountInput = document.createElement("input");
+                    seasonCountInput.type = "hidden";
+                    seasonCountInput.name = "season_count";
+                    form.appendChild(seasonCountInput);
+                }
+                seasonCountInput.value = cards.length;
+            });
+        }
+    });
+</script>
+<style>
+    .season-card {
+        background: #f9f9f9;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+
+    .season-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        border-bottom: 2px solid #e0e0e0;
+        padding-bottom: 15px;
+    }
+
+    .season-card-header h3 {
+        margin: 0;
+        font-size: 18px;
+        color: #333;
+    }
+
+    .btn-remove-season {
+        background: #ff4444;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        width: 32px;
+        height: 32px;
+        font-size: 18px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.2s;
+    }
+
+    .btn-remove-season:hover {
+        background: #cc0000;
+    }
+
+    .season-card-content {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+    }
+
+    .form-col {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .form-col label {
+        font-weight: 500;
+        margin-bottom: 5px;
+        color: #333;
+    }
+
+    .form-col input {
+        padding: 8px 12px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+
+    .form-col input:focus {
+        outline: none;
+        border-color: #007bff;
+        box-shadow: 0 0 4px rgba(0, 123, 255, 0.25);
+    }
+</style>
+</html>
+                                           name="season_no_0"
+                                           placeholder="1"
+                                           required
+                                           min="1"
+                                           value="{{ form_data.get('season_no_0', '1') }}">
+                                </div>
+                                <div>
+                                    <label for="season_year_0">Season Year</label>
+                                    <input type="date"
+                                           id="season_year_0"
+                                           name="season_year_0"
+                                           required
+                                           value="{{ form_data.get('season_year_0', '') }}">
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div>
+                                    <label for="start_date_0">Start Date</label>
+                                    <input type="date"
+                                           id="start_date_0"
+                                           name="start_date_0"
+                                           required
+                                           value="{{ form_data.get('start_date_0', '') }}">
+                                </div>
+                                <div>
+                                    <label for="start_time_0">Start Time</label>
+                                    <input type="time"
+                                           id="start_time_0"
+                                           name="start_time_0"
+                                           value="{{ form_data.get('start_time_0', '00:00') }}">
+                                </div>
+                            </div>
+
+                            <div class="form-row">
+                                <div>
+                                    <label for="end_date_0">End Date</label>
+                                    <input type="date"
+                                           id="end_date_0"
+                                           name="end_date_0"
+                                           required
+                                           value="{{ form_data.get('end_date_0', '') }}">
+                                </div>
+                                <div>
+                                    <label for="end_time_0">End Time</label>
+                                    <input type="time"
+                                           id="end_time_0"
+                                           name="end_time_0"
+    

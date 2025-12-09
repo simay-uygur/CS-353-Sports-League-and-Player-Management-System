@@ -18,6 +18,19 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-key")
 app.register_blueprint(admin_bp)
 app.register_blueprint(superadmin_bp)
 
+@app.template_filter('strftime')
+def strftime_filter(value, format_string='%Y-%m-%d %H:%M:%S'):
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value.replace(' ', 'T'))
+        except (ValueError, TypeError, AttributeError):
+            return value
+    if hasattr(value, 'strftime'):
+        return value.strftime(format_string)
+    return value
+
 @app.before_request
 def _set_default_banner():
     role = session.get("role")

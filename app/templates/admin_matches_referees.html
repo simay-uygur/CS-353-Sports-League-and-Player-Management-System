@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin | Assign Referees to Matches</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="dashboard-body">
+    {% include "_banner.html" %}
+    <main class="dashboard-container">
+        <header class="admin-header">
+            <div>
+                <p class="eyebrow">Admin Console</p>
+                <h1>Assign Referees to Matches</h1>
+            </div>
+        </header>
+
+        <section class="matches-list">
+            {% if matches %}
+                <table class="matches-table">
+                    <thead>
+                        <tr>
+                            <th>Match</th>
+                            <th>Date & Time</th>
+                            <th>Type</th>
+                            <th>Score</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for match in matches %}
+                        <tr class="match-row">
+                            <td class="match-teams">
+                                <strong>{{ match.hometeamname }}</strong><br>
+                                vs<br>
+                                <strong>{{ match.awayteamname }}</strong>
+                            </td>
+                            <td class="match-datetime">
+                                {{ match.matchstartdatetime|strftime('%b %d, %Y %H:%M') }}
+                            </td>
+                            <td class="match-type">
+                                {% if match.match_type == 'tournament' %}
+                                    <span class="badge tournament">Tournament</span><br>
+                                    {{ match.tournament_name }}
+                                {% elif match.match_type == 'seasonal' %}
+                                    <span class="badge seasonal">Seasonal</span><br>
+                                    {{ match.league_name }}
+                                {% else %}
+                                    <span class="badge unknown">Unknown</span>
+                                {% endif %}
+                            </td>
+                            <td class="match-score">
+                                {% if match.hometeamscore is not none and match.awayteamscore is not none %}
+                                    {{ match.hometeamscore }} - {{ match.awayteamscore }}
+                                {% else %}
+                                    <em>Pending</em>
+                                {% endif %}
+                            </td>
+                            <td class="match-status">
+                                {% if match.islocked %}
+                                    <span class="status-badge locked">Locked</span>
+                                {% else %}
+                                    <span class="status-badge active">Active</span>
+                                {% endif %}
+                            </td>
+                            <td class="match-action">
+                                <a href="{{ url_for('admin.match_referee_assignment', match_id=match.matchid) }}" 
+                                   class="btn small">
+                                    Assign Referee
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+            <div class="empty-state">
+                <p>No tournament or seasonal matches assigned to you.</p>
+            </div>
+            {% endif %}
+        </section>
+    </main>
+
+    <style>
+        .matches-list {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .matches-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .matches-table th {
+            background-color: #f5f5f5;
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #e0e0e0;
+            color: #333;
+        }
+
+        .matches-table td {
+            padding: 1rem;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .match-row:hover {
+            background-color: #f9f9f9;
+        }
+
+        .match-teams {
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        .match-datetime {
+            font-size: 0.85rem;
+            color: #666;
+            white-space: nowrap;
+        }
+
+        .match-type {
+            font-size: 0.85rem;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-weight: 500;
+            font-size: 0.75rem;
+        }
+
+        .badge.tournament {
+            background-color: #e3f2fd;
+            color: #1565c0;
+        }
+
+        .badge.seasonal {
+            background-color: #f3e5f5;
+            color: #6a1b9a;
+        }
+
+        .badge.unknown {
+            background-color: #f5f5f5;
+            color: #666;
+        }
+
+        .match-score {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .match-score em {
+            color: #999;
+            font-style: italic;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-weight: 500;
+            font-size: 0.75rem;
+        }
+
+        .status-badge.locked {
+            background-color: #ffcdd2;
+            color: #c62828;
+        }
+
+        .status-badge.active {
+            background-color: #c8e6c9;
+            color: #2e7d32;
+        }
+
+        .match-action {
+            text-align: right;
+        }
+
+        .empty-state {
+            padding: 3rem 1rem;
+            text-align: center;
+            color: #666;
+        }
+    </style>
+</body>
+</html>

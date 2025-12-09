@@ -99,3 +99,126 @@ def delete_tournament(tournament_id):
 
     delete_tournament_and_matches(tournament_id)
     return redirect(url_for("admin.view_tournaments"))
+
+
+@admin_bp.route("/matches/referees", methods=["GET"])
+def view_matches_for_referees():
+    """View all tournament and seasonal matches for this admin to assign referees."""
+    admin_id = session.get("user_id")
+    if not admin_id:
+        return redirect(url_for("login"))
+    
+    matches = fetch_admin_tournament_matches(admin_id)
+    return render_template(
+        "admin_matches_referees.html",
+        matches=matches,
+    )
+
+
+@admin_bp.route("/matches/<int:match_id>/referees", methods=["GET"])
+def match_referee_assignment(match_id):
+    """View and assign referees to a specific match."""
+    admin_id = session.get("user_id")
+    if not admin_id:
+        return redirect(url_for("login"))
+    
+    # Verify admin manages this match
+    matches = fetch_admin_tournament_matches(admin_id)
+    if not any(m["matchid"] == match_id for m in matches):
+        abort(403)
+    
+    match = fetch_match_with_referees(match_id)
+    if not match:
+        abort(404)
+    
+    referees = fetch_all_referees()
+    assigned_referee_ids = {ref["usersid"] for ref in match.get("referees", [])}
+    
+    return render_template(
+        "admin_match_referee_detail.html",
+        match=match,
+        referees=referees,
+        assigned_referee_ids=assigned_referee_ids,
+    )
+
+
+@admin_bp.route("/matches/<int:match_id>/referees/<int:referee_id>", methods=["POST"])
+def assign_match_referee(match_id, referee_id):
+    """Assign a referee to a match."""
+    admin_id = session.get("user_id")
+    if not admin_id:
+        return redirect(url_for("login"))
+    
+    # Verify admin manages this match
+    matches = fetch_admin_tournament_matches(admin_id)
+    if not any(m["matchid"] == match_id for m in matches):
+        abort(403)
+    
+    try:
+        assign_referee_to_match(match_id, referee_id)
+    except psycopg2.Error:
+        pass  # Silent fail if already assigned
+    
+    return redirect(url_for("admin.match_referee_assignment", match_id=match_id))
+
+
+@admin_bp.route("/matches/<int:match_id>/referees/<int:referee_id>/remove", methods=["POST"])
+def remove_match_referee(match_id, referee_id):
+    """Remove a referee from a match."""
+    admin_id = session.get("user_id")
+    if not admin_id:
+        return redirect(url_for("login"))
+    
+    # Verify admin manages this match
+    matches = fetch_admin_tournament_matches(admin_id)
+    if not any(m["matchid"] == match_id for m in matches):
+        abort(403)
+    
+    remove_referee_from_match(match_id, referee_id)
+    return redirect(url_for("admin.match_referee_assignment", match_id=match_id))
+
+
+@admin_bp.route("/matches/seasonal/lock-status")
+def view_seasonal_matches_lock():
+    """View all seasonal matches with lock/unlock controls."""
+    admin_id = session.get("user_id")
+    if not admin_id:
+        return redirect(url_for("login"))
+    
+    matches = fetch_seasonal_matches_for_admin(admin_id)
+    return render_template(
+        "admin_seasonal_matches_lock.html",
+        matches=matches,
+    )
+
+
+@admin_bp.route("/matches/<int:match_id>/lock", methods=["POST"])
+def lock_match(match_id):
+    """Lock a seasonal match."""
+    admin_id = session.get("user_id")
+    if not admin_id:
+        return redirect(url_for("login"))
+    
+    # Verify admin manages this match
+    matches = fetch_seasonal_matches_for_admin(admin_id)
+    if not any(m["matchid"] == match_id for m in matches):
+        abort(403)
+    
+    toggle_match_lock(match_id, True)
+    return redirect(url_for("admin.view_seasonal_matches_lock"))
+
+
+@admin_bp.route("/matches/<int:match_id>/unlock", methods=["POST"])
+def unlock_match(match_id):
+    """Unlock a seasonal match."""
+    admin_id = session.get("user_id")
+    if not admin_id:
+        return redirect(url_for("login"))
+    
+    # Verify admin manages this match
+    matches = fetch_seasonal_matches_for_admin(admin_id)
+    if not any(m["matchid"] == match_id for m in matches):
+        abort(403)
+    
+    toggle_match_lock(match_id, False)
+    return redirect(url_for("admin.view_seasonal_matches_lock"))

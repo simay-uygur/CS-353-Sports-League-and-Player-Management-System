@@ -575,6 +575,479 @@ def _ensure_admin_record(cur, admin_id):
         """,
         (admin_id,),
     )
+
+
+def fetch_all_leagues():
+    """Fetch all leagues with their seasons."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT l.leagueid,
+                       l.name,
+                       s.seasonno,
+                       s.seasonyear,
+                       s.startdate,
+                       s.enddate,
+                       s.prizepool
+                FROM League l
+                LEFT JOIN Season s ON l.leagueid = s.leagueid
+                ORDER BY l.name, s.seasonyear DESC, s.seasonno DESC;
+                """
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_league_by_id(league_id):
+    """Fetch a single league with all its seasons and admin assignments."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT l.leagueid,
+                       l.name,
+                       s.seasonno,
+                       s.seasonyear,
+                       s.startdate,
+                       s.enddate,
+                       s.prizepool,
+                       sm.adminid
+                FROM League l
+                LEFT JOIN Season s ON l.leagueid = s.leagueid
+                LEFT JOIN SeasonModeration sm ON l.leagueid = sm.leagueid 
+                    AND s.seasonno = sm.seasonno 
+                    AND s.seasonyear = sm.seasonyear
+                WHERE l.leagueid = %s
+                ORDER BY s.seasonyear DESC, s.seasonno DESC;
+                """,
+                (league_id,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def create_league_with_seasons(league_name, seasons_data):
+    """
+    Create a league and its seasons in a single transaction.
+    
+    seasons_data: List of dicts with keys:
+        - season_year: Year (YYYY-MM-DD format date string)
+        - start_date: Start date (YYYY-MM-DD format)
+        - start_time: Start time (HH:MM format)
+        - end_date: End date (YYYY-MM-DD format)
+        - end_time: End time (HH:MM format)
+        - prize_pool: Prize pool amount (int)
+    
+    Returns: {'league_id': int}
+    """
+    if not league_name or not league_name.strip():
+        raise ValueError("League name is required.")
+    
+    if not seasons_data:
+        raise ValueError("At least one season is required.")
+    
+    validated_seasons = []
+    for i, season in enumerate(seasons_data):
+        season_no = i + 1
+        season_year_str = season.get("season_year", "").strip()
+        start_date_str = season.get("start_date", "").strip()
+        start_time_str = season.get("start_time", "00:00").strip()
+        end_date_str = season.get("end_date", "").strip()
+        end_time_str = season.get("end_time", "23:59").strip()
+        prize_pool = season.get("prize_pool", 0)
         
+        if not season_year_str or not start_date_str or not end_date_str:
+            raise ValueError(f"Season {season_no}: Year, start date, and end date are required.")
+        
+        try:
+            season_year = datetime.strptime(season_year_str, "%Y-%m-%d").date()
+            start_datetime = datetime.strptime(f"{start_date_str} {start_time_str}", "%Y-%m-%d %H:%M")
+            end_datetime = datetime.strptime(f"{end_date_str} {end_time_str}", "%Y-%m-%d %H:%M")
+        except ValueError:
+            raise ValueError(f"Season {season_no}: Invalid date or time format. Use YYYY-MM-DD for dates and HH:MM for times.")
+        
+        if start_datetime >= end_datetime:
+            raise ValueError(f"Season {season_no}: Start datetime must be before end datetime.")
+        
+        if int(prize_pool) <= 0:
+            raise ValueError(f"Season {season_no}: Prize pool must be greater than 0.")
+        
+        validated_seasons.append({
+            "season_no": season_no,
+            "season_year": season_year,
+            "start_datetime": start_datetime,
+            "end_datetime": end_datetime,
+            "prize_pool": int(prize_pool),
+        })
+    
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                # Insert league
+                cur.execute(
+                    """
+                    INSERT INTO League (Name)
+                    VALUES (%s)
+                    RETURNING LeagueID;
+                    """,
+                    (league_name.strip(),),
+                )
+                league_id = cur.fetchone()[0]
+                
+                # Insert seasons using validated data
+                for season in validated_seasons:
+                    cur.execute(
+                        """
+                        INSERT INTO Season (LeagueID, SeasonNo, SeasonYear, StartDate, EndDate, PrizePool)
+                        VALUES (%s, %s, %s, %s, %s, %s);
+                        """,
+                        (
+                            league_id,
+                            season["season_no"],
+                            season["season_year"],
+                            season["start_datetime"],
+                            season["end_datetime"],
+                            season["prize_pool"],
+                        ),
+                    )
+        
+        return {"league_id": league_id}
+    finally:
+        conn.close()
+
+
+def assign_admins_to_season(league_id, season_no, season_year, admin_ids):
+    """
+    Assign admins to a specific season.
+    Replaces all existing admin assignments for that season.
+    
+    admin_ids: List of admin user IDs
+    """
+    if not admin_ids:
+        raise ValueError("At least one admin must be assigned.")
+    
+    admin_ids = [int(aid) for aid in admin_ids if aid]
+    admin_ids = list(dict.fromkeys(admin_ids))  # Remove duplicates
+    
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                # Ensure all admins exist in Admin table
+                for admin_id in admin_ids:
+                    _ensure_admin_record(cur, admin_id)
+                
+                # Delete existing assignments for this season
+                cur.execute(
+                    """
+                    DELETE FROM SeasonModeration
+                    WHERE LeagueID = %s AND SeasonNo = %s AND SeasonYear = %s;
+                    """,
+                    (league_id, season_no, season_year),
+                )
+                
+                # Insert new assignments
+                for admin_id in admin_ids:
+                    cur.execute(
+                        """
+                        INSERT INTO SeasonModeration (LeagueID, SeasonNo, SeasonYear, AdminID)
+                        VALUES (%s, %s, %s, %s);
+                        """,
+                        (league_id, season_no, season_year, admin_id),
+                    )
+    finally:
+        conn.close()
+
+
+def assign_same_admins_to_all_seasons(league_id, admin_ids):
+    """
+    Assign the same set of admins to all seasons of a league.
+    Replaces all existing admin assignments for all seasons.
+    """
+    if not admin_ids:
+        raise ValueError("At least one admin must be assigned.")
+    
+    admin_ids = [int(aid) for aid in admin_ids if aid]
+    admin_ids = list(dict.fromkeys(admin_ids))  # Remove duplicates
+    
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                # Ensure all admins exist in Admin table
+                for admin_id in admin_ids:
+                    _ensure_admin_record(cur, admin_id)
+                
+                # Get all seasons for this league
+                cur.execute(
+                    """
+                    SELECT seasonno, seasonyear
+                    FROM Season
+                    WHERE leagueid = %s;
+                    """,
+                    (league_id,),
+                )
+                seasons = cur.fetchall()
+                
+                if not seasons:
+                    raise ValueError("League has no seasons.")
+                
+                # Delete existing assignments for this league
+                cur.execute(
+                    """
+                    DELETE FROM SeasonModeration
+                    WHERE LeagueID = %s;
+                    """,
+                    (league_id,),
+                )
+                
+                # Insert new assignments for all seasons
+                for season in seasons:
+                    for admin_id in admin_ids:
+                        cur.execute(
+                            """
+                            INSERT INTO SeasonModeration (LeagueID, SeasonNo, SeasonYear, AdminID)
+                            VALUES (%s, %s, %s, %s);
+                            """,
+                            (league_id, season["seasonno"], season["seasonyear"], admin_id),
+                        )
+    finally:
+        conn.close()
+
+
+def fetch_all_referees():
+    """Fetch all referees."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT r.usersid,
+                       u.firstname,
+                       u.lastname,
+                       u.email
+                FROM Referee r
+                JOIN Users u ON r.usersid = u.usersid
+                ORDER BY u.lastname, u.firstname;
+                """
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_admin_tournament_matches(admin_id):
+    """
+    Fetch all tournament and seasonal matches that this admin manages.
+    Returns matches with their basic info and any assigned referees.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT
+                       m.matchid,
+                       m.hometeamname,
+                       m.awayteamname,
+                       m.matchstartdatetime,
+                       m.matchenddatetime,
+                       m.hometeamscore,
+                       m.awayteamscore,
+                       m.winnerteam,
+                       m.islocked,
+                       CASE 
+                           WHEN tm.matchid IS NOT NULL THEN 'tournament'
+                           WHEN sm.matchid IS NOT NULL THEN 'seasonal'
+                           ELSE 'unknown'
+                       END as match_type,
+                       t.tournamentid,
+                       t.name as tournament_name,
+                       l.leagueid,
+                       l.name as league_name
+                FROM Match m
+                LEFT JOIN TournamentMatch tm ON m.matchid = tm.matchid
+                LEFT JOIN Tournament t ON t.tournamentid = (
+                    SELECT tournamentid FROM Round WHERE t_matchid = m.matchid
+                )
+                LEFT JOIN SeasonalMatch sm ON m.matchid = sm.matchid
+                LEFT JOIN League l ON sm.leagueid = l.leagueid
+                WHERE t.tournamentid IN (
+                    SELECT t_id FROM TournamentModeration WHERE adminid = %s
+                ) OR sm.leagueid IN (
+                    SELECT leagueid FROM SeasonModeration WHERE adminid = %s
+                )
+                ORDER BY m.matchstartdatetime DESC;
+                """,
+                (admin_id, admin_id),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_match_with_referees(match_id):
+    """Fetch a specific match with its assigned referees."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT m.matchid,
+                       m.hometeamname,
+                       m.awayteamname,
+                       m.matchstartdatetime,
+                       m.matchenddatetime,
+                       m.hometeamscore,
+                       m.awayteamscore,
+                       m.winnerteam,
+                       m.islocked,
+                       CASE 
+                           WHEN tm.matchid IS NOT NULL THEN 'tournament'
+                           WHEN sm.matchid IS NOT NULL THEN 'seasonal'
+                           ELSE 'unknown'
+                       END as match_type
+                FROM Match m
+                LEFT JOIN TournamentMatch tm ON m.matchid = tm.matchid
+                LEFT JOIN SeasonalMatch sm ON m.matchid = sm.matchid
+                WHERE m.matchid = %s;
+                """,
+                (match_id,),
+            )
+            match = cur.fetchone()
+            
+            if not match:
+                return None
+            
+            # Fetch assigned referees for this match
+            cur.execute(
+                """
+                SELECT r.usersid,
+                       u.firstname,
+                       u.lastname,
+                       u.email
+                FROM RefereeMatchAttendance rma
+                JOIN Referee r ON rma.refereeid = r.usersid
+                JOIN Users u ON r.usersid = u.usersid
+                WHERE rma.matchid = %s
+                ORDER BY u.lastname, u.firstname;
+                """,
+                (match_id,),
+            )
+            match_dict = dict(match)
+            match_dict["referees"] = cur.fetchall()
+            return match_dict
+    finally:
+        conn.close()
+
+
+def assign_referee_to_match(match_id, referee_id):
+    """Assign a referee to a match (in RefereeMatchAttendance)."""
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO RefereeMatchAttendance (MatchID, RefereeID)
+                    VALUES (%s, %s)
+                    ON CONFLICT DO NOTHING;
+                    """,
+                    (match_id, referee_id),
+                )
+    finally:
+        conn.close()
+
+
+def remove_referee_from_match(match_id, referee_id):
+    """Remove a referee from a match."""
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    DELETE FROM RefereeMatchAttendance
+                    WHERE MatchID = %s AND RefereeID = %s;
+                    """,
+                    (match_id, referee_id),
+                )
+    finally:
+        conn.close()
+
+
+def fetch_seasonal_matches_for_admin(admin_id):
+    """
+    Fetch all seasonal matches that this admin manages (for locking/unlocking).
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT m.matchid,
+                       m.hometeamname,
+                       m.awayteamname,
+                       m.matchstartdatetime,
+                       m.hometeamscore,
+                       m.awayteamscore,
+                       m.islocked,
+                       l.leagueid,
+                       l.name as league_name,
+                       s.seasonno,
+                       s.seasonyear
+                FROM Match m
+                JOIN SeasonalMatch sm ON m.matchid = sm.matchid
+                JOIN Season s ON sm.leagueid = s.leagueid 
+                    AND sm.seasonno = s.seasonno 
+                    AND sm.seasonyear = s.seasonyear
+                JOIN League l ON s.leagueid = l.leagueid
+                JOIN SeasonModeration smod ON s.leagueid = smod.leagueid 
+                    AND s.seasonno = smod.seasonno 
+                    AND s.seasonyear = smod.seasonyear
+                WHERE smod.adminid = %s
+                ORDER BY m.matchstartdatetime DESC;
+                """,
+                (admin_id,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def toggle_match_lock(match_id, lock_state):
+    """Toggle the lock state of a match."""
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE Match
+                    SET IsLocked = %s
+                    WHERE MatchID = %s;
+                    """,
+                    (lock_state, match_id),
+                )
+    finally:
+        conn.close()
+
+        
+        
+        
+
+        
+        
+
+        
+        
+        
+
         
         
