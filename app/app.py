@@ -37,10 +37,10 @@ def _set_default_banner():
     if role == "superadmin":
         g.banner_view_endpoint = "superadmin.view_tournaments"
         g.banner_league_endpoint = "superadmin.view_leagues"
-        g.banner_create_league_endpoint = "superadmin.create_league_form"
+        g.banner_create_league_endpoint = None
     elif role in ("admin", "tournament_admin"):
         g.banner_view_endpoint = "admin.view_tournaments"
-        g.banner_league_endpoint = None
+        g.banner_league_endpoint = "admin.view_leagues"
         g.banner_create_league_endpoint = None
     else:
         g.banner_view_endpoint = None

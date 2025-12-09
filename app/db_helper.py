@@ -601,6 +601,36 @@ def fetch_all_leagues():
         conn.close()
 
 
+def fetch_admin_leagues(admin_id):
+    """Fetch leagues and seasons moderated by a specific admin."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT l.leagueid,
+                       l.name,
+                       s.seasonno,
+                       s.seasonyear,
+                       s.startdate,
+                       s.enddate,
+                       s.prizepool
+                FROM SeasonModeration sm
+                JOIN Season s
+                    ON sm.leagueid = s.leagueid
+                    AND sm.seasonno = s.seasonno
+                    AND sm.seasonyear = s.seasonyear
+                JOIN League l ON l.leagueid = sm.leagueid
+                WHERE sm.adminid = %s
+                ORDER BY l.name, s.seasonyear DESC, s.seasonno DESC;
+                """,
+                (admin_id,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
 def fetch_league_by_id(league_id):
     """Fetch a single league with all its seasons and admin assignments."""
     conn = get_connection()
@@ -683,6 +713,17 @@ def create_league_with_seasons(league_name, seasons_data, team_ids=None):
             "end_datetime": end_datetime,
             "prize_pool": int(prize_pool),
         })
+
+    # Ensure seasons do not overlap
+    sorted_seasons = sorted(validated_seasons, key=lambda s: s["start_datetime"])
+    for i in range(len(sorted_seasons) - 1):
+        current = sorted_seasons[i]
+        nxt = sorted_seasons[i + 1]
+        if current["end_datetime"] > nxt["start_datetime"]:
+            raise ValueError(
+                f"Season {current['season_no']} and Season {nxt['season_no']} overlap. "
+                "Please adjust the start/end dates and times."
+            )
     
     conn = get_connection()
     try:
@@ -789,7 +830,7 @@ def assign_same_admins_to_all_seasons(league_id, admin_ids):
     conn = get_connection()
     try:
         with conn:
-            with conn.cursor() as cur:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 # Ensure all admins exist in Admin table
                 for admin_id in admin_ids:
                     _ensure_admin_record(cur, admin_id)

@@ -25,24 +25,27 @@
                     <p class="form-note">Assign admins to manage each season. You can assign the same admins to all seasons or choose different admins for each.</p>
                     {% endif %}
 
-                    <div class="assignment-mode-selector">
-                        <label class="radio-option">
-                            <input type="radio" 
-                                   name="assignment_type" 
-                                   value="all" 
-                                   id="mode-all"
-                                   checked
-                                   onchange="updateAssignmentUI()">
-                            <span>Same Admins for All Seasons</span>
-                        </label>
-                        <label class="radio-option">
-                            <input type="radio" 
-                                   name="assignment_type" 
-                                   value="per-season"
-                                   id="mode-per-season"
-                                   onchange="updateAssignmentUI()">
-                            <span>Different Admins per Season</span>
-                        </label>
+                    <div class="admin-assignment-card">
+                        <label class="admin-assignment-label">Admin Assignment Mode</label>
+                        <div class="admin-mode-options" role="group" aria-label="Admin assignment mode">
+                            <label class="admin-mode-option">
+                                <input type="radio" 
+                                       name="assignment_type" 
+                                       value="all" 
+                                       id="mode-all"
+                                       checked
+                                       onchange="updateAssignmentUI()">
+                                <span class="admin-mode-text">Same Admins for All Seasons</span>
+                            </label>
+                            <label class="admin-mode-option">
+                                <input type="radio" 
+                                       name="assignment_type" 
+                                       value="per-season"
+                                       id="mode-per-season"
+                                       onchange="updateAssignmentUI()">
+                                <span class="admin-mode-text">Different Admins per Season</span>
+                            </label>
+                        </div>
                     </div>
 
                     <!-- All Seasons Mode -->
@@ -61,7 +64,8 @@
                                 <label class="checkbox-line" data-admin-search="{{ (admin.firstname ~ ' ' ~ admin.lastname ~ ' ' ~ admin.email)|lower }}">
                                     <input type="checkbox"
                                            name="admin_ids"
-                                           value="{{ admin.usersid }}">
+                                           value="{{ admin.usersid }}"
+                                           {% if admin.usersid in global_admin_ids %}checked{% endif %}>
                                     <span>{{ admin.firstname }} {{ admin.lastname }} ({{ admin.email }})</span>
                                 </label>
                                 {% endfor %}
@@ -141,27 +145,23 @@
                 line.style.display = matches ? 'flex' : 'none';
             });
         });
+
+        // Leave / cancel handler
+        document.querySelectorAll('.leave-link').forEach(button => {
+            button.addEventListener('click', function (e) {
+                e.preventDefault();
+                const message = button.dataset.confirmMessage || 'Leave without saving admin assignments?';
+                if (confirm(message)) {
+                    const target = button.dataset.target;
+                    if (target) {
+                        window.location.href = target;
+                    }
+                }
+            });
+        });
     </script>
 
     <style>
-        .assignment-mode-selector {
-            margin-bottom: 2rem;
-            padding: 1rem;
-            background-color: #f5f5f5;
-            border-radius: 8px;
-        }
-
-        .radio-option {
-            display: block;
-            margin-bottom: 0.75rem;
-            cursor: pointer;
-            font-weight: 500;
-        }
-
-        .radio-option input[type="radio"] {
-            margin-right: 0.5rem;
-        }
-
         .assignment-mode-panel {
             margin: 1.5rem 0;
         }
@@ -228,6 +228,65 @@
 
         .checkbox-line span {
             flex: 1;
+        }
+
+        /* Match create page radio styling */
+        .admin-assignment-card {
+            margin-top: 20px;
+            padding-top: 12px;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .admin-assignment-label {
+            display: block;
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 12px;
+        }
+
+        .admin-mode-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .admin-mode-option {
+            position: relative;
+            display: inline-flex;
+            align-items: stretch;
+            cursor: pointer;
+        }
+
+        .admin-mode-option input[type="radio"] {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .admin-mode-text {
+            display: inline-flex;
+            align-items: center;
+            padding: 10px 14px;
+            border: 1px solid #dbe2ef;
+            border-radius: 12px;
+            background: #f8fafc;
+            font-weight: 600;
+            color: #334155;
+            transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+            min-height: 42px;
+        }
+
+        .admin-mode-option input[type="radio"]:checked + .admin-mode-text {
+            border-color: #111827;
+            background: #111827;
+            color: #ffffff;
+            box-shadow: 0 8px 20px rgba(17, 24, 39, 0.15);
+        }
+
+        .admin-mode-option input[type="radio"]:focus-visible + .admin-mode-text {
+            outline: 3px solid rgba(79, 124, 255, 0.35);
+            outline-offset: 2px;
         }
     </style>
 </body>

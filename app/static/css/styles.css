@@ -708,6 +708,13 @@ button:hover {
     min-width: 120px;
     cursor: pointer;
     transition: transform 0.15s ease, box-shadow 0.15s ease;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.btn:visited {
+    text-decoration: none;
 }
 
 .btn.ghost {
@@ -1060,21 +1067,27 @@ button:hover {
 
 .top-banner__nav {
     display: flex;
-    gap: 1rem;
+    gap: 0.25rem;
     align-items: center;
+    padding: 0.3rem;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
 .nav-link {
     color: #e5e7eb;
     text-decoration: none;
     font-weight: 600;
-    padding: 0.5rem 0.75rem;
+    padding: 0.6rem 0.95rem;
     border-radius: 10px;
-    transition: background 0.15s ease, color 0.15s ease;
+    transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+    border: 1px solid transparent;
 }
 
 .nav-link:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 -2px 0 rgba(255, 255, 255, 0.7);
 }
 
 .nav-link.logout {

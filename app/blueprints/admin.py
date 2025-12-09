@@ -56,6 +56,21 @@ def view_tournaments():
     )
 
 
+@admin_bp.route("/leagues")
+def view_leagues():
+    admin_id = session.get("user_id")
+    if not admin_id:
+        return redirect(url_for("login"))
+
+    leagues = fetch_admin_leagues(admin_id)
+    return render_template(
+        "admin_view_leagues.html",
+        leagues=leagues,
+        create_endpoint=None,  # admins don't create leagues
+        assign_endpoint=None,
+    )
+
+
 def _select_tournament(requested_id, tournaments):
     if requested_id:
         for tournament in tournaments:

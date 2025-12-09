@@ -197,6 +197,14 @@ CREATE TABLE League (
   PRIMARY KEY (LeagueID)
 );
 
+CREATE TABLE LeagueTeam (
+  LeagueID INT,
+  TeamID INT,
+  PRIMARY KEY (LeagueID, TeamID),
+  FOREIGN KEY (LeagueID) REFERENCES League(LeagueID) ON DELETE CASCADE,
+  FOREIGN KEY (TeamID) REFERENCES Team(TeamID) ON DELETE CASCADE
+);
+
 CREATE TABLE Season (
   LeagueID INT,
   SeasonNo INT,

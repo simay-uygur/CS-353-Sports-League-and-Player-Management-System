@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SuperAdmin | Manage Leagues</title>
+    <title>{{ 'SuperAdmin' if create_endpoint else 'Admin' }} | Manage Leagues</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 <body class="dashboard-body">
@@ -11,12 +11,14 @@
     <main class="dashboard-container">
         <header class="admin-header">
             <div>
-                <p class="eyebrow">SuperAdmin Console</p>
+                <p class="eyebrow">{{ 'SuperAdmin' if create_endpoint else 'Admin' }} Console</p>
                 <h1>Manage Leagues</h1>
             </div>
+            {% if create_endpoint %}
             <div>
                 <a href="{{ url_for(create_endpoint) }}" class="btn solid">Create New League</a>
             </div>
+            {% endif %}
         </header>
 
         <section class="leagues-list">
@@ -38,9 +40,11 @@
                             <h2>{{ league_info.name }}</h2>
                             <p class="league-seasons-count">{{ league_info.seasons|length }} season(s)</p>
                         </div>
-                        <a href="{{ url_for(assign_endpoint, league_id=league_id) }}" class="btn solid">
+                        {% if assign_endpoint %}
+                        <a href="{{ url_for(assign_endpoint, league_id=league_id) }}" class="btn solid btn-inline">
                             Assign Admins
                         </a>
+                        {% endif %}
                     </div>
 
                     {% if league_info.seasons %}
@@ -76,7 +80,6 @@
             {% else %}
             <div class="empty-state">
                 <p>No leagues have been created yet.</p>
-                <a href="{{ url_for(create_endpoint) }}" class="btn solid">Create Your First League</a>
             </div>
             {% endif %}
         </section>
@@ -107,7 +110,7 @@
 
         .league-card-header h2 {
             margin: 0 0 0.5rem 0;
-            font-size: 1.5rem;
+            font-size: 1.25rem;
             color: #333;
         }
 
@@ -143,13 +146,15 @@
             background-color: #f9f9f9;
         }
 
-        .empty-state {
-            text-align: center;
-            padding: 3rem 1rem;
-            background: white;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
+        .btn-inline {
+            padding: 8px 14px;
+            font-size: 0.9rem;
+            line-height: 1.1;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(17, 24, 39, 0.12);
         }
+
+  
 
         .empty-state p {
             margin-bottom: 1.5rem;

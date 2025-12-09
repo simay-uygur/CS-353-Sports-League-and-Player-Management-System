@@ -266,6 +266,14 @@ def assign_admins_form(league_id):
     # Get fresh league data with current admin assignments
     league_data = fetch_league_by_id(league_id)
     seasons_list = _group_seasons_with_admins(league_data)
+    # Preselect admins that are assigned to every season (used for "all seasons" mode)
+    if seasons_list:
+        common_admin_ids = set(seasons_list[0].get("admin_ids", []))
+        for season in seasons_list[1:]:
+            common_admin_ids &= set(season.get("admin_ids", []))
+        global_admin_ids = list(common_admin_ids)
+    else:
+        global_admin_ids = []
     
     return render_template(
         "admin_assign_admins_to_seasons.html",
@@ -273,6 +281,7 @@ def assign_admins_form(league_id):
         league_name=selected_league["name"],
         seasons=seasons_list,
         admins=admins,
+        global_admin_ids=global_admin_ids,
         error_message=error_message,
         cancel_endpoint="superadmin.view_leagues",
     )

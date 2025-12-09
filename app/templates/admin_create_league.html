@@ -78,6 +78,7 @@
                                 <span class="admin-mode-text">Different admins per season</span>
                             </label>
                         </div>
+                        <p id="admin-mode-helper" class="select-hint subtle" style="margin-top: 6px;">Add at least 2 seasons to enable per-season admin assignments.</p>
                     </div>
 
                     <div id="admin-selection-container" style="margin-top: 10px;"></div>
@@ -119,6 +120,7 @@
         const teamValidation = document.getElementById("team-validation");
         const adminModeAllRadio = document.getElementById("admin-mode-all");
         const adminModePerSeasonRadio = document.getElementById("admin-mode-per-season");
+        const adminModeHelper = document.getElementById("admin-mode-helper");
         const adminSelectionContainer = document.getElementById("admin-selection-container");
         
         let seasonCount = 0;
@@ -317,6 +319,7 @@
                             <label for="prize_pool_${index}">Prize Pool</label>
                             <input type="number"
                                    id="prize_pool_${index}"
+                                   class="prize-input"
                                    name="prize_pool_${index}"
                                    placeholder="0"
                                    min="0"
@@ -376,6 +379,7 @@
                 seasonsContainer.appendChild(newCard);
                 seasonCount++;
             }
+            updateAdminModeAvailability();
         }
 
         addSeasonBtn.addEventListener("click", function (e) {
@@ -384,6 +388,7 @@
             const newIndex = cards.length;
             const newCard = createSeasonCard(newIndex);
             seasonsContainer.appendChild(newCard);
+            updateAdminModeAvailability();
         });
 
         // Handle admin assignment mode radio button changes
@@ -403,6 +408,7 @@
             seasonsContainer.appendChild(newCard);
             seasonCount = 1;
         }
+        updateAdminModeAvailability();
 
         // Initial admin selection rendering
         renderAdminSelectionMode();
@@ -412,6 +418,19 @@
             form.addEventListener("submit", function (event) {
                 const cards = seasonsContainer.querySelectorAll(".season-card");
                 const selectedTeams = getSelectedCount();
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                for (const card of cards) {
+                    const startInput = card.querySelector('input[id^="start_date_"]');
+                    if (startInput && startInput.value) {
+                        const startDate = new Date(startInput.value);
+                        if (startDate < today) {
+                            event.preventDefault();
+                            alert("Season start date cannot be in the past.");
+                            return;
+                        }
+                    }
+                }
 
                 if (selectedTeams < 2) {
                     event.preventDefault();
@@ -435,6 +454,26 @@
                 }
                 seasonCountInput.value = cards.length;
             });
+        }
+
+        function updateAdminModeAvailability() {
+            const cards = seasonsContainer.querySelectorAll(".season-card").length;
+            const perSeason = adminModePerSeasonRadio;
+            const allSeasons = adminModeAllRadio;
+            const helper = adminModeHelper;
+
+            if (!perSeason || !allSeasons) return;
+
+            if (cards < 2) {
+                perSeason.disabled = true;
+                perSeason.checked = false;
+                allSeasons.checked = true;
+                helper?.classList.remove("is-hidden");
+                renderAdminSelectionMode();
+            } else {
+                perSeason.disabled = false;
+                helper?.classList.add("is-hidden");
+            }
         }
     });
 </script>
@@ -579,6 +618,17 @@
     .admin-mode-option input[type="radio"]:focus-visible + .admin-mode-text {
         outline: 3px solid rgba(79, 124, 255, 0.35);
         outline-offset: 2px;
+    }
+
+    /* Make prize pool field look like a plain text box (no steppers) */
+    .prize-input::-webkit-outer-spin-button,
+    .prize-input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+    .prize-input {
+        -moz-appearance: textfield;
+        appearance: textfield;
     }
 </style>
 </html>
