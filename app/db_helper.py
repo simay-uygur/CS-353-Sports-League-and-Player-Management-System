@@ -358,6 +358,9 @@ def _build_bracket_tree(cur, tournament_id, team_ids, start_date):
             """,
             (match_id, tournament_id, leaf_round_no),
         )
+
+        # Seed Play rows for the tournament match (uses employment at match start)
+        create_plays_for_match_players_on_insert(match_id)
     
     return created_match_ids        
   
@@ -471,6 +474,7 @@ def _insert_play_rows_for_match(match_id, include_tournament_matches=False):
                     if cur.fetchone():
                         return 0
 
+                #checks also whether player is eligible _ _ _ at that date? or now  - i can delete is eligible 
                 cur.execute(
                     """
                     WITH active_players AS (
@@ -892,6 +896,71 @@ def fetch_all_referees():
     finally:
         conn.close()
 
+
+def fetch_teams_by_owner(owner_id):
+    """Return teams owned by the given owner."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT TeamID, TeamName, EstablishedDate, HomeVenue
+                FROM Team
+                WHERE OwnerID = %s
+                ORDER BY TeamName;
+                """,
+                (owner_id,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_other_team_owners(current_owner_id):
+    """Return other owners to transfer to."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT towner.UsersID,
+                       u.FirstName,
+                       u.LastName,
+                       u.Email,
+                       towner.NetWorth
+                FROM TeamOwner towner
+                JOIN Users u ON u.UsersID = towner.UsersID
+                WHERE towner.UsersID <> %s
+                ORDER BY u.LastName, u.FirstName;
+                """,
+                (current_owner_id,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def transfer_team_owner(team_id, current_owner_id, new_owner_id):
+    """Transfer ownership of a team to a different owner."""
+    if current_owner_id == new_owner_id:
+        raise ValueError("New owner must be different.")
+
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE Team
+                    SET OwnerID = %s
+                    WHERE TeamID = %s AND OwnerID = %s;
+                    """,
+                    (new_owner_id, team_id, current_owner_id),
+                )
+                if cur.rowcount == 0:
+                    raise ValueError("Transfer failed; team not owned by current owner.")
+    finally:
+        conn.close()
 
 def fetch_admin_tournament_matches(admin_id):
     """

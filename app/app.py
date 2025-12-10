@@ -11,12 +11,14 @@ from db import get_connection
 
 from blueprints.admin import admin_bp
 from blueprints.superadmin import superadmin_bp
+from blueprints.owner import owner_bp
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-key")
 
 app.register_blueprint(admin_bp)
 app.register_blueprint(superadmin_bp)
+app.register_blueprint(owner_bp)
 
 @app.template_filter('strftime')
 def strftime_filter(value, format_string='%Y-%m-%d %H:%M:%S'):
@@ -38,14 +40,22 @@ def _set_default_banner():
         g.banner_view_endpoint = "superadmin.view_tournaments"
         g.banner_league_endpoint = "superadmin.view_leagues"
         g.banner_create_league_endpoint = None
+        g.banner_owner_endpoint = None
     elif role in ("admin", "tournament_admin"):
         g.banner_view_endpoint = "admin.view_tournaments"
         g.banner_league_endpoint = "admin.view_leagues"
         g.banner_create_league_endpoint = None
+        g.banner_owner_endpoint = None
+    elif role == "team_owner":
+        g.banner_view_endpoint = None
+        g.banner_league_endpoint = None
+        g.banner_create_league_endpoint = None
+        g.banner_owner_endpoint = "owner.view_teams"
     else:
         g.banner_view_endpoint = None
         g.banner_league_endpoint = None
         g.banner_create_league_endpoint = None
+        g.banner_owner_endpoint = None
     g.banner_create_endpoint = None
     g.banner_allow_create = False
 

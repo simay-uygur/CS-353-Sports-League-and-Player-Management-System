@@ -799,42 +799,58 @@ INSERT INTO Users (
   Role,
   Nationality
 ) VALUES
-  ('Ada', 'Admin', 'admin@example.com', REPEAT('a', 64), REPEAT('s', 32), NOW(), '555-0001', TO_DATE('1988-05-10','YYYY-MM-DD'), 'admin', 'USA'),
-  ('Olivia', 'Owner', 'owner1@example.com', REPEAT('b', 64), REPEAT('t', 32), NOW(), '555-0011', TO_DATE('1990-03-22','YYYY-MM-DD'), 'team_owner', 'Spain'),
-  ('Noah', 'Owner', 'owner2@example.com', REPEAT('c', 64), REPEAT('u', 32), NOW(), '555-0022', TO_DATE('1989-11-05','YYYY-MM-DD'), 'team_owner', 'Turkey'),
-  ('Mia', 'Owner', 'owner3@example.com', REPEAT('d', 64), REPEAT('v', 32), NOW(), '555-0033', TO_DATE('1992-07-14','YYYY-MM-DD'), 'team_owner', 'Italy'),
-  ('Elena', 'Owner', 'owner4@example.com', REPEAT('aa', 32), REPEAT('ww', 16), NOW(), '555-0044', TO_DATE('1987-02-19','YYYY-MM-DD'), 'team_owner', 'Germany'),
-  ('Kenan', 'Owner', 'owner5@example.com', REPEAT('bb', 32), REPEAT('xx', 16), NOW(), '555-0055', TO_DATE('1991-09-07','YYYY-MM-DD'), 'team_owner', 'France'),
-  ('Sara', 'Owner', 'owner6@example.com', REPEAT('cc', 32), REPEAT('yy', 16), NOW(), '555-0066', TO_DATE('1988-12-11','YYYY-MM-DD'), 'team_owner', 'Netherlands'),
-  ('Omar', 'Owner', 'owner7@example.com', REPEAT('dd', 32), REPEAT('zz', 16), NOW(), '555-0077', TO_DATE('1993-04-03','YYYY-MM-DD'), 'team_owner', 'Morocco'),
-  ('Priya', 'Owner', 'owner8@example.com', REPEAT('ee', 32), REPEAT('qq', 16), NOW(), '555-0088', TO_DATE('1986-08-29','YYYY-MM-DD'), 'team_owner', 'India'),
+  ('Alice', 'Smith', 'a1@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'admin', 'USA'),
+  ('Aaron', 'Lee', 'a2@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'admin', 'Canada'),
+  ('Sam', 'Super', 'sa@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'superadmin', 'USA'),
+  -- Owners
+  ('Olivia', 'Ortiz', 'o1@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'team_owner', 'Spain'),
+  ('Noah', 'Novak', 'o2@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'team_owner', 'Turkey'),
+  ('Mia', 'Marino', 'o3@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'team_owner', 'Italy'),
+  ('Elena', 'Evans', 'o4@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'team_owner', 'Germany'),
+  ('Kenan', 'Kaya', 'o5@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'team_owner', 'France'),
+  ('Sara', 'Sato', 'o6@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'team_owner', 'Netherlands'),
+  ('Omar', 'Ochoa', 'o7@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'team_owner', 'Morocco'),
+  ('Priya', 'Patel', 'o8@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'team_owner', 'India'),
   -- Coaches
-  ('John', 'Coach', 'coach1@example.com', REPEAT('e', 64), REPEAT('w', 32), NOW(), '555-0101', TO_DATE('1980-01-15','YYYY-MM-DD'), 'coach', 'USA'),
-  ('Maria', 'Coach', 'coach2@example.com', REPEAT('f', 64), REPEAT('x', 32), NOW(), '555-0102', TO_DATE('1985-04-20','YYYY-MM-DD'), 'coach', 'Spain'),
-  ('Carlos', 'Coach', 'coach3@example.com', REPEAT('g', 64), REPEAT('y', 32), NOW(), '555-0103', TO_DATE('1982-06-10','YYYY-MM-DD'), 'coach', 'Italy'),
-  ('Sofia', 'Coach', 'coach4@example.com', REPEAT('h', 64), REPEAT('z', 32), NOW(), '555-0104', TO_DATE('1987-09-05','YYYY-MM-DD'), 'coach', 'Turkey'),
-  ('tl', 'Admin', 'a@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'admin', 'Local'),
-  ('super', 'super', 'sa@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'superadmin', 'Local');
+  ('John', 'Carter', 'c1@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'coach', 'USA'),
+  ('Maria', 'Lopez', 'c2@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'coach', 'Spain'),
+  ('Carlos', 'Silva', 'c3@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'coach', 'Italy'),
+  ('Sofia', 'Rossi', 'c4@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'coach', 'Turkey'),
+  ('Ivy', 'Chen', 'c5@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'coach', 'Canada'),
+  ('Mateo', 'Diaz', 'c6@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'coach', 'Argentina'),
+  ('Keiko', 'Tanaka', 'c7@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'coach', 'Japan'),
+  ('Jonas', 'Berg', 'c8@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'coach', 'Norway'),
+  -- Referees
+  ('Ryan', 'Cole', 'r1@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'referee', 'USA'),
+  ('Elena', 'Ruiz', 'r2@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'referee', 'Spain'),
+  ('Marco', 'Conte', 'r3@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'referee', 'Italy'),
+  ('Deniz', 'Arslan', 'r4@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'referee', 'Turkey'),
+  ('Pierre', 'Dupont', 'r5@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'referee', 'France'),
+  ('Hans', 'Weber', 'r6@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'referee', 'Germany'),
+  ('Bruno', 'Costa', 'r7@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'referee', 'Brazil'),
+  ('Javier', 'Mendez', 'r8@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'referee', 'Argentina'),
+  ('Kenji', 'Sato', 'r9@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'referee', 'Japan'),
+  ('Liam', 'OBrien', 'r10@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'referee', 'Ireland');
 
 INSERT INTO SuperAdmin (UsersID)
 SELECT UsersID FROM Users WHERE Email = 'sa@gmail.com';
 
 
 INSERT INTO Admin (UsersID)
-SELECT UsersID FROM Users WHERE Email IN ('admin@example.com', 'a@gmail.com');
+SELECT UsersID FROM Users WHERE Email IN ('a1@gmail.com', 'a2@gmail.com');
 
 INSERT INTO TeamOwner (UsersID, NetWorth)
 SELECT u.UsersID, data.net_worth
 FROM (
   VALUES
-    ('owner1@example.com', 750000.000),
-    ('owner2@example.com', 680000.000),
-    ('owner3@example.com', 720000.000),
-    ('owner4@example.com', 650000.000),
-    ('owner5@example.com', 700000.000),
-    ('owner6@example.com', 670000.000),
-    ('owner7@example.com', 640000.000),
-    ('owner8@example.com', 710000.000)
+    ('o1@gmail.com', 750000.000),
+    ('o2@gmail.com', 680000.000),
+    ('o3@gmail.com', 720000.000),
+    ('o4@gmail.com', 650000.000),
+    ('o5@gmail.com', 700000.000),
+    ('o6@gmail.com', 670000.000),
+    ('o7@gmail.com', 640000.000),
+    ('o8@gmail.com', 710000.000)
 ) AS data(email, net_worth)
 JOIN Users u ON u.Email = data.email;
 
@@ -850,14 +866,14 @@ SELECT u.UsersID,
        data.venue
 FROM (
   VALUES
-    ('owner1@example.com', 'Lions FC', '2015-03-12', 'Sunrise Stadium'),
-    ('owner2@example.com', 'Falcons United', '2012-07-04', 'Riverfront Arena'),
-    ('owner3@example.com', 'Harbor City Waves', '2018-09-18', 'Bayfront Dome'),
-    ('owner4@example.com', 'Alpine Strikers', '2014-05-21', 'Summit Park'),
-    ('owner5@example.com', 'Riviera Royals', '2016-11-02', 'Coastal Arena'),
-    ('owner6@example.com', 'Canal City Crew', '2013-08-14', 'Harborfront Field'),
-    ('owner7@example.com', 'Atlas Eagles', '2011-02-02', 'Mountain Crest'),
-    ('owner8@example.com', 'Silk Route FC', '2017-06-09', 'Bazaar Stadium')
+    ('o1@gmail.com', 'Lions FC', '2015-03-12', 'Sunrise Stadium'),
+    ('o2@gmail.com', 'Falcons United', '2012-07-04', 'Riverfront Arena'),
+    ('o3@gmail.com', 'Harbor City Waves', '2018-09-18', 'Bayfront Dome'),
+    ('o4@gmail.com', 'Alpine Strikers', '2014-05-21', 'Summit Park'),
+    ('o5@gmail.com', 'Riviera Royals', '2016-11-02', 'Coastal Arena'),
+    ('o6@gmail.com', 'Canal City Crew', '2013-08-14', 'Harborfront Field'),
+    ('o7@gmail.com', 'Atlas Eagles', '2011-02-02', 'Mountain Crest'),
+    ('o8@gmail.com', 'Silk Route FC', '2017-06-09', 'Bazaar Stadium')
 ) AS data(email, team_name, established, venue)
 JOIN Users u ON u.Email = data.email;
 
@@ -865,17 +881,34 @@ INSERT INTO Employee (UsersID, TeamID)
 SELECT u.UsersID, t.TeamID
 FROM Users u
 JOIN Team t ON t.OwnerID = (SELECT UsersID FROM Users WHERE Email = CASE 
-  WHEN u.Email = 'coach1@example.com' THEN 'owner1@example.com'
-  WHEN u.Email = 'coach2@example.com' THEN 'owner2@example.com'
-  WHEN u.Email = 'coach3@example.com' THEN 'owner3@example.com'
-  WHEN u.Email = 'coach4@example.com' THEN 'owner1@example.com'
+  WHEN u.Email = 'c1@gmail.com' THEN 'o1@gmail.com'
+  WHEN u.Email = 'c2@gmail.com' THEN 'o2@gmail.com'
+  WHEN u.Email = 'c3@gmail.com' THEN 'o3@gmail.com'
+  WHEN u.Email = 'c4@gmail.com' THEN 'o1@gmail.com'
 END)
-WHERE u.Email IN ('coach1@example.com', 'coach2@example.com', 'coach3@example.com', 'coach4@example.com');
+WHERE u.Email IN ('c1@gmail.com', 'c2@gmail.com', 'c3@gmail.com', 'c4@gmail.com');
 
 INSERT INTO Coach (UsersID, Certification)
 SELECT u.UsersID, 'UEFA A License'
 FROM Users u
-WHERE u.Email IN ('coach1@example.com', 'coach2@example.com', 'coach3@example.com', 'coach4@example.com');
+WHERE u.Email IN ('c1@gmail.com', 'c2@gmail.com', 'c3@gmail.com', 'c4@gmail.com');
+
+-- Additional coaches (unassigned to teams)
+INSERT INTO Employee (UsersID, TeamID)
+SELECT u.UsersID, NULL
+FROM Users u
+WHERE u.Email IN ('c5@gmail.com', 'c6@gmail.com', 'c7@gmail.com', 'c8@gmail.com');
+
+INSERT INTO Coach (UsersID, Certification)
+SELECT u.UsersID, 'UEFA B License'
+FROM Users u
+WHERE u.Email IN ('c5@gmail.com', 'c6@gmail.com', 'c7@gmail.com', 'c8@gmail.com');
+
+-- Referees
+INSERT INTO Referee (UsersID, Certification)
+SELECT u.UsersID, 'FIFA Elite'
+FROM Users u
+WHERE u.Email LIKE 'r%@gmail.com';
 
 -- 112 players (14 per team) with ongoing employment
 WITH player_data AS (

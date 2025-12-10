@@ -16,6 +16,9 @@
         {% if g.get("banner_create_league_endpoint") %}
         <a href="{{ url_for(g.banner_create_league_endpoint) }}" class="nav-link">Create League</a>
         {% endif %}
+        {% if g.get("banner_owner_endpoint") %}
+        <a href="{{ url_for(g.banner_owner_endpoint) }}" class="nav-link">My Teams</a>
+        {% endif %}
     </nav>
     <div class="top-banner__actions">
         <span class="role-pill">{{ session.get("role", "guest")|capitalize }}</span>

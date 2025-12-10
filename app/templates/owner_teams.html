@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Team Owner | My Teams</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="dashboard-body">
+    {% include "_banner.html" %}
+    <main class="dashboard-container">
+        <header class="admin-header">
+            <div>
+                <p class="eyebrow">Team Owner Console</p>
+                <h1>My Teams</h1>
+            </div>
+        </header>
+
+        <section class="team-owner-layout">
+            <div class="team-card-list">
+                {% if teams %}
+                {% for team in teams %}
+                <div class="team-card">
+                    <div class="team-card-header">
+                        <div>
+                            <h2>{{ team.teamname }}</h2>
+                            <p class="subtle">Venue: {{ team.homevenue or 'N/A' }}</p>
+                        </div>
+                        <form method="POST" action="{{ url_for('owner.transfer_team', team_id=team.teamid) }}" class="transfer-form">
+                            <label for="new_owner_id_{{ team.teamid }}">Transfer to:</label>
+                            <select id="new_owner_id_{{ team.teamid }}" name="new_owner_id" required>
+                                <option value="">Select owner</option>
+                                {% for owner in other_owners %}
+                                <option value="{{ owner.usersid }}">{{ owner.firstname }} {{ owner.lastname }} ({{ owner.email }})</option>
+                                {% endfor %}
+                            </select>
+                            <button type="submit" class="btn solid">Transfer</button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <div class="empty-state">
+                    <p>You currently do not own any teams.</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <aside class="team-owner-aside">
+                <h3>Other Team Owners</h3>
+                {% if other_owners %}
+                <ul class="owner-list">
+                    {% for owner in other_owners %}
+                    <li>
+                        <span>{{ owner.firstname }} {{ owner.lastname }}</span>
+                        <span class="subtle">{{ owner.email }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="subtle">No other owners available.</p>
+                {% endif %}
+            </aside>
+        </section>
+    </main>
+</body>
+</html>
