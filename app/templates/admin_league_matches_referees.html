@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assign Referees | League {{ league_id }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="dashboard-body">
+    {% include "_banner.html" %}
+    <main class="dashboard-container">
+        <header class="admin-header">
+            <div>
+                <p class="eyebrow">Admin Console</p>
+                <h1>Assign Referees</h1>
+                <p class="subtitle">League {{ league_id }}</p>
+            </div>
+            <div>
+                <a href="{{ url_for('admin.view_leagues') }}" class="back-link">← Back to leagues</a>
+            </div>
+        </header>
+
+        {% if matches %}
+        <div class="table-card">
+            <table class="simple-table">
+                <thead>
+                    <tr>
+                        <th>Season</th>
+                        <th>Match</th>
+                        <th>Date</th>
+                        <th>Assign Referee</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for match in matches %}
+                    <tr>
+                        <td>Season {{ match.seasonno }} ({{ match.seasonyear }})</td>
+                        <td>{{ match.hometeamname }} vs {{ match.awayteamname }}</td>
+                        <td>{{ match.matchstartdatetime|strftime('%b %d, %Y %H:%M') }}</td>
+                        <td>
+                            <form method="POST" action="{{ url_for('admin.assign_match_referee', match_id=match.matchid) }}" class="inline-form">
+                                <select name="referee_id" required>
+                                    <option value="">Select referee</option>
+                                    {% for ref in referees %}
+                                    <option value="{{ ref.usersid }}">{{ ref.firstname }} {{ ref.lastname }} ({{ ref.email }})</option>
+                                    {% endfor %}
+                                </select>
+                                <button type="submit" class="btn solid">Assign</button>
+                            </form>
+                            <a class="link" href="{{ url_for('admin.match_referee_assignment', match_id=match.matchid) }}">Manage refs</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="subtle">No matches found for this league yet.</p>
+        {% endif %}
+    </main>
+</body>
+</html>

@@ -63,11 +63,22 @@ def view_leagues():
         return redirect(url_for("login"))
 
     leagues = fetch_admin_leagues(admin_id)
+    leagues_with_teams = []
+    for league in leagues or []:
+        league_entry = dict(league)
+        league_entry["teams"] = fetch_league_teams(league["leagueid"])
+        league_entry["available_teams"] = fetch_league_available_teams(league["leagueid"])
+        league_entry["matches"] = fetch_league_matches(league["leagueid"])
+        leagues_with_teams.append(league_entry)
+
     return render_template(
         "admin_view_leagues.html",
-        leagues=leagues,
+        leagues=leagues_with_teams,
         create_endpoint=None,  # admins don't create leagues
         assign_endpoint=None,
+        match_create_endpoint="admin.create_season_match",
+        season_delete_endpoint="admin.delete_season",
+        league_matches_ref_endpoint="admin.league_matches_referees",
     )
 
 
@@ -157,8 +168,29 @@ def match_referee_assignment(match_id):
     )
 
 
+@admin_bp.route("/leagues/<int:league_id>/matches/referees")
+def league_matches_referees(league_id):
+    admin_id = session.get("user_id")
+    if not admin_id:
+        return redirect(url_for("login"))
+
+    allowed_leagues = {l["leagueid"] for l in fetch_admin_leagues(admin_id)}
+    if league_id not in allowed_leagues:
+        abort(403)
+
+    matches = [m for m in fetch_league_matches(league_id)]
+    referees = fetch_all_referees()
+    return render_template(
+        "admin_league_matches_referees.html",
+        league_id=league_id,
+        matches=matches,
+        referees=referees,
+    )
+
+
+@admin_bp.route("/matches/<int:match_id>/referees", methods=["POST"])
 @admin_bp.route("/matches/<int:match_id>/referees/<int:referee_id>", methods=["POST"])
-def assign_match_referee(match_id, referee_id):
+def assign_match_referee(match_id, referee_id=None):
     """Assign a referee to a match."""
     admin_id = session.get("user_id")
     if not admin_id:
@@ -169,8 +201,9 @@ def assign_match_referee(match_id, referee_id):
     if not any(m["matchid"] == match_id for m in matches):
         abort(403)
     
+    ref_id = referee_id or request.form.get("referee_id")
     try:
-        assign_referee_to_match(match_id, referee_id)
+        assign_referee_to_match(match_id, int(ref_id))
     except psycopg2.Error:
         pass  # Silent fail if already assigned
     
@@ -191,6 +224,62 @@ def remove_match_referee(match_id, referee_id):
     
     remove_referee_from_match(match_id, referee_id)
     return redirect(url_for("admin.match_referee_assignment", match_id=match_id))
+
+
+@admin_bp.route("/leagues/<int:league_id>/teams/add", methods=["POST"])
+def add_team_to_league_route(league_id):
+    admin_id = session.get("user_id")
+    if not admin_id:
+        return redirect(url_for("login"))
+    allowed_leagues = {l["leagueid"] for l in fetch_admin_leagues(admin_id)}
+    if league_id not in allowed_leagues:
+        abort(403)
+    team_id = request.form.get("team_id")
+    if not team_id:
+        abort(400)
+    add_team_to_league(league_id, int(team_id))
+    return redirect(url_for("admin.view_leagues"))
+
+
+@admin_bp.route("/leagues/<int:league_id>/seasons/<int:season_no>/<season_year>/delete", methods=["POST"])
+def delete_season_route(league_id, season_no, season_year):
+    admin_id = session.get("user_id")
+    if not admin_id:
+        return redirect(url_for("login"))
+    allowed_leagues = {l["leagueid"] for l in fetch_admin_leagues(admin_id)}
+    if league_id not in allowed_leagues:
+        abort(403)
+    delete_season(league_id, season_no, season_year)
+    return redirect(url_for("admin.view_leagues"))
+
+
+@admin_bp.route("/leagues/<int:league_id>/seasons/<int:season_no>/<season_year>/matches/create", methods=["POST"])
+def create_season_match_route(league_id, season_no, season_year):
+    admin_id = session.get("user_id")
+    if not admin_id:
+        return redirect(url_for("login"))
+    allowed_leagues = {l["leagueid"] for l in fetch_admin_leagues(admin_id)}
+    if league_id not in allowed_leagues:
+        abort(403)
+
+    home_team_id = request.form.get("home_team_id")
+    away_team_id = request.form.get("away_team_id")
+    start_dt = request.form.get("start_datetime")
+    venue = request.form.get("venue") or None
+
+    if not home_team_id or not away_team_id or not start_dt:
+        abort(400)
+
+    create_season_match(
+        league_id,
+        season_no,
+        season_year,
+        int(home_team_id),
+        int(away_team_id),
+        _normalize_datetime(start_dt),
+        venue,
+    )
+    return redirect(url_for("admin.view_leagues"))
 
 
 @admin_bp.route("/matches/seasonal/lock-status")
@@ -237,3 +326,52 @@ def unlock_match(match_id):
     
     toggle_match_lock(match_id, False)
     return redirect(url_for("admin.view_seasonal_matches_lock"))
+
+
+@admin_bp.route("/reports", methods=["GET", "POST"])
+def reports():
+    admin_id = session.get("user_id")
+    if not admin_id:
+        return redirect(url_for("login"))
+
+    players_report = None
+    standings_report = None
+    attendance_report = None
+    error_message = None
+
+    if request.method == "POST":
+        report_type = request.form.get("report_type")
+        try:
+            if report_type == "players":
+                players_report = report_players({
+                    "player_id": _to_int(request.form.get("player_id"), "Player ID") if request.form.get("player_id") else None,
+                    "currently_employed": bool(request.form.get("currently_employed")),
+                    "employed_before": request.form.get("employed_before"),
+                    "employed_after": request.form.get("employed_after"),
+                    "ended_before": request.form.get("ended_before"),
+                    "ended_after": request.form.get("ended_after"),
+                })
+            elif report_type == "standings":
+                league_id = _to_int(request.form.get("league_id"), "League ID", required=True)
+                season_no = _to_int(request.form.get("season_no"), "Season No", required=True)
+                season_year = request.form.get("season_year")
+                if not season_year:
+                    raise ValueError("Season year is required.")
+                standings_report = report_league_standings(league_id, season_no, season_year)
+            elif report_type == "attendance":
+                league_id = _to_int(request.form.get("league_id"), "League ID") if request.form.get("league_id") else None
+                season_no = _to_int(request.form.get("season_no"), "Season No") if request.form.get("season_no") else None
+                season_year = request.form.get("season_year") or None
+                attendance_report = report_player_attendance(league_id, season_no, season_year)
+        except ValueError as exc:
+            error_message = str(exc)
+
+    leagues = fetch_all_leagues()
+    return render_template(
+        "admin_reports.html",
+        error_message=error_message,
+        players_report=players_report,
+        standings_report=standings_report,
+        attendance_report=attendance_report,
+        leagues=leagues,
+    )

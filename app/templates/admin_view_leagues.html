@@ -26,7 +26,7 @@
                 {% set grouped_leagues = {} %}
                 {% for league in leagues %}
                     {% if league.leagueid not in grouped_leagues %}
-                        {% set _ = grouped_leagues.update({league.leagueid: {'name': league.name, 'seasons': []}}) %}
+                        {% set _ = grouped_leagues.update({league.leagueid: {'name': league.name, 'seasons': [] , 'teams': league.teams, 'available_teams': league.available_teams, 'matches': league.matches}}) %}
                     {% endif %}
                     {% if league.seasonno %}
                         {% set _ = grouped_leagues[league.leagueid]['seasons'].append(league) %}
@@ -40,41 +40,118 @@
                             <h2>{{ league_info.name }}</h2>
                             <p class="league-seasons-count">{{ league_info.seasons|length }} season(s)</p>
                         </div>
-                        {% if assign_endpoint %}
-                        <a href="{{ url_for(assign_endpoint, league_id=league_id) }}" class="btn solid btn-inline">
-                            Assign Admins
-                        </a>
-                        {% endif %}
+                        <div class="league-card-actions">
+                            <a class="btn ghost btn-inline" href="{{ url_for('admin.league_matches_referees', league_id=league_id) }}">Assign Referees</a>
+                        </div>
                     </div>
 
-                    {% if league_info.seasons %}
-                    <div class="seasons-table">
-                        <table>
+                    <div class="league-body-grid">
+                        <div>
+                            <h3>Seasons</h3>
+                            {% if league_info.seasons %}
+                            <div class="seasons-table">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Season</th>
+                                            <th>Year</th>
+                                            <th>Start</th>
+                                            <th>End</th>
+                                            <th>Prize</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for season in league_info.seasons %}
+                                        <tr>
+                                            <td>{{ season.seasonno }}</td>
+                                            <td>{{ season.seasonyear }}</td>
+                                            <td>{{ season.startdate|strftime('%b %d, %Y %H:%M') }}</td>
+                                            <td>{{ season.enddate|strftime('%b %d, %Y %H:%M') }}</td>
+                                            <td>${{ "{:,.0f}".format(season.prizepool) }}</td>
+                                            <td class="table-actions">
+                                                <form method="POST" action="{{ url_for('admin.delete_season_route', league_id=league_id, season_no=season.seasonno, season_year=season.seasonyear) }}" onsubmit="return confirm('Delete this season?');">
+                                                    <button type="submit" class="btn ghost btn-small">Delete</button>
+                                                </form>
+                                                <form method="POST" action="{{ url_for('admin.create_season_match_route', league_id=league_id, season_no=season.seasonno, season_year=season.seasonyear) }}" class="inline-form">
+                                                    <select name="home_team_id" required>
+                                                        <option value=\"\">Home team</option>
+                                                        {% for team in league_info.teams %}
+                                                        <option value=\"{{ team.teamid }}\">{{ team.teamname }}</option>
+                                                        {% endfor %}
+                                                    </select>
+                                                    <select name="away_team_id" required>
+                                                        <option value=\"\">Away team</option>
+                                                        {% for team in league_info.teams %}
+                                                        <option value=\"{{ team.teamid }}\">{{ team.teamname }}</option>
+                                                        {% endfor %}
+                                                    </select>
+                                                    <input type=\"datetime-local\" name=\"start_datetime\" required>
+                                                    <input type=\"text\" name=\"venue\" placeholder=\"Venue (optional)\">
+                                                    <button type=\"submit\" class=\"btn solid btn-small\">Create Match</button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {% else %}
+                            <p class="subtle">No seasons defined yet. Create seasons when you add admins.</p>
+                            {% endif %}
+                        </div>
+
+                        <div>
+                            <h3>Teams in League</h3>
+                            {% if league_info.teams %}
+                            <ul class="owner-list">
+                                {% for team in league_info.teams %}
+                                <li>{{ team.teamname }}</li>
+                                {% endfor %}
+                            </ul>
+                            {% else %}
+                            <p class="subtle">No teams assigned yet.</p>
+                            {% endif %}
+
+                            <form method="POST" action="{{ url_for('admin.add_team_to_league_route', league_id=league_id) }}" class="inline-form add-team-form">
+                                <select name="team_id" required>
+                                    <option value=\"\">Add team...</option>
+                                    {% for team in league_info.available_teams %}
+                                    <option value=\"{{ team.teamid }}\">{{ team.teamname }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button type="submit" class="btn solid btn-small">Add</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="matches-table">
+                        <h3>Seasonal Matches</h3>
+                        {% if league_info.matches %}
+                        <table class="simple-table">
                             <thead>
                                 <tr>
                                     <th>Season</th>
-                                    <th>Year</th>
-                                    <th>Start Date</th>
-                                    <th>End Date</th>
-                                    <th>Prize Pool</th>
+                                    <th>Match</th>
+                                    <th>Date</th>
+                                    <th>Locked</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for season in league_info.seasons %}
+                                {% for match in league_info.matches %}
                                 <tr>
-                                    <td>{{ season.seasonno }}</td>
-                                    <td>{{ season.seasonyear }}</td>
-                                    <td>{{ season.startdate|strftime('%b %d, %Y %H:%M') }}</td>
-                                    <td>{{ season.enddate|strftime('%b %d, %Y %H:%M') }}</td>
-                                    <td>${{ "{:,.0f}".format(season.prizepool) }}</td>
+                                    <td>{{ match.seasonno }} ({{ match.seasonyear }})</td>
+                                    <td>{{ match.hometeamname }} vs {{ match.awayteamname }}</td>
+                                    <td>{{ match.matchstartdatetime|strftime('%b %d, %Y %H:%M') }}</td>
+                                    <td>{{ 'Yes' if match.islocked else 'No' }}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
                         </table>
+                        {% else %}
+                        <p class="subtle">No matches yet.</p>
+                        {% endif %}
                     </div>
-                    {% else %}
-                    <p class="subtle">No seasons defined yet. Create seasons when you add admins.</p>
-                    {% endif %}
                 </div>
                 {% endfor %}
             {% else %}

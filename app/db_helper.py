@@ -89,6 +89,195 @@ def fetch_all_players():
             return cur.fetchall()
     finally:
         conn.close()
+
+
+def report_players(filters):
+    """
+    filters: {
+      all_players: bool,
+      currently_employed: bool,
+      player_id: int|None,
+      employed_before: datetime|None,
+      employed_after: datetime|None,
+      ended_before: datetime|None,
+      ended_after: datetime|None,
+    }
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            clauses = []
+            params = []
+
+            if filters.get("player_id"):
+                clauses.append("p.UsersID = %s")
+                params.append(filters["player_id"])
+
+            if filters.get("currently_employed"):
+                clauses.append("e.EndDate >= NOW()")
+
+            if filters.get("employed_before"):
+                clauses.append("e.StartDate <= %s")
+                params.append(filters["employed_before"])
+
+            if filters.get("employed_after"):
+                clauses.append("e.StartDate >= %s")
+                params.append(filters["employed_after"])
+
+            if filters.get("ended_before"):
+                clauses.append("e.EndDate <= %s")
+                params.append(filters["ended_before"])
+
+            if filters.get("ended_after"):
+                clauses.append("e.EndDate >= %s")
+                params.append(filters["ended_after"])
+
+            where_sql = " WHERE " + " AND ".join(clauses) if clauses else ""
+
+            cur.execute(
+                f"""
+                SELECT p.UsersID,
+                       u.FirstName,
+                       u.LastName,
+                       u.Email,
+                       p.Position,
+                       p.Height,
+                       p.Weight,
+                       e.StartDate,
+                       e.EndDate,
+                       t.TeamName
+                FROM Player p
+                JOIN Users u ON u.UsersID = p.UsersID
+                LEFT JOIN Employed em ON em.UsersID = p.UsersID
+                LEFT JOIN Employment e ON e.EmploymentID = em.EmploymentID
+                LEFT JOIN Team t ON t.TeamID = em.TeamID
+                {where_sql}
+                ORDER BY u.LastName, u.FirstName, e.StartDate NULLS LAST;
+                """,
+                tuple(params),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def report_league_standings(league_id, season_no, season_year):
+    """Simple standings: wins/draws/losses/points from SeasonalMatch scores."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT
+                    m.HomeTeamID,
+                    m.AwayTeamID,
+                    m.HomeTeamName,
+                    m.AwayTeamName,
+                    m.HomeTeamScore,
+                    m.AwayTeamScore
+                FROM Match m
+                JOIN SeasonalMatch sm ON m.MatchID = sm.MatchID
+                WHERE sm.LeagueID = %s AND sm.SeasonNo = %s AND sm.SeasonYear = %s
+                """,
+                (league_id, season_no, season_year),
+            )
+            rows = cur.fetchall()
+
+    finally:
+        conn.close()
+
+    stats = {}
+
+    def ensure(team_id, name):
+        if team_id not in stats:
+            stats[team_id] = {
+                "teamid": team_id,
+                "teamname": name,
+                "played": 0,
+                "wins": 0,
+                "draws": 0,
+                "losses": 0,
+                "gf": 0,
+                "ga": 0,
+                "points": 0,
+            }
+
+    for row in rows:
+        home_id = row["hometeamid"]
+        away_id = row["awayteamid"]
+        home_name = row["hometeamname"]
+        away_name = row["awayteamname"]
+        hs = row["hometeamscore"]
+        as_ = row["awayteamscore"]
+        if hs is None or as_ is None:
+            continue
+        ensure(home_id, home_name)
+        ensure(away_id, away_name)
+        stats[home_id]["played"] += 1
+        stats[away_id]["played"] += 1
+        stats[home_id]["gf"] += hs
+        stats[home_id]["ga"] += as_
+        stats[away_id]["gf"] += as_
+        stats[away_id]["ga"] += hs
+        if hs > as_:
+            stats[home_id]["wins"] += 1
+            stats[home_id]["points"] += 3
+            stats[away_id]["losses"] += 1
+        elif hs < as_:
+            stats[away_id]["wins"] += 1
+            stats[away_id]["points"] += 3
+            stats[home_id]["losses"] += 1
+        else:
+            stats[home_id]["draws"] += 1
+            stats[away_id]["draws"] += 1
+            stats[home_id]["points"] += 1
+            stats[away_id]["points"] += 1
+
+    return sorted(stats.values(), key=lambda s: (-s["points"], -(s["gf"] - s["ga"]), -s["wins"]))
+
+
+def report_player_attendance(league_id=None, season_no=None, season_year=None):
+    """
+    Counts appearances per player across matches; optionally filtered by league/season.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            clauses = []
+            params = []
+            join_clause = ""
+            if league_id:
+                join_clause = "JOIN SeasonalMatch sm ON sm.MatchID = pl.MatchID"
+                clauses.append("sm.LeagueID = %s")
+                params.append(league_id)
+                if season_no:
+                    clauses.append("sm.SeasonNo = %s")
+                    params.append(season_no)
+                if season_year:
+                    clauses.append("sm.SeasonYear = %s")
+                    params.append(season_year)
+
+            where_sql = " WHERE " + " AND ".join(clauses) if clauses else ""
+
+            cur.execute(
+                f"""
+                SELECT pl.PlayerID,
+                       u.FirstName,
+                       u.LastName,
+                       COUNT(*) AS appearances
+                FROM Play pl
+                JOIN Users u ON u.UsersID = pl.PlayerID
+                {join_clause}
+                {where_sql}
+                GROUP BY pl.PlayerID, u.FirstName, u.LastName
+                ORDER BY appearances DESC, u.LastName, u.FirstName;
+                """,
+                tuple(params),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
         
         
 def fetch_matches_grouped(tournament_id):
@@ -664,6 +853,149 @@ def fetch_league_by_id(league_id):
     finally:
         conn.close()
 
+
+def fetch_league_teams(league_id):
+    """Teams currently associated to a league."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT t.teamid, t.teamname
+                FROM LeagueTeam lt
+                JOIN Team t ON lt.teamid = t.teamid
+                WHERE lt.leagueid = %s
+                ORDER BY t.teamname;
+                """,
+                (league_id,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_league_available_teams(league_id):
+    """Teams not yet associated to this league."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT t.teamid, t.teamname
+                FROM Team t
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM LeagueTeam lt
+                    WHERE lt.teamid = t.teamid AND lt.leagueid = %s
+                )
+                ORDER BY t.teamname;
+                """,
+                (league_id,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def add_team_to_league(league_id, team_id):
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO LeagueTeam (LeagueID, TeamID)
+                    VALUES (%s, %s)
+                    ON CONFLICT DO NOTHING;
+                    """,
+                    (league_id, team_id),
+                )
+    finally:
+        conn.close()
+
+
+def delete_season(league_id, season_no, season_year):
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    DELETE FROM Season
+                    WHERE LeagueID = %s AND SeasonNo = %s AND SeasonYear = %s;
+                    """,
+                    (league_id, season_no, season_year),
+                )
+    finally:
+        conn.close()
+
+
+def create_season_match(league_id, season_no, season_year, home_team_id, away_team_id, start_dt, venue):
+    """Create a Match and link it to SeasonalMatch for the given season."""
+    if home_team_id == away_team_id:
+        raise ValueError("Home and away team cannot be the same.")
+
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO Match (
+                        HomeTeamID, AwayTeamID,
+                        MatchStartDatetime, MatchEndDatetime,
+                        VenuePlayed,
+                        HomeTeamName, AwayTeamName,
+                        HomeTeamScore, AwayTeamScore, WinnerTeam, IsLocked
+                    )
+                    SELECT %s, %s, %s, NULL, %s, ht.teamname, at.teamname, NULL, NULL, NULL, FALSE
+                    FROM Team ht, Team at
+                    WHERE ht.teamid = %s AND at.teamid = %s
+                    RETURNING MatchID;
+                    """,
+                    (home_team_id, away_team_id, start_dt, venue, home_team_id, away_team_id),
+                )
+                match_id = cur.fetchone()[0]
+
+                cur.execute(
+                    """
+                    INSERT INTO SeasonalMatch (MatchID, LeagueID, SeasonNo, SeasonYear)
+                    VALUES (%s, %s, %s, %s);
+                    """,
+                    (match_id, league_id, season_no, season_year),
+                )
+
+                return match_id
+    finally:
+        conn.close()
+
+
+def fetch_league_matches(league_id):
+    """All seasonal matches for a league with season info."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT m.matchid,
+                       m.hometeamname,
+                       m.awayteamname,
+                       m.matchstartdatetime,
+                       m.islocked,
+                       s.seasonno,
+                       s.seasonyear
+                FROM Match m
+                JOIN SeasonalMatch sm ON m.matchid = sm.matchid
+                JOIN Season s ON sm.leagueid = s.leagueid
+                    AND sm.seasonno = s.seasonno
+                    AND sm.seasonyear = s.seasonyear
+                WHERE sm.leagueid = %s
+                ORDER BY s.seasonyear DESC, s.seasonno DESC, m.matchstartdatetime DESC;
+                """,
+                (league_id,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
 
 def create_league_with_seasons(league_name, seasons_data, team_ids=None):
     """

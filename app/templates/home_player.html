@@ -6,10 +6,16 @@
     <title>Sports League | Player Home</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
-<body class="auth-body">
-    <main class="auth-card">
+<body class="dashboard-body">
+    {% include "_banner.html" %}
+    <main class="dashboard-container">
+        <header class="admin-header">
+            <div>
+                <p class="eyebrow">Player Console</p>
+                <h1>Player Home</h1>
+            </div>
+        </header>
         <section>
-            <h1>Player Home</h1>
             <p class="subtitle">Welcome, player. Your dashboard will appear here.</p>
         </section>
     </main>
