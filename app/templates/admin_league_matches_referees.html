@@ -21,33 +21,28 @@
         </header>
 
         {% if matches %}
-        <div class="table-card">
-            <table class="simple-table">
+        <div class="matches-card">
+            <table class="matches-table">
                 <thead>
                     <tr>
                         <th>Season</th>
                         <th>Match</th>
                         <th>Date</th>
-                        <th>Assign Referee</th>
+                        <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for match in matches %}
                     <tr>
-                        <td>Season {{ match.seasonno }} ({{ match.seasonyear }})</td>
-                        <td>{{ match.hometeamname }} vs {{ match.awayteamname }}</td>
-                        <td>{{ match.matchstartdatetime|strftime('%b %d, %Y %H:%M') }}</td>
-                        <td>
-                            <form method="POST" action="{{ url_for('admin.assign_match_referee', match_id=match.matchid) }}" class="inline-form">
-                                <select name="referee_id" required>
-                                    <option value="">Select referee</option>
-                                    {% for ref in referees %}
-                                    <option value="{{ ref.usersid }}">{{ ref.firstname }} {{ ref.lastname }} ({{ ref.email }})</option>
-                                    {% endfor %}
-                                </select>
-                                <button type="submit" class="btn solid">Assign</button>
-                            </form>
-                            <a class="link" href="{{ url_for('admin.match_referee_assignment', match_id=match.matchid) }}">Manage refs</a>
+                        <td><span class="season-badge">Season {{ match.seasonno }} ({{ match.seasonyear }})</span></td>
+                        <td class="match-teams">
+                            <strong>{{ match.hometeamname }}</strong> vs <strong>{{ match.awayteamname }}</strong>
+                        </td>
+                        <td class="match-date">{{ match.matchstartdatetime|strftime('%b %d, %Y %H:%M') }}</td>
+                        <td class="action-cell">
+                            <a href="{{ url_for('admin.match_referee_assignment', match_id=match.matchid) }}" class="btn small solid">
+                                Manage Referees
+                            </a>
                         </td>
                     </tr>
                     {% endfor %}
@@ -55,8 +50,95 @@
             </table>
         </div>
         {% else %}
-        <p class="subtle">No matches found for this league yet.</p>
+        <div class="empty-state">
+            <p>No matches found for this league yet.</p>
+        </div>
         {% endif %}
     </main>
+
+    <style>
+        .matches-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .matches-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .matches-table th {
+            background-color: #f5f5f5;
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #e0e0e0;
+            color: #333;
+        }
+
+        .matches-table td {
+            padding: 1rem;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .matches-table tr:hover {
+            background-color: #f9f9f9;
+        }
+
+        .season-badge {
+            display: inline-block;
+            padding: 0.4rem 0.8rem;
+            background-color: #e3f2fd;
+            color: #1565c0;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .match-teams {
+            font-size: 0.95rem;
+        }
+
+        .match-date {
+            color: #666;
+            font-size: 0.9rem;
+            white-space: nowrap;
+        }
+
+        .action-cell {
+            text-align: center;
+        }
+
+        .btn.small {
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+            white-space: nowrap;
+        }
+
+        .empty-state {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 3rem;
+            text-align: center;
+        }
+
+        .empty-state p {
+            color: #666;
+            font-size: 1rem;
+        }
+
+        .back-link {
+            color: #1565c0;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
 </body>
 </html>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin | View and Manage Leagues</title>
+    <title>Super Admin | View and Manage Leagues</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 <body class="dashboard-body">
@@ -11,7 +11,7 @@
     <main class="dashboard-container">
         <header class="admin-header">
             <div>
-                <p class="eyebrow">Admin Console</p>
+                <p class="eyebrow">Super Admin Console</p>
                 <h1>View and Manage Leagues</h1>
             </div>
             {% if create_endpoint %}
@@ -41,13 +41,12 @@
                             <p class="league-seasons-count">{{ league_info.seasons|length }} season(s)</p>
                         </div>
                         <div class="league-card-actions">
-                            <a class="btn solid btn-inline" href="{{ url_for('admin.league_matches_referees', league_id=league_id) }}">Assign Referees</a>
-                            <a class="btn solid btn-inline" href="{{ url_for('admin.manage_league_teams', league_id=league_id) }}">Manage Teams</a>
-                            {% if delete_endpoint %}
-                            <form method="POST" action="{{ url_for(delete_endpoint, league_id=league_id) }}" onsubmit="return confirm('Delete this league and all associated data?');" style="display: inline;">
+                            {% if assign_endpoint %}
+                            <a class="btn solid btn-inline" href="{{ url_for(assign_endpoint, league_id=league_id) }}">Assign Admins</a>
+                            {% endif %}
+                            <form method="POST" action="{{ url_for('superadmin.delete_league_route', league_id=league_id) }}" onsubmit="return confirm('Delete this league and all associated data?');" style="display: inline;">
                                 <button type="submit" class="btn ghost btn-inline">Delete League</button>
                             </form>
-                            {% endif %}
                         </div>
                     </div>
 
@@ -88,16 +87,7 @@
                                             <td>{{ season.enddate|strftime('%b %d, %Y %H:%M') }}</td>
                                             <td>${{ "{:,.0f}".format(season.prizepool) }}</td>
                                             <td class="table-actions">
-                                                {% set now = now() %}
-                                                {% set season_ended = season.enddate < now %}
                                                 <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
-                                                    {% if not season_ended %}
-                                                    <a href="{{ url_for('admin.create_season_match_form', league_id=league_id, season_no=season.seasonno, season_year=season.seasonyear) }}" class="btn solid btn-small">
-                                                        + Create Match
-                                                    </a>
-                                                    {% else %}
-                                                    <span class="subtle" style="font-size: 0.85rem;">Season ended</span>
-                                                    {% endif %}
                                                     {% if season_delete_endpoint %}
                                                     <form method="POST" action="{{ url_for(season_delete_endpoint, league_id=league_id, season_no=season.seasonno, season_year=season.seasonyear) }}" onsubmit="return confirm('Delete this season?');" style="display: inline;">
                                                         <button type="submit" class="btn ghost btn-small">Delete Season</button>
@@ -231,8 +221,6 @@
             border-radius: 10px;
             box-shadow: 0 4px 10px rgba(17, 24, 39, 0.12);
         }
-
-  
 
         .empty-state p {
             margin-bottom: 1.5rem;

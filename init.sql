@@ -646,6 +646,58 @@ FOR EACH ROW
 EXECUTE FUNCTION fill_parent_match();
 
 
+-- ===== TRIGGER: Auto-create Play rows when a Match is inserted =====
+-- Purpose: Whenever a Match is created (league or tournament), automatically 
+--          populate Play rows for all current active players on both teams.
+-- Logic:
+--   1. Get the HomeTeamID and AwayTeamID from the new Match
+--   2. Find all players actively employed by both teams at the match time
+--   3. Insert Play rows for each player (without eligibility check for now)
+-- Note: This runs for BOTH seasonal matches and tournament matches
+-- Note: IsEligible filtering is currently bypassed
+CREATE OR REPLACE FUNCTION auto_create_plays_on_match_insert()
+RETURNS TRIGGER AS $$
+DECLARE
+    home_team_id INT;
+    away_team_id INT;
+    match_time TIMESTAMP;
+BEGIN
+    home_team_id := NEW.HomeTeamID;
+    away_team_id := NEW.AwayTeamID;
+    match_time := NEW.MatchStartDatetime;
+
+    -- Insert Play rows for all active players from both teams
+    WITH active_players AS (
+        SELECT em.UsersID AS player_id
+        FROM Employed em
+        JOIN Employment e ON e.EmploymentID = em.EmploymentID
+        JOIN Player p ON p.UsersID = em.UsersID
+        WHERE em.TeamID IN (home_team_id, away_team_id)
+          AND e.StartDate <= match_time
+          AND e.EndDate >= match_time
+          -- NOTE: Skipping IsEligible check for now (see TODO in create_tournament_with_bracket)
+    ),
+    to_insert AS (
+        SELECT NEW.MatchID AS match_id, ap.player_id
+        FROM active_players ap
+        WHERE NOT EXISTS (
+            SELECT 1 FROM Play pl
+            WHERE pl.MatchID = NEW.MatchID AND pl.PlayerID = ap.player_id
+        )
+    )
+    INSERT INTO Play (MatchID, PlayerID)
+    SELECT match_id, player_id FROM to_insert;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_auto_create_plays_on_match_insert
+AFTER INSERT ON Match
+FOR EACH ROW
+EXECUTE FUNCTION auto_create_plays_on_match_insert();
+
+
 
 
 

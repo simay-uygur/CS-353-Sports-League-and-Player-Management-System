@@ -389,6 +389,12 @@ def create_tournament_with_bracket(form_data, admin_id, moderator_ids=None):
 
                 leaf_match_ids = _build_bracket_tree(cur, tournament_id, team_ids, start_date)
 
+        # NOTE: Play rows are now created automatically via the database trigger
+        # trg_auto_create_plays_on_match_insert when matches are inserted.
+        # The following code is commented out as the trigger handles this:
+        # for match_id in leaf_match_ids:
+        #     create_plays_for_match_players_on_insert(match_id)
+
         return {"tournament_id": tournament_id, "match_ids": leaf_match_ids}
     finally:
         conn.close()        
@@ -929,6 +935,23 @@ def delete_season(league_id, season_no, season_year):
         conn.close()
 
 
+def delete_league(league_id):
+    """Delete a league and all associated data."""
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    DELETE FROM League
+                    WHERE LeagueID = %s;
+                    """,
+                    (league_id,),
+                )
+    finally:
+        conn.close()
+
+
 def create_season_match(league_id, season_no, season_year, home_team_id, away_team_id, start_dt, venue):
     """Create a Match and link it to SeasonalMatch for the given season."""
     if home_team_id == away_team_id:
@@ -965,6 +988,28 @@ def create_season_match(league_id, season_no, season_year, home_team_id, away_te
                 )
 
                 return match_id
+    finally:
+        conn.close()
+
+
+def team_has_match_on_date(team_id, date_str):
+    """
+    Check if a team already has any match scheduled on the given date (YYYY-MM-DD).
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT 1
+                FROM Match
+                WHERE DATE(matchstartdatetime) = %s
+                  AND (hometeamid = %s OR awayteamid = %s)
+                LIMIT 1;
+                """,
+                (date_str, team_id, team_id),
+            )
+            return cur.fetchone() is not None
     finally:
         conn.close()
 
@@ -1487,6 +1532,211 @@ def toggle_match_lock(match_id, lock_state):
                     """,
                     (lock_state, match_id),
                 )
+    finally:
+        conn.close()
+
+
+def fetch_seasons_for_dropdown():
+    """Fetch distinct season years for dropdown."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT EXTRACT(YEAR FROM SeasonYear)::INT AS seasonyear
+                FROM Season
+                ORDER BY seasonyear DESC;
+                """
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_leagues_for_dropdown():
+    """Fetch all leagues for dropdown."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT leagueid, name AS leaguename
+                FROM League
+                ORDER BY name;
+                """
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_tournaments_for_dropdown():
+    """Fetch all tournaments for dropdown."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT tournamentid, name AS tournamentname
+                FROM Tournament
+                ORDER BY name;
+                """
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_all_matches_with_filters(admin_id, season_year=None, league_id=None, tournament_id=None):
+    """
+    Fetch all matches (league and tournament) that the admin can manage,
+    with optional filters for season year, league, or tournament.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Build the query dynamically based on filters
+            query = """
+                -- League matches (seasonal matches)
+                SELECT DISTINCT
+                    m.matchid,
+                    m.hometeamname,
+                    m.awayteamname,
+                    m.matchstartdatetime,
+                    m.hometeamscore,
+                    m.awayteamscore,
+                    m.islocked,
+                    'league' as match_type,
+                    l.leagueid,
+                    l.name as league_name,
+                    s.seasonno,
+                    s.seasonyear,
+                    NULL::INT as tournamentid,
+                    NULL::VARCHAR as tournament_name
+                FROM Match m
+                JOIN SeasonalMatch sm ON m.matchid = sm.matchid
+                JOIN Season s ON sm.leagueid = s.leagueid 
+                    AND sm.seasonno = s.seasonno 
+                    AND sm.seasonyear = s.seasonyear
+                JOIN League l ON s.leagueid = l.leagueid
+                JOIN SeasonModeration smod ON s.leagueid = smod.leagueid 
+                    AND s.seasonno = smod.seasonno 
+                    AND s.seasonyear = smod.seasonyear
+                WHERE smod.adminid = %s
+            """
+            params = [admin_id]
+            
+            if season_year:
+                query += " AND EXTRACT(YEAR FROM s.seasonyear) = %s"
+                params.append(season_year)
+            
+            if league_id:
+                query += " AND l.leagueid = %s"
+                params.append(int(league_id))
+            
+            query += """
+                UNION ALL
+                
+                -- Tournament matches
+                SELECT DISTINCT
+                    m.matchid,
+                    m.hometeamname,
+                    m.awayteamname,
+                    m.matchstartdatetime,
+                    m.hometeamscore,
+                    m.awayteamscore,
+                    m.islocked,
+                    'tournament' as match_type,
+                    NULL::INT as leagueid,
+                    NULL::VARCHAR as league_name,
+                    NULL::INT as seasonno,
+                    NULL::DATE as seasonyear,
+                    t.tournamentid,
+                    t.name as tournament_name
+                FROM Match m
+                JOIN TournamentMatch tm ON m.matchid = tm.matchid
+                JOIN Round r ON r.t_matchid = tm.matchid
+                JOIN Tournament t ON r.tournamentid = t.tournamentid
+                JOIN TournamentModeration tmod ON t.tournamentid = tmod.t_id
+                WHERE tmod.adminid = %s
+            """
+            params.append(admin_id)
+            
+            if tournament_id:
+                query += " AND t.tournamentid = %s"
+                params.append(int(tournament_id))
+            
+            query += " ORDER BY matchstartdatetime DESC;"
+            
+            cur.execute(query, params)
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def toggle_league_match_lock_by_admin(match_id, admin_id):
+    """
+    Toggle lock/unlock for a league match with admin permission check.
+    Returns the number of rows affected (0 if no permission, 1 if successful).
+    """
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                # Try to update league match
+                cur.execute(
+                    """
+                    UPDATE Match M1
+                    SET IsLocked = NOT IsLocked
+                    WHERE EXISTS (
+                        SELECT 1
+                        FROM SeasonModeration SMo1
+                        JOIN Season S1 USING (LeagueID, SeasonNo, SeasonYear)
+                        JOIN SeasonalMatch SMa1 USING (LeagueID, SeasonNo, SeasonYear)
+                        WHERE SMa1.MatchID = %s
+                        AND M1.MatchID = SMa1.MatchID
+                        AND SMo1.AdminID = %s
+                    );
+                    """,
+                    (match_id, admin_id),
+                )
+                rows_affected = cur.rowcount
+                return rows_affected
+    finally:
+        conn.close()
+
+
+def toggle_tournament_match_lock_by_admin(match_id, admin_id):
+    """
+    Toggle lock/unlock for a tournament match with admin permission check.
+    Returns the number of rows affected (0 if no permission, 1 if successful).
+    NOTE: Based on requirements, tournament matches should NOT be locked via this page.
+    This method is provided for completeness but may not be used.
+    """
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                # Try to update tournament match
+                cur.execute(
+                    """
+                    UPDATE Match M1
+                    SET IsLocked = NOT IsLocked
+                    WHERE EXISTS (
+                        SELECT 1
+                        FROM TournamentModeration TMOD
+                        JOIN Tournament T ON TMOD.T_ID = T.TournamentID
+                        JOIN Round R ON T.TournamentID = R.TournamentID
+                        JOIN TournamentMatch TM ON R.T_MatchID = TM.MatchID
+                        WHERE TM.MatchID = %s
+                        AND M1.MatchID = TM.MatchID
+                        AND TMOD.AdminID = %s
+                    );
+                    """,
+                    (match_id, admin_id),
+                )
+                rows_affected = cur.rowcount
+                return rows_affected
     finally:
         conn.close()
 

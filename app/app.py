@@ -33,30 +33,38 @@ def strftime_filter(value, format_string='%Y-%m-%d %H:%M:%S'):
         return value.strftime(format_string)
     return value
 
+@app.context_processor
+def inject_now():
+    """Make datetime.now() available in templates."""
+    return {'now': datetime.now}
 @app.before_request
 def _set_default_banner():
     role = session.get("role")
     if role == "superadmin":
         g.banner_view_endpoint = "superadmin.view_tournaments"
         g.banner_league_endpoint = "superadmin.view_leagues"
+        g.banner_all_matches_endpoint = "admin.view_all_matches_lock"
         g.banner_create_league_endpoint = None
         g.banner_owner_endpoint = None
         g.banner_reports_endpoint = "admin.reports"
     elif role in ("admin", "tournament_admin"):
         g.banner_view_endpoint = "admin.view_tournaments"
         g.banner_league_endpoint = "admin.view_leagues"
+        g.banner_all_matches_endpoint = "admin.view_all_matches_lock"
         g.banner_create_league_endpoint = None
         g.banner_owner_endpoint = None
         g.banner_reports_endpoint = "admin.reports"
     elif role == "team_owner":
         g.banner_view_endpoint = None
         g.banner_league_endpoint = None
+        g.banner_all_matches_endpoint = None
         g.banner_create_league_endpoint = None
         g.banner_owner_endpoint = "owner.view_teams"
         g.banner_reports_endpoint = None
     else:
         g.banner_view_endpoint = None
         g.banner_league_endpoint = None
+        g.banner_all_matches_endpoint = None
         g.banner_create_league_endpoint = None
         g.banner_owner_endpoint = None
         g.banner_reports_endpoint = None

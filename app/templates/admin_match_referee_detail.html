@@ -15,7 +15,7 @@
                 <h1>Assign Referee to Match</h1>
             </div>
             <div>
-                <a href="{{ url_for('admin.view_matches_for_referees') }}" class="btn ghost">Back</a>
+                <a href="{{ url_for('admin.view_matches_for_referees') }}" class="btn black"><- Back</a>
             </div>
         </header>
 
@@ -198,14 +198,25 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 1rem;
+            padding: 1rem 1.25rem;
             border: 1px solid #e0e0e0;
             border-radius: 6px;
-            background-color: #f9f9f9;
+            background-color: #fafafa;
+            transition: all 0.2s ease;
+        }
+
+        .referee-card:hover {
+            background-color: #f5f5f5;
+            border-color: #ccc;
         }
 
         .referee-card.assigned {
             background-color: #e8f5e9;
+            border-color: #66bb6a;
+        }
+
+        .referee-card.assigned:hover {
+            background-color: #e0f2e1;
             border-color: #4caf50;
         }
 
@@ -241,16 +252,44 @@
             background-color: #d32f2f;
         }
 
+        .btn.black {
+            background-color: #111;
+            color: #fff;
+            border: 1px solid #111;
+        }
+
+        .btn.black:hover {
+            background-color: #000;
+            border-color: #000;
+        }
+
+        .referee-picker {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
         .search-box {
             margin-bottom: 1rem;
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 10;
+            padding-bottom: 0.5rem;
         }
 
         .search-box input {
             width: 100%;
-            padding: 0.75rem;
-            border: 1px solid #e0e0e0;
-            border-radius: 4px;
+            padding: 0.75rem 1rem;
+            border: 1px solid #ddd;
+            border-radius: 6px;
             font-size: 1rem;
+            transition: border-color 0.2s ease;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: #1565c0;
+            box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.1);
         }
 
         .subtle {

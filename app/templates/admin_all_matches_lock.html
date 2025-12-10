@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin | View All Matches</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="dashboard-body">
+    {% include "_banner.html" %}
+    <main class="dashboard-container">
+        <header class="admin-header">
+            <div>
+                <p class="eyebrow">Admin Console</p>
+                <h1>View All Matches</h1>
+                <p class="subtitle">Lock/Unlock League Matches | View Tournament Matches</p>
+            </div>
+        </header>
+
+        <!-- Filters Section -->
+        <section class="filters-section">
+            <form method="GET" action="{{ url_for('admin.view_all_matches_lock') }}" class="filters-form">
+                <div class="filter-group">
+                    <label for="season_year">Season (Year)</label>
+                    <select name="season_year" id="season_year">
+                        <option value="">All Seasons</option>
+                        {% for season in seasons %}
+                            <option value="{{ season.seasonyear }}" 
+                                    {% if selected_season_year == season.seasonyear %}selected{% endif %}>
+                                {{ season.seasonyear }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="league_id">League</label>
+                    <select name="league_id" id="league_id">
+                        <option value="">All Leagues</option>
+                        {% for league in leagues %}
+                            <option value="{{ league.leagueid }}" 
+                                    {% if selected_league_id == league.leagueid %}selected{% endif %}>
+                                {{ league.leaguename }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="tournament_id">Tournament</label>
+                    <select name="tournament_id" id="tournament_id">
+                        <option value="">All Tournaments</option>
+                        {% for tournament in tournaments %}
+                            <option value="{{ tournament.tournamentid }}" 
+                                    {% if selected_tournament_id == tournament.tournamentid %}selected{% endif %}>
+                                {{ tournament.tournamentname }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <button type="submit" class="btn small">Apply Filters</button>
+                <a href="{{ url_for('admin.view_all_matches_lock') }}" class="btn small ghost">Clear Filters</a>
+            </form>
+        </section>
+
+        <!-- Matches Section -->
+        <section class="matches-section">
+            {% if matches %}
+                {% set grouped_matches = {} %}
+                {% for match in matches %}
+                    {% if match.match_type == 'league' %}
+                        {% set group_key = 'League: ' ~ match.league_name ~ ' (Season ' ~ match.seasonno ~ ' - ' ~ match.seasonyear ~ ')' %}
+                        {% set group_type = 'league' %}
+                    {% else %}
+                        {% set group_key = 'Tournament: ' ~ match.tournament_name %}
+                        {% set group_type = 'tournament' %}
+                    {% endif %}
+                    
+                    {% if group_key not in grouped_matches %}
+                        {% set _ = grouped_matches.update({group_key: {'type': group_type, 'matches': []}}) %}
+                    {% endif %}
+                    {% set _ = grouped_matches[group_key]['matches'].append(match) %}
+                {% endfor %}
+
+                {% for group_name, group_data in grouped_matches.items() %}
+                <div class="league-section">
+                    <div class="league-header">
+                        <div>
+                            <h2>{{ group_name }}</h2>
+                            {% if group_data.type == 'league' %}
+                                <span class="badge seasonal">League Match</span>
+                            {% else %}
+                                <span class="badge tournament">Tournament Match</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="matches-table-container">
+                        <table class="matches-table">
+                            <thead>
+                                <tr>
+                                    <th>Match</th>
+                                    <th>Date & Time</th>
+                                    <th>Score</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for match in group_data.matches %}
+                                <tr class="match-row">
+                                    <td class="match-teams">
+                                        <strong>{{ match.hometeamname }}</strong><br>
+                                        vs<br>
+                                        <strong>{{ match.awayteamname }}</strong>
+                                    </td>
+                                    <td class="match-datetime">
+                                        {{ match.matchstartdatetime|strftime('%b %d, %Y %H:%M') }}
+                                    </td>
+                                    <td class="match-score">
+                                        {% if match.hometeamscore is not none and match.awayteamscore is not none %}
+                                            {{ match.hometeamscore }} - {{ match.awayteamscore }}
+                                        {% else %}
+                                            <em>Pending</em>
+                                        {% endif %}
+                                    </td>
+                                    <td class="match-status">
+                                        {% if match.islocked %}
+                                            <span class="status-badge locked">Locked</span>
+                                        {% else %}
+                                            <span class="status-badge unlocked">Unlocked</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="match-action">
+                                        {% if group_data.type == 'league' %}
+                                            <!-- Only show lock/unlock button for league matches -->
+                                            <form method="POST" class="action-form">
+                                                {% if match.islocked %}
+                                                    <button type="submit" class="btn small ghost" 
+                                                            formaction="{{ url_for('admin.toggle_match_lock_route', match_id=match.matchid, season_year=selected_season_year, league_id=selected_league_id, tournament_id=selected_tournament_id) }}"
+                                                            onclick="return confirm('Unlock this match? Players may be removed.');">
+                                                        Unlock
+                                                    </button>
+                                                {% else %}
+                                                    <button type="submit" class="btn small" 
+                                                            formaction="{{ url_for('admin.toggle_match_lock_route', match_id=match.matchid, season_year=selected_season_year, league_id=selected_league_id, tournament_id=selected_tournament_id) }}"
+                                                            onclick="return confirm('Lock this match? It cannot be modified later.');">
+                                                        Lock
+                                                    </button>
+                                                {% endif %}
+                                            </form>
+                                        {% else %}
+                                            <!-- No action for tournament matches -->
+                                            <span class="text-muted">View Only</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+            <div class="empty-state">
+                <p>No matches found for the selected filters.</p>
+            </div>
+            {% endif %}
+        </section>
+    </main>
+
+    <style>
+        .filters-section {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .filters-form {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            align-items: end;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .filter-group label {
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: #333;
+        }
+
+        .filter-group select {
+            padding: 0.6rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.95rem;
+            background-color: white;
+        }
+
+        .filter-group select:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+
+        .matches-section {
+            display: grid;
+            gap: 2rem;
+        }
+
+        .league-section {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .league-header {
+            background-color: #f5f5f5;
+            padding: 1.5rem;
+            border-bottom: 2px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .league-header h2 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1.25rem;
+            color: #333;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.4rem 0.8rem;
+            border-radius: 4px;
+            font-weight: 500;
+            font-size: 0.8rem;
+            margin-top: 0.5rem;
+        }
+
+        .badge.seasonal {
+            background-color: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .badge.tournament {
+            background-color: #f3e5f5;
+            color: #7b1fa2;
+        }
+
+        .matches-table-container {
+            overflow-x: auto;
+        }
+
+        .matches-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .matches-table th {
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 1px solid #e0e0e0;
+            color: #333;
+            background-color: #fafafa;
+        }
+
+        .matches-table td {
+            padding: 1rem;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .match-row:hover {
+            background-color: #f9f9f9;
+        }
+
+        .match-teams {
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        .match-datetime {
+            font-size: 0.85rem;
+            color: #666;
+            white-space: nowrap;
+        }
+
+        .match-score {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .match-score em {
+            color: #999;
+            font-style: italic;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.4rem 0.8rem;
+            border-radius: 4px;
+            font-weight: 500;
+            font-size: 0.8rem;
+            white-space: nowrap;
+        }
+
+        .status-badge.locked {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+
+        .status-badge.unlocked {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .match-action {
+            text-align: center;
+        }
+
+        .action-form {
+            margin: 0;
+        }
+
+        .text-muted {
+            color: #999;
+            font-style: italic;
+            font-size: 0.875rem;
+        }
+
+        .empty-state {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 3rem;
+            text-align: center;
+        }
+
+        .empty-state p {
+            color: #666;
+            font-size: 1rem;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 0.95rem;
+            margin-top: 0.5rem;
+        }
+    </style>
+</body>
+</html>

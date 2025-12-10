@@ -13,6 +13,7 @@ from db_helper import (
     create_league_with_seasons,
     assign_admins_to_season,
     assign_same_admins_to_all_seasons,
+    delete_league,
 )
 
 superadmin_bp = Blueprint("superadmin", __name__, url_prefix="/superadmin")
@@ -108,10 +109,11 @@ def delete_tournament(tournament_id):
 def view_leagues():
     leagues = fetch_all_leagues()
     return render_template(
-        "admin_view_leagues.html",
+        "superadmin_view_leagues.html",
         leagues=leagues,
         create_endpoint="superadmin.create_league_form",
         assign_endpoint="superadmin.assign_admins_form",
+        season_delete_endpoint="superadmin.delete_season_route",
     )
 
 
@@ -285,3 +287,16 @@ def assign_admins_form(league_id):
         error_message=error_message,
         cancel_endpoint="superadmin.view_leagues",
     )
+
+
+@superadmin_bp.route("/leagues/<int:league_id>/delete", methods=["POST"])
+def delete_league_route(league_id):
+    delete_league(league_id)
+    return redirect(url_for("superadmin.view_leagues"))
+
+
+@superadmin_bp.route("/leagues/<int:league_id>/seasons/<int:season_no>/<season_year>/delete", methods=["POST"])
+def delete_season_route(league_id, season_no, season_year):
+    """Allow superadmins to delete a season directly."""
+    delete_season(league_id, season_no, season_year)
+    return redirect(url_for("superadmin.view_leagues"))

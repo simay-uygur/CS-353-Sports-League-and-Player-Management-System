@@ -1,9 +1,10 @@
 import math
 from datetime import datetime, timedelta
+from io import BytesIO
 
 import psycopg2
 
-from flask import Blueprint, render_template, request, redirect, url_for, session, abort
+from flask import Blueprint, render_template, request, redirect, url_for, session, abort, make_response
 from psycopg2.extras import RealDictCursor
 
 from db_helper import * 
@@ -77,9 +78,117 @@ def view_leagues():
         create_endpoint=None,  # admins don't create leagues
         assign_endpoint=None,
         match_create_endpoint="admin.create_season_match",
-        season_delete_endpoint="admin.delete_season",
+        season_delete_endpoint="admin.delete_season_route",
         league_matches_ref_endpoint="admin.league_matches_referees",
     )
+
+
+@admin_bp.route("/leagues/<int:league_id>/manage-teams", methods=["GET"])
+def manage_league_teams(league_id):
+    """Manage teams in a league - add/remove teams."""
+    admin_id = session.get("user_id")
+    if not admin_id:
+        return redirect(url_for("login"))
+
+    # Verify admin manages this league
+    leagues = fetch_admin_leagues(admin_id)
+    if not any(l["leagueid"] == league_id for l in leagues):
+        abort(403)
+
+    league = fetch_league_by_id(league_id)
+    if not league:
+        abort(404)
+
+    league_name = league[0]["name"] if league else "Unknown League"
+    league_teams = fetch_league_teams(league_id)
+    available_teams = fetch_league_available_teams(league_id)
+    error_message = request.args.get("error", None)
+
+    return render_template(
+        "admin_manage_league_teams.html",
+        league_id=league_id,
+        league_name=league_name,
+        league_teams=league_teams,
+        available_teams=available_teams,
+        error_message=error_message,
+    )
+
+
+@admin_bp.route("/leagues/<int:league_id>/teams/<int:team_id>/add", methods=["POST"])
+def add_team_to_league(league_id, team_id):
+    """Add a team to a league."""
+    admin_id = session.get("user_id")
+    if not admin_id:
+        return redirect(url_for("login"))
+
+    try:
+        # Verify admin manages this league
+        leagues = fetch_admin_leagues(admin_id)
+        if not any(l["leagueid"] == league_id for l in leagues):
+            abort(403)
+
+        # Add team to league
+        conn = get_connection()
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "INSERT INTO LeagueTeam (LeagueID, TeamID) VALUES (%s, %s);",
+                        (league_id, team_id),
+                    )
+        finally:
+            conn.close()
+
+        return redirect(url_for("admin.manage_league_teams", league_id=league_id))
+    except psycopg2.IntegrityError:
+        # Team already in league
+        return redirect(url_for("admin.manage_league_teams", league_id=league_id))
+    except psycopg2.Error as exc:
+        error_msg = getattr(exc.diag, "message_primary", str(exc))
+        return redirect(
+            url_for(
+                "admin.manage_league_teams",
+                league_id=league_id,
+                error=error_msg,
+            )
+        )
+
+
+@admin_bp.route("/leagues/<int:league_id>/teams/<int:team_id>/remove", methods=["POST"])
+def remove_team_from_league(league_id, team_id):
+    """Remove a team from a league."""
+    admin_id = session.get("user_id")
+    if not admin_id:
+        return redirect(url_for("login"))
+
+    try:
+        # Verify admin manages this league
+        leagues = fetch_admin_leagues(admin_id)
+        if not any(l["leagueid"] == league_id for l in leagues):
+            abort(403)
+
+        # Remove team from league
+        conn = get_connection()
+        try:
+            with conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "DELETE FROM LeagueTeam WHERE LeagueID = %s AND TeamID = %s;",
+                        (league_id, team_id),
+                    )
+        finally:
+            conn.close()
+
+        return redirect(url_for("admin.manage_league_teams", league_id=league_id))
+    except psycopg2.Error as exc:
+        error_msg = getattr(exc.diag, "message_primary", str(exc))
+        return redirect(
+            url_for(
+                "admin.manage_league_teams",
+                league_id=league_id,
+                error=error_msg,
+            )
+        )
 
 
 def _select_tournament(requested_id, tournaments):
@@ -226,7 +335,7 @@ def remove_match_referee(match_id, referee_id):
     return redirect(url_for("admin.match_referee_assignment", match_id=match_id))
 
 
-@admin_bp.route("/leagues/<int:league_id>/teams/add", methods=["POST"])
+@admin_bp.route("/leagues/<int:league_id>/teams/add", methods=["GET", "POST"])
 def add_team_to_league_route(league_id):
     admin_id = session.get("user_id")
     if not admin_id:
@@ -234,6 +343,12 @@ def add_team_to_league_route(league_id):
     allowed_leagues = {l["leagueid"] for l in fetch_admin_leagues(admin_id)}
     if league_id not in allowed_leagues:
         abort(403)
+    
+    if request.method == "GET":
+        # Redirect to leagues view if accessed via GET
+        return redirect(url_for("admin.view_leagues"))
+    
+    # POST: Add team to league
     team_id = request.form.get("team_id")
     if not team_id:
         abort(400)
@@ -253,32 +368,83 @@ def delete_season_route(league_id, season_no, season_year):
     return redirect(url_for("admin.view_leagues"))
 
 
-@admin_bp.route("/leagues/<int:league_id>/seasons/<int:season_no>/<season_year>/matches/create", methods=["POST"])
-def create_season_match_route(league_id, season_no, season_year):
+@admin_bp.route("/leagues/<int:league_id>/seasons/<int:season_no>/<season_year>/matches/create", methods=["GET", "POST"])
+def create_season_match_form(league_id, season_no, season_year):
     admin_id = session.get("user_id")
     if not admin_id:
         return redirect(url_for("login"))
+    
     allowed_leagues = {l["leagueid"] for l in fetch_admin_leagues(admin_id)}
     if league_id not in allowed_leagues:
         abort(403)
 
+    def _render_form(error_message=None):
+        league = fetch_league_by_id(league_id)
+        if not league:
+            abort(404)
+        league_name = league[0]["name"] if league else "Unknown League"
+        teams = fetch_league_teams(league_id)
+        return render_template(
+            "admin_create_season_match.html",
+            league_id=league_id,
+            league_name=league_name,
+            season_no=season_no,
+            season_year=season_year,
+            teams=teams,
+            error_message=error_message,
+            form_data=request.form,
+        )
+
+    if request.method == "GET":
+        # Display the form
+        return _render_form()
+    
+    # Handle POST
     home_team_id = request.form.get("home_team_id")
     away_team_id = request.form.get("away_team_id")
-    start_dt = request.form.get("start_datetime")
+    start_dt_raw = request.form.get("start_datetime")
     venue = request.form.get("venue") or None
 
-    if not home_team_id or not away_team_id or not start_dt:
-        abort(400)
+    missing_bits = []
+    if not home_team_id:
+        missing_bits.append("home team")
+    if not away_team_id:
+        missing_bits.append("away team")
+    if not start_dt_raw:
+        missing_bits.append("start date/time")
+    if missing_bits:
+        return _render_form(f"Please provide: {', '.join(missing_bits)}.")
 
-    create_season_match(
-        league_id,
-        season_no,
-        season_year,
-        int(home_team_id),
-        int(away_team_id),
-        _normalize_datetime(start_dt),
-        venue,
-    )
+    if home_team_id == away_team_id:
+        return _render_form("Home and away team must be different.")
+
+    normalized_start = _normalize_datetime(start_dt_raw)
+    match_date = normalized_start.split(" ")[0] if normalized_start else None
+
+    if match_date:
+        conflicts = []
+        if team_has_match_on_date(int(home_team_id), match_date):
+            conflicts.append("home team")
+        if team_has_match_on_date(int(away_team_id), match_date):
+            conflicts.append("away team")
+        if conflicts:
+            return _render_form(
+                f"Cannot create match: the {', '.join(conflicts)} already has a match on {match_date}."
+            )
+
+    try:
+        create_season_match(
+            league_id,
+            season_no,
+            season_year,
+            int(home_team_id),
+            int(away_team_id),
+            normalized_start,
+            venue,
+        )
+    except ValueError as exc:
+        return _render_form(str(exc))
+
     return redirect(url_for("admin.view_leagues"))
 
 
@@ -294,6 +460,64 @@ def view_seasonal_matches_lock():
         "admin_seasonal_matches_lock.html",
         matches=matches,
     )
+
+
+@admin_bp.route("/matches/all/lock-status")
+def view_all_matches_lock():
+    """View all matches (league and tournament) with filters and lock/unlock controls for league matches only."""
+    admin_id = session.get("user_id")
+    if not admin_id:
+        return redirect(url_for("login"))
+    
+    # Get filter parameters
+    season_year_param = request.args.get("season_year")
+    season_year = int(season_year_param) if season_year_param else None
+    league_id = request.args.get("league_id")
+    tournament_id = request.args.get("tournament_id")
+    
+    # Fetch dropdown data
+    seasons = fetch_seasons_for_dropdown()
+    leagues = fetch_leagues_for_dropdown()
+    tournaments = fetch_tournaments_for_dropdown()
+    
+    # Fetch filtered matches
+    matches = fetch_all_matches_with_filters(admin_id, season_year, league_id, tournament_id)
+    
+    return render_template(
+        "admin_all_matches_lock.html",
+        matches=matches,
+        seasons=seasons,
+        leagues=leagues,
+        tournaments=tournaments,
+        selected_season_year=season_year,
+        selected_league_id=int(league_id) if league_id else None,
+        selected_tournament_id=int(tournament_id) if tournament_id else None,
+    )
+
+
+@admin_bp.route("/matches/<int:match_id>/toggle-lock", methods=["POST"])
+def toggle_match_lock_route(match_id):
+    """Toggle lock/unlock for a league match only (with permission check)."""
+    admin_id = session.get("user_id")
+    if not admin_id:
+        return redirect(url_for("login"))
+    
+    # Try to toggle the lock (only works for league matches with permission)
+    rows_affected = toggle_league_match_lock_by_admin(match_id, admin_id)
+    
+    if rows_affected == 0:
+        # No permission or not a league match
+        abort(403)
+    
+    # Preserve filters in redirect
+    season_year = request.args.get("season_year")
+    league_id = request.args.get("league_id")
+    tournament_id = request.args.get("tournament_id")
+    
+    return redirect(url_for("admin.view_all_matches_lock", 
+                           season_year=season_year, 
+                           league_id=league_id, 
+                           tournament_id=tournament_id))
 
 
 @admin_bp.route("/matches/<int:match_id>/lock", methods=["POST"])
@@ -337,7 +561,7 @@ def reports():
     players_report = None
     standings_report = None
     attendance_report = None
-    error_message = None
+    error_message = request.args.get("error")
 
     if request.method == "POST":
         report_type = request.form.get("report_type")
@@ -375,3 +599,227 @@ def reports():
         attendance_report=attendance_report,
         leagues=leagues,
     )
+
+
+@admin_bp.route("/reports/download", methods=["POST"])
+def download_report_pdf():
+    admin_id = session.get("user_id")
+    if not admin_id:
+        return redirect(url_for("login"))
+
+    report_type = request.form.get("report_type")
+    try:
+        if report_type == "players":
+            data = report_players({
+                "player_id": _to_int(request.form.get("player_id"), "Player ID") if request.form.get("player_id") else None,
+                "currently_employed": bool(request.form.get("currently_employed")),
+                "employed_before": request.form.get("employed_before"),
+                "employed_after": request.form.get("employed_after"),
+                "ended_before": request.form.get("ended_before"),
+                "ended_after": request.form.get("ended_after"),
+            })
+            title = "Player Report"
+            headers = ["Name", "Email", "Position", "Team", "Start", "End"]
+            rows = [
+                [
+                    f"{row['firstname']} {row['lastname']}",
+                    row["email"],
+                    row["position"],
+                    row["teamname"] or "Unassigned",
+                    row["startdate"].strftime("%Y-%m-%d") if row["startdate"] else "",
+                    row["enddate"].strftime("%Y-%m-%d") if row["enddate"] else "",
+                ]
+                for row in data
+            ]
+            filename = "player-report.pdf"
+        elif report_type == "standings":
+            league_id = _to_int(request.form.get("league_id"), "League ID", required=True)
+            season_no = _to_int(request.form.get("season_no"), "Season No", required=True)
+            season_year = request.form.get("season_year")
+            if not season_year:
+                raise ValueError("Season year is required.")
+            data = report_league_standings(league_id, season_no, season_year)
+            title = f"League Standings - League {league_id}, Season {season_no} ({season_year})"
+            headers = ["Team", "Pts", "W", "D", "L", "GF", "GA", "GD"]
+            rows = [
+                [
+                    row["teamname"],
+                    row["points"],
+                    row["wins"],
+                    row["draws"],
+                    row["losses"],
+                    row["gf"],
+                    row["ga"],
+                    row["gf"] - row["ga"],
+                ]
+                for row in data
+            ]
+            filename = "standings-report.pdf"
+        elif report_type == "attendance":
+            league_id = _to_int(request.form.get("league_id"), "League ID") if request.form.get("league_id") else None
+            season_no = _to_int(request.form.get("season_no"), "Season No") if request.form.get("season_no") else None
+            season_year = request.form.get("season_year") or None
+            data = report_player_attendance(league_id, season_no, season_year)
+            title = "Player Attendance"
+            headers = ["Player", "Appearances"]
+            rows = [
+                [
+                    f"{row['firstname']} {row['lastname']}",
+                    row["appearances"],
+                ]
+                for row in data
+            ]
+            filename = "attendance-report.pdf"
+        else:
+            raise ValueError("Invalid report type.")
+    except ValueError as exc:
+        return redirect(url_for("admin.reports", error=str(exc)))
+
+    pdf_bytes = _build_pdf_document(title, headers, rows)
+
+    response = make_response(pdf_bytes)
+    response.headers["Content-Type"] = "application/pdf"
+    response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
+def _build_pdf_document(title, headers, rows):
+    """
+    Minimal PDF generator to export simple tabular data without external dependencies.
+    """
+    def escape(text):
+        return str(text).replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+    # Build monospace table layout with width constraint
+    col_widths = [len(str(h)) for h in headers]
+    for row in rows:
+        for idx, col in enumerate(row):
+            col_widths[idx] = max(col_widths[idx], len(str(col)))
+
+    max_total_width = 90
+    min_width = 4
+    separator_width = 3 * (len(headers) - 1)
+
+    def total_width():
+        return sum(col_widths) + separator_width
+
+    # Shrink widest columns until we fit the width budget
+    while total_width() > max_total_width and any(w > min_width for w in col_widths):
+        max_idx = max(range(len(col_widths)), key=lambda i: col_widths[i])
+        if col_widths[max_idx] > min_width:
+            col_widths[max_idx] -= 1
+        else:
+            break
+
+    def truncate(text, width):
+        s = str(text)
+        if len(s) <= width:
+            return s
+        if width <= 3:
+            return s[:width]
+        return s[: width - 3] + "..."
+
+    def format_row(cells):
+        return " | ".join(truncate(cell, col_widths[i]).ljust(col_widths[i]) for i, cell in enumerate(cells))
+
+    table_lines = []
+    table_lines.append(format_row(headers))
+    table_lines.append("-+-".join("-" * w for w in col_widths))
+    for row in rows:
+        table_lines.append(format_row(row))
+
+    # Pagination settings
+    top_margin = 780
+    bottom_margin = 60
+    header_gap = 28
+    line_height = 14
+    max_lines = max(1, int((top_margin - bottom_margin - header_gap) / line_height))
+
+    def start_page(page_number):
+        heading = escape(title if page_number == 1 else f"{title} (Page {page_number})")
+        return [
+            "BT",
+            "/F1 16 Tf",
+            f"72 {top_margin} Td",
+            f"({heading}) Tj",
+            "0 -28 Td",
+            "/F2 9 Tf",
+        ]
+
+    pages_lines = []
+    current_page = start_page(1)
+    line_count = 0
+    page_number = 1
+
+    for line in table_lines:
+        if line_count >= max_lines:
+            current_page.append("ET")
+            pages_lines.append(current_page)
+            page_number += 1
+            current_page = start_page(page_number)
+            line_count = 0
+        current_page.append(f"({escape(line)}) Tj")
+        current_page.append("0 -14 Td")
+        line_count += 1
+
+    current_page.append("ET")
+    pages_lines.append(current_page)
+
+    # Build PDF objects with multi-page support
+    objects = []
+
+    def add_object(obj):
+        objects.append(obj)
+        return len(objects)
+
+    font1_id = add_object("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\n")
+    font2_id = add_object("<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>\n")
+    pages_id = add_object("")  # placeholder, fill later
+
+    page_ids = []
+    content_ids = []
+    for page_lines in pages_lines:
+        content_stream = "\n".join(page_lines).encode("latin-1", errors="replace")
+        content_id = add_object(
+            b"<< /Length "
+            + str(len(content_stream)).encode("latin-1")
+            + b" >>\nstream\n"
+            + content_stream
+            + b"\nendstream\n"
+        )
+        content_ids.append(content_id)
+        page_id = add_object(
+            f"<< /Type /Page /Parent {pages_id} 0 R /MediaBox [0 0 612 792] "
+            f"/Contents {content_id} 0 R /Resources << /Font << /F1 {font1_id} 0 R /F2 {font2_id} 0 R >> >> >>\n"
+        )
+        page_ids.append(page_id)
+
+    # Fill pages object now that we have page ids
+    objects[pages_id - 1] = (
+        f"<< /Type /Pages /Kids [{' '.join(f'{pid} 0 R' for pid in page_ids)}] /Count {len(page_ids)} >>\n"
+    )
+
+    catalog_id = add_object(f"<< /Type /Catalog /Pages {pages_id} 0 R >>\n")
+
+    pdf_bytes = BytesIO()
+    pdf_bytes.write(b"%PDF-1.4\n")
+    offsets = []
+    for obj in objects:
+        offsets.append(pdf_bytes.tell())
+        if isinstance(obj, bytes):
+            data = obj
+        else:
+            data = obj.encode("latin-1")
+        pdf_bytes.write(data)
+
+    xref_start = pdf_bytes.tell()
+    pdf_bytes.write(f"xref\n0 {len(objects)+1}\n".encode("latin-1"))
+    pdf_bytes.write(b"0000000000 65535 f \n")
+    for i in range(len(objects)):
+        pdf_bytes.write(f"{offsets[i]:010d} 00000 n \n".encode("latin-1"))
+
+    pdf_bytes.write(
+        f"trailer\n<< /Size {len(objects)+1} /Root 1 0 R >>\nstartxref\n{xref_start}\n%%EOF".encode("latin-1")
+    )
+    pdf_bytes.seek(0)
+    return pdf_bytes.read()

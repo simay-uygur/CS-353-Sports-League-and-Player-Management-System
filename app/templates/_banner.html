@@ -13,6 +13,9 @@
         {% if g.get("banner_league_endpoint") %}
         <a href="{{ url_for(g.banner_league_endpoint) }}" class="nav-link">View Leagues</a>
         {% endif %}
+        {% if g.get("banner_all_matches_endpoint") %}
+        <a href="{{ url_for(g.banner_all_matches_endpoint) }}" class="nav-link">View All Matches</a>
+        {% endif %}
         {% if g.get("banner_create_league_endpoint") %}
         <a href="{{ url_for(g.banner_create_league_endpoint) }}" class="nav-link">Create League</a>
         {% endif %}
