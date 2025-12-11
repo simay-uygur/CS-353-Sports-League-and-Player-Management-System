@@ -250,14 +250,12 @@ CREATE TABLE Offer (
   OfferID SERIAL,
   RequestingCoach INT NOT NULL,
   RequestedPlayer INT NOT NULL,
-  ResponsibleCoach INT,
-  OfferDate TIMESTAMP NOT NULL,
+  OfferedEndDate TIMESTAMP NOT NULL,
   AvailableUntil TIMESTAMP NOT NULL,
   OfferStatus INT NOT NULL,
   PRIMARY KEY (OfferID),
   FOREIGN KEY (RequestingCoach) REFERENCES Coach(UsersID) ON DELETE CASCADE,
-  FOREIGN KEY (RequestedPlayer) REFERENCES Player(UsersID) ON DELETE CASCADE,
-  FOREIGN KEY (ResponsibleCoach) REFERENCES Coach(UsersID) ON DELETE CASCADE
+  FOREIGN KEY (RequestedPlayer) REFERENCES Player(UsersID) ON DELETE CASCADE
 );
 
 CREATE TABLE Employed (
@@ -777,6 +775,72 @@ CREATE TRIGGER match_update
 AFTER UPDATE ON Match
 FOR EACH ROW
 EXECUTE FUNCTION update_match_winner();
+
+-- trigger to update a player's employment after accepting an offer ----------
+CREATE OR REPLACE FUNCTION handle_accepted_transfer_offer()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_requesting_coach_team INT;
+  v_player_current_team INT;
+  v_current_employment_id INT;
+  v_current_employment_salary INT;
+  v_new_employment_id INT;
+BEGIN
+  -- Only process when OfferStatus changes to 1 (accepted)
+  IF NEW.OfferStatus = 1 AND (OLD.OfferStatus IS NULL OR OLD.OfferStatus != 1) THEN
+    
+    -- Get the requesting coach's team
+    SELECT TeamID INTO v_requesting_coach_team
+    FROM Employee
+    WHERE UsersID = NEW.RequestingCoach;
+    
+    -- Only proceed if the coach has a team
+    IF v_requesting_coach_team IS NOT NULL THEN
+      
+      -- Get the player's current team and active employment
+      SELECT e.TeamID, em.EmploymentID, emp.Salary
+      INTO v_player_current_team, v_current_employment_id, v_current_employment_salary
+      FROM Employee e
+      LEFT JOIN Employed em ON e.UsersID = em.UsersID 
+        AND em.EmploymentID = (
+          SELECT EmploymentID FROM Employed 
+          WHERE UsersID = NEW.RequestedPlayer 
+          ORDER BY EmploymentID DESC LIMIT 1
+        )
+      LEFT JOIN Employment emp ON em.EmploymentID = emp.EmploymentID
+      WHERE e.UsersID = NEW.RequestedPlayer;
+      
+      -- If player is currently in a team, end their current employment
+      IF v_current_employment_id IS NOT NULL THEN
+        UPDATE Employment
+        SET EndDate = NOW()
+        WHERE EmploymentID = v_current_employment_id;
+      END IF;
+      
+      -- Update the player's team
+      UPDATE Employee
+      SET TeamID = v_requesting_coach_team
+      WHERE UsersID = NEW.RequestedPlayer;
+      
+      -- Create new employment record with OfferedEndDate
+      INSERT INTO Employment (StartDate, EndDate, Salary)
+      VALUES (NOW(), NEW.OfferedEndDate, COALESCE(v_current_employment_salary, 60000))
+      RETURNING EmploymentID INTO v_new_employment_id;
+      
+      -- Create new employed record
+      INSERT INTO Employed (EmploymentID, UsersID, TeamID)
+      VALUES (v_new_employment_id, NEW.RequestedPlayer, v_requesting_coach_team);
+    END IF;
+  END IF;
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tr_accepted_transfer_offer
+AFTER UPDATE ON Offer
+FOR EACH ROW
+EXECUTE FUNCTION handle_accepted_transfer_offer();
 
 -- sample data ---------------------------------------------------------------
 INSERT INTO Users (

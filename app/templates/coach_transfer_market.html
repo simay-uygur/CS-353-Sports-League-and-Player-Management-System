@@ -28,7 +28,7 @@
         <select name="pos" id="position-filter">
           <option value="" selected>Any</option>
           {% for position in positions %}
-          <option value="{{ position['id'] }}">{{ position['name'] }}</option>
+          <option value="{{ position['position'] }}">{{ position['position'] }}</option>
           {% endfor %}
         </select>
       </div>
@@ -47,9 +47,10 @@
       <div>
         <label for="team">Team</label>
         <select name="team" id="team-filter">
-          <option value="" selected>-</option>
+          <option value="" selected>Any</option>
+          {{teams}}
           {% for team in teams %}
-          <option value="{{ team['id'] }}">{{ team['name'] }}</option>
+          <option value="{{ team['teamid'] }}">{{ team['teamname'] }}</option>
           {% endfor %}
         </select>
       </div>
@@ -67,11 +68,12 @@
     <thead>
       <tr>
         <th>Name</th>
-        <th>Age</th>
+        <th>Birthdate</th>
         <th>Nationality</th>
         <th>Position</th>
         <th>Team</th>
         <th>Salary</th>
+        <th>Contact Expires Before</th>
         <th>Action</th>
       </tr>
     </thead>
@@ -79,12 +81,13 @@
       {% for player in players %}
       <tr>
         <td>{{ player['firstname'] }} {{player['lastname']}}</td>
-        <td>{{ player['age'] }}</td>
+        <td>{{ player['birthdate'] }}</td>
         <td>{{ player['nationality'] }}</td>
         <td>{{ player['position'] }}</td>
-        <td>{{ player['team'] }}</td>
+        <td>{{ player['teamname'] }}</td>
         <td>{{ player['salary'] }}</td>
-        <td><button><a href="{{url_for('coach.transfer_offer', player_id=player['id'])}}">Offer</a></button></td>
+        <td>{{ player['enddate']}}</td>
+        <td><button><a href="{{url_for('coach.transfer_offer', player_id=player['usersid'])}}">Offer</a></button></td>
       </tr>
       {% endfor %}
     </tbody>

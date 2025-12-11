@@ -11,15 +11,15 @@
   <h1>Transfer Offer</h1>
   <h2>Player</h2>
   <ul>
-    <li>Name: {{ player['name']}}</li>
+    <li>Name: {{ player['firstname'] }} {{ player['lastname']}}</li>
     <li>Position: {{ player['position'] }}</li>
+    <li>If we want more information, I have to improve the query and that's it</li>
   </ul>
-  <form>
-    
+  <form method="post">
     <label for="amount">Offer Amount</label>
-    <input name="amount" type="number" min="0">
+    <input name="amount" type="number" min="0" required>
     <label for="availableUntil">Available Until</label>
-    <input type="date" name="availableUntil" id="availableUntil">
+    <input type="date" name="availableUntil" id="availableUntil" required>
     <button type="submit">Send Offer</button>
   </form>
   <script>
