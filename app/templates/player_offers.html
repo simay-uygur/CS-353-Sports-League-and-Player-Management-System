@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sports League | My Offers</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="dashboard-body">
+    {% include "_banner.html" %}
+    <main class="dashboard-container">
+        <header class="admin-header">
+            <div>
+                <p class="eyebrow">Player Dashboard</p>
+                <h1>My Offers & Invites</h1>
+            </div>
+            <a href="{{ url_for('home_player') }}" class="back-link">← Back to Dashboard</a>
+        </header>
+
+        {% if offers %}
+        <div class="table-card">
+            <table class="simple-table">
+                <thead>
+                    <tr>
+                        <th>Offer Date</th>
+                        <th>From Team</th>
+                        <th>Requesting Coach</th>
+                        <th>Responsible Coach</th>
+                        <th>Available Until</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for offer in offers %}
+                    <tr>
+                        <td>
+                            <strong>{{ offer.offerdate|strftime('%Y-%m-%d') }}</strong><br>
+                            <span class="subtle">{{ offer.offerdate|strftime('%H:%M') }}</span>
+                        </td>
+                        <td>{{ offer.teamname }}</td>
+                        <td>{{ offer.requestingcoachfirstname }} {{ offer.requestingcoachlastname }}</td>
+                        <td>
+                            {% if offer.responsiblecoachfirstname %}
+                                {{ offer.responsiblecoachfirstname }} {{ offer.responsiblecoachlastname }}
+                            {% else %}
+                                <span class="subtle">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <strong>{{ offer.availableuntil|strftime('%Y-%m-%d') }}</strong><br>
+                            <span class="subtle">{{ offer.availableuntil|strftime('%H:%M') }}</span>
+                        </td>
+                        <td>
+                            {% if offer.offerstatus == 0 %}
+                                <span class="status-badge" style="background: #fef3c7; color: #92400e;">Pending</span>
+                            {% elif offer.offerstatus == 1 %}
+                                <span class="status-badge eligible">Accepted</span>
+                            {% elif offer.offerstatus == 2 %}
+                                <span class="status-badge ineligible">Rejected</span>
+                            {% elif offer.offerstatus == 3 %}
+                                <span class="status-badge" style="background: #fee2e2; color: #991b1b;">Expired</span>
+                            {% else %}
+                                <span class="status-badge" style="background: #f3f4f6; color: #6b7280;">Unknown</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="card">
+            <p class="subtle">No offers or invites found.</p>
+        </div>
+        {% endif %}
+    </main>
+</body>
+</html>
+

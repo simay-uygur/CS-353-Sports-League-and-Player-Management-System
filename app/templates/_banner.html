@@ -25,6 +25,9 @@
         {% if g.get("banner_reports_endpoint") %}
         <a href="{{ url_for(g.banner_reports_endpoint) }}" class="nav-link">Reports</a>
         {% endif %}
+        {% if g.get("banner_statistics_endpoint") %}
+        <a href="{{ url_for(g.banner_statistics_endpoint) }}" class="nav-link">Statistics</a>
+        {% endif %}
     </nav>
     <div class="top-banner__actions">
         <span class="role-pill">{{ session.get("role", "guest")|capitalize }}</span>

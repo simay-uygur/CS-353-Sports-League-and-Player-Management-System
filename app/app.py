@@ -4,10 +4,20 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 import psycopg2
+from psycopg2.extras import RealDictCursor
 from flask import Flask, jsonify, render_template, request, session, redirect, url_for, g
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from db import get_connection
+from db_helper import (
+    fetch_player_stats_all,
+    fetch_player_season_stats,
+    fetch_player_tournament_stats,
+    fetch_player_available_seasons,
+    fetch_player_available_leagues,
+    fetch_player_trainings,
+    fetch_player_offers,
+)
 
 from blueprints.admin import admin_bp
 from blueprints.superadmin import superadmin_bp
@@ -47,6 +57,7 @@ def _set_default_banner():
         g.banner_create_league_endpoint = None
         g.banner_owner_endpoint = None
         g.banner_reports_endpoint = "admin.reports"
+        g.banner_statistics_endpoint = None
     elif role in ("admin", "tournament_admin"):
         g.banner_view_endpoint = "admin.view_tournaments"
         g.banner_league_endpoint = "admin.view_leagues"
@@ -54,6 +65,7 @@ def _set_default_banner():
         g.banner_create_league_endpoint = None
         g.banner_owner_endpoint = None
         g.banner_reports_endpoint = "admin.reports"
+        g.banner_statistics_endpoint = None
     elif role == "team_owner":
         g.banner_view_endpoint = None
         g.banner_league_endpoint = None
@@ -61,6 +73,15 @@ def _set_default_banner():
         g.banner_create_league_endpoint = None
         g.banner_owner_endpoint = "owner.view_teams"
         g.banner_reports_endpoint = None
+        g.banner_statistics_endpoint = None
+    elif role == "player":
+        g.banner_view_endpoint = None
+        g.banner_league_endpoint = None
+        g.banner_all_matches_endpoint = None
+        g.banner_create_league_endpoint = None
+        g.banner_owner_endpoint = None
+        g.banner_reports_endpoint = None
+        g.banner_statistics_endpoint = "home_player"
     else:
         g.banner_view_endpoint = None
         g.banner_league_endpoint = None
@@ -68,6 +89,7 @@ def _set_default_banner():
         g.banner_create_league_endpoint = None
         g.banner_owner_endpoint = None
         g.banner_reports_endpoint = None
+        g.banner_statistics_endpoint = None
     g.banner_create_endpoint = None
     g.banner_allow_create = False
 
@@ -88,7 +110,81 @@ def home():
 
 @app.route("/home/player")
 def home_player():
-    return render_template("home_player.html")
+    player_id = session.get("user_id")
+    if not player_id or session.get("role") != "player":
+        return redirect(url_for("login"))
+    
+    # Fetch overall statistics for summary cards
+    overall_stats = fetch_player_stats_all(player_id)
+    
+    # Fetch available seasons and leagues for filters
+    available_seasons = fetch_player_available_seasons(player_id)
+    available_leagues = fetch_player_available_leagues(player_id)
+    
+    # Get filter parameters
+    league_id = request.args.get("league_id", type=int)
+    season_no = request.args.get("season_no", type=int)
+    season_year = request.args.get("season_year")
+    
+    # Fetch season-specific stats if filters are provided
+    season_stats = None
+    if league_id is not None and season_no is not None and season_year:
+        season_stats = fetch_player_season_stats(player_id, league_id, season_no, season_year)
+    
+    # Fetch tournament stats
+    tournament_stats = fetch_player_tournament_stats(player_id)
+    
+    # Get player info for display
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT FirstName, LastName, IsEligible
+                FROM Users u
+                JOIN Player p ON u.UsersID = p.UsersID
+                WHERE u.UsersID = %s;
+                """,
+                (player_id,),
+            )
+            player_info = cur.fetchone()
+    finally:
+        conn.close()
+    
+    return render_template(
+        "home_player.html",
+        player_info=player_info,
+        overall_stats=overall_stats,
+        season_stats=season_stats,
+        tournament_stats=tournament_stats,
+        available_seasons=available_seasons,
+        available_leagues=available_leagues,
+        selected_league_id=league_id,
+        selected_season_no=season_no,
+        selected_season_year=season_year,
+    )
+
+
+@app.route("/player/trainings")
+def view_trainings():
+    player_id = session.get("user_id")
+    if not player_id or session.get("role") != "player":
+        return redirect(url_for("login"))
+    
+    trainings = fetch_player_trainings(player_id)
+    
+    return render_template("player_trainings.html", trainings=trainings)
+
+
+@app.route("/player/offers")
+def view_offers():
+    player_id = session.get("user_id")
+    if not player_id or session.get("role") != "player":
+        return redirect(url_for("login"))
+    
+    offers = fetch_player_offers(player_id)
+    
+    return render_template("player_offers.html", offers=offers)
 
 
 @app.route("/home/coach")

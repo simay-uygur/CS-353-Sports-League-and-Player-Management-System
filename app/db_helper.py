@@ -1740,16 +1740,202 @@ def toggle_tournament_match_lock_by_admin(match_id, admin_id):
     finally:
         conn.close()
 
-        
-        
-        
 
-        
-        
+def fetch_player_stats_all(player_id):
+    """Fetch overall statistics for a player from PlayerStatsAll view."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT *
+                FROM PlayerStatsAll
+                WHERE UsersID = %s;
+                """,
+                (player_id,),
+            )
+            return cur.fetchone()
+    finally:
+        conn.close()
 
-        
-        
-        
 
-        
+def fetch_player_season_stats(player_id, league_id=None, season_no=None, season_year=None):
+    """
+    Fetch season-specific statistics for a player.
+    If all parameters are provided, returns stats for that specific season.
+    If only player_id is provided, returns all seasons the player participated in.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            query = """
+                SELECT *
+                FROM PlayerSeasonStats
+                WHERE UsersID = %s
+            """
+            params = [player_id]
+            
+            if league_id is not None:
+                query += " AND LeagueID = %s"
+                params.append(league_id)
+            
+            if season_no is not None:
+                query += " AND SeasonNo = %s"
+                params.append(season_no)
+            
+            if season_year is not None:
+                query += " AND SeasonYear = %s"
+                params.append(season_year)
+            
+            query += " ORDER BY SeasonYear DESC, SeasonNo DESC, Name;"
+            
+            cur.execute(query, params)
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_player_tournament_stats(player_id):
+    """Fetch tournament statistics for a player from PlayerTournamentStats view."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT *
+                FROM PlayerTournamentStats
+                WHERE UsersID = %s
+                ORDER BY TournamentID DESC;
+                """,
+                (player_id,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_player_available_seasons(player_id):
+    """Fetch distinct league/season combinations that a player has participated in."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT
+                    LeagueID,
+                    Name AS LeagueName,
+                    SeasonNo,
+                    SeasonYear
+                FROM PlayerSeasonStats
+                WHERE UsersID = %s
+                ORDER BY SeasonYear DESC, SeasonNo DESC, Name;
+                """,
+                (player_id,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_player_available_leagues(player_id):
+    """Fetch distinct leagues that a player has participated in."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT
+                    LeagueID,
+                    Name AS LeagueName
+                FROM PlayerSeasonStats
+                WHERE UsersID = %s
+                ORDER BY Name;
+                """,
+                (player_id,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_player_trainings(player_id):
+    """
+    Fetch all training sessions for a player, including attendance status.
+    Returns trainings from coaches on the same team, ordered by date (upcoming first).
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT 
+                    TS.SessionID,
+                    TS.SessionDate,
+                    TS.Location,
+                    TS.Focus,
+                    TS.CoachID,
+                    UC.FirstName AS CoachFirstName,
+                    UC.LastName AS CoachLastName,
+                    TA.Status AS AttendanceStatus,
+                    T.TeamID,
+                    T.TeamName
+                FROM TrainingSession TS
+                JOIN Coach CO ON TS.CoachID = CO.UsersID
+                JOIN Employee E ON CO.UsersID = E.UsersID
+                JOIN Team T ON E.TeamID = T.TeamID
+                JOIN Users UC ON CO.UsersID = UC.UsersID
+                LEFT JOIN TrainingAttendance TA ON TS.SessionID = TA.SessionID AND TA.PlayerID = %s
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM Employee E2
+                    WHERE E2.UsersID = %s
+                    AND E2.TeamID = T.TeamID
+                )
+                ORDER BY TS.SessionDate DESC;
+                """,
+                (player_id, player_id),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_player_offers(player_id):
+    """
+    Fetch all offers and invites for a player.
+    Returns offers ordered by date (newest first).
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT 
+                    O.OfferID,
+                    O.OfferDate,
+                    O.AvailableUntil,
+                    O.OfferStatus,
+                    O.RequestingCoach,
+                    RC.FirstName AS RequestingCoachFirstName,
+                    RC.LastName AS RequestingCoachLastName,
+                    O.ResponsibleCoach,
+                    RSC.FirstName AS ResponsibleCoachFirstName,
+                    RSC.LastName AS ResponsibleCoachLastName,
+                    E.TeamID,
+                    T.TeamName
+                FROM Offer O
+                JOIN Coach C ON O.RequestingCoach = C.UsersID
+                JOIN Employee E ON C.UsersID = E.UsersID
+                JOIN Team T ON E.TeamID = T.TeamID
+                JOIN Users RC ON O.RequestingCoach = RC.UsersID
+                LEFT JOIN Users RSC ON O.ResponsibleCoach = RSC.UsersID
+                WHERE O.RequestedPlayer = %s
+                ORDER BY O.OfferDate DESC;
+                """,
+                (player_id,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
         
