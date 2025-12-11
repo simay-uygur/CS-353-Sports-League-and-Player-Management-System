@@ -25,7 +25,8 @@
             <table class="matches-table">
                 <thead>
                     <tr>
-                        <th>Season</th>
+                        <th>Type</th>
+                        <th>Context</th>
                         <th>Match</th>
                         <th>Date</th>
                         <th>Actions</th>
@@ -33,8 +34,24 @@
                 </thead>
                 <tbody>
                     {% for match in matches %}
+                    {% set mtype = match.match_type or 'seasonal' %}
                     <tr>
-                        <td><span class="season-badge">Season {{ match.seasonno }} ({{ match.seasonyear }})</span></td>
+                        <td>
+                            {% if mtype == 'tournament' %}
+                            <span class="season-badge">Tournament</span>
+                            {% elif mtype == 'seasonal' %}
+                            <span class="season-badge">Seasonal</span>
+                            {% else %}
+                            <span class="season-badge">Unknown</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if mtype == 'tournament' %}
+                                {{ match.tournament_name or 'Tournament' }}
+                            {% else %}
+                                Season {{ match.seasonno }} ({{ match.seasonyear }})
+                            {% endif %}
+                        </td>
                         <td class="match-teams">
                             <strong>{{ match.hometeamname }}</strong> vs <strong>{{ match.awayteamname }}</strong>
                         </td>

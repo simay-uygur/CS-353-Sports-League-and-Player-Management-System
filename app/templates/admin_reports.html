@@ -25,7 +25,7 @@
                 <form method="POST">
                     <input type="hidden" name="report_type" value="players">
                     <label>Player ID (optional)</label>
-                    <input type="number" name="player_id" placeholder="e.g. 12">
+                    <input type="text" inputmode="numeric" pattern="[0-9]*" name="player_id" placeholder="e.g. 12" value="{{ request.form.get('player_id','') }}">
 
                     <label class="checkbox-field">
                         <input type="checkbox" name="currently_employed">
@@ -33,16 +33,16 @@
                     </label>
 
                     <label>Employed before</label>
-                    <input type="datetime-local" name="employed_before">
+                    <input type="datetime-local" name="employed_before" value="{{ request.form.get('employed_before','') }}">
 
                     <label>Employed after</label>
-                    <input type="datetime-local" name="employed_after">
+                    <input type="datetime-local" name="employed_after" value="{{ request.form.get('employed_after','') }}">
 
                     <label>Employment ended before</label>
-                    <input type="datetime-local" name="ended_before">
+                    <input type="datetime-local" name="ended_before" value="{{ request.form.get('ended_before','') }}">
 
                     <label>Employment ended after</label>
-                    <input type="datetime-local" name="ended_after">
+                    <input type="datetime-local" name="ended_after" value="{{ request.form.get('ended_after','') }}">
 
                     <button type="submit" class="btn solid">Generate</button>
                 </form>
@@ -56,13 +56,13 @@
                     <select name="league_id" required>
                         <option value="">Select league</option>
                         {% for l in leagues %}
-                        <option value="{{ l.leagueid }}">{{ l.name }}</option>
+                        <option value="{{ l.leagueid }}" {% if request.form.get('league_id') == l.leagueid|string %}selected{% endif %}>{{ l.name }}</option>
                         {% endfor %}
                     </select>
                     <label>Season No</label>
-                    <input type="number" name="season_no" required min="1">
+                    <input type="text" inputmode="numeric" pattern="[0-9]*" name="season_no" required value="{{ request.form.get('season_no','') }}">
                     <label>Season Year</label>
-                    <input type="date" name="season_year" required>
+                    <input type="date" name="season_year" required value="{{ request.form.get('season_year','') }}">
                     <button type="submit" class="btn solid">Generate</button>
                 </form>
             </div>
@@ -75,13 +75,15 @@
                     <select name="league_id">
                         <option value="">All leagues</option>
                         {% for l in leagues %}
-                        <option value="{{ l.leagueid }}">{{ l.name }}</option>
+                        <option value="{{ l.leagueid }}" {% if request.form.get('league_id') == l.leagueid|string %}selected{% endif %}>{{ l.name }}</option>
                         {% endfor %}
                     </select>
                     <label>Season No (optional)</label>
-                    <input type="number" name="season_no" min="1">
-                    <label>Season Year (optional)</label>
-                    <input type="date" name="season_year">
+                    <input type="text" inputmode="numeric" pattern="[0-9]*" name="season_no" value="{{ request.form.get('season_no','') }}">
+                    <label>Season Year From (optional)</label>
+                    <input type="date" name="season_year_from" value="{{ request.form.get('season_year_from','') }}">
+                    <label>Season Year To (optional)</label>
+                    <input type="date" name="season_year_to" value="{{ request.form.get('season_year_to','') }}">
                     <button type="submit" class="btn solid">Generate</button>
                 </form>
             </div>
@@ -193,7 +195,8 @@
                     <input type="hidden" name="report_type" value="attendance">
                     <input type="hidden" name="league_id" value="{{ request.form.get('league_id', '') }}">
                     <input type="hidden" name="season_no" value="{{ request.form.get('season_no', '') }}">
-                    <input type="hidden" name="season_year" value="{{ request.form.get('season_year', '') }}">
+                    <input type="hidden" name="season_year_from" value="{{ request.form.get('season_year_from', '') }}">
+                    <input type="hidden" name="season_year_to" value="{{ request.form.get('season_year_to', '') }}">
                     <button type="submit" class="btn solid btn-small">Download PDF</button>
                 </form>
             </div>

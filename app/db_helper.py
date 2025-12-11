@@ -236,9 +236,9 @@ def report_league_standings(league_id, season_no, season_year):
     return sorted(stats.values(), key=lambda s: (-s["points"], -(s["gf"] - s["ga"]), -s["wins"]))
 
 
-def report_player_attendance(league_id=None, season_no=None, season_year=None):
+def report_player_attendance(league_id=None, season_no=None, season_year_from=None, season_year_to=None):
     """
-    Counts appearances per player across matches; optionally filtered by league/season.
+    Counts appearances per player across matches; optionally filtered by league/season and year range.
     """
     conn = get_connection()
     try:
@@ -253,9 +253,12 @@ def report_player_attendance(league_id=None, season_no=None, season_year=None):
                 if season_no:
                     clauses.append("sm.SeasonNo = %s")
                     params.append(season_no)
-                if season_year:
-                    clauses.append("sm.SeasonYear = %s")
-                    params.append(season_year)
+                if season_year_from:
+                    clauses.append("sm.SeasonYear >= %s")
+                    params.append(season_year_from)
+                if season_year_to:
+                    clauses.append("sm.SeasonYear <= %s")
+                    params.append(season_year_to)
 
             where_sql = " WHERE " + " AND ".join(clauses) if clauses else ""
 

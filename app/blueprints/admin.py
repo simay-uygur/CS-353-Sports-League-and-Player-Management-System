@@ -128,7 +128,7 @@ def add_team_to_league(league_id, team_id):
             abort(403)
 
         # Add team to league
-        conn = get_connection()
+    conn = get_connection()
         try:
             with conn:
                 with conn.cursor() as cur:
@@ -176,8 +176,8 @@ def remove_team_from_league(league_id, team_id):
                         "DELETE FROM LeagueTeam WHERE LeagueID = %s AND TeamID = %s;",
                         (league_id, team_id),
                     )
-        finally:
-            conn.close()
+    finally:
+        conn.close()
 
         return redirect(url_for("admin.manage_league_teams", league_id=league_id))
     except psycopg2.Error as exc:
@@ -489,9 +489,9 @@ def view_all_matches_lock():
         seasons=seasons,
         leagues=leagues,
         tournaments=tournaments,
-        selected_season_year=season_year,
-        selected_league_id=int(league_id) if league_id else None,
-        selected_tournament_id=int(tournament_id) if tournament_id else None,
+        selected_season_year=season_year_param,
+        selected_league_id=league_id,
+        selected_tournament_id=tournament_id,
     )
 
 
@@ -585,8 +585,9 @@ def reports():
             elif report_type == "attendance":
                 league_id = _to_int(request.form.get("league_id"), "League ID") if request.form.get("league_id") else None
                 season_no = _to_int(request.form.get("season_no"), "Season No") if request.form.get("season_no") else None
-                season_year = request.form.get("season_year") or None
-                attendance_report = report_player_attendance(league_id, season_no, season_year)
+                season_year_from = request.form.get("season_year_from") or None
+                season_year_to = request.form.get("season_year_to") or None
+                attendance_report = report_player_attendance(league_id, season_no, season_year_from, season_year_to)
         except ValueError as exc:
             error_message = str(exc)
 
@@ -658,8 +659,9 @@ def download_report_pdf():
         elif report_type == "attendance":
             league_id = _to_int(request.form.get("league_id"), "League ID") if request.form.get("league_id") else None
             season_no = _to_int(request.form.get("season_no"), "Season No") if request.form.get("season_no") else None
-            season_year = request.form.get("season_year") or None
-            data = report_player_attendance(league_id, season_no, season_year)
+            season_year_from = request.form.get("season_year_from") or None
+            season_year_to = request.form.get("season_year_to") or None
+            data = report_player_attendance(league_id, season_no, season_year_from, season_year_to)
             title = "Player Attendance"
             headers = ["Player", "Appearances"]
             rows = [
@@ -696,7 +698,7 @@ def _build_pdf_document(title, headers, rows):
         for idx, col in enumerate(row):
             col_widths[idx] = max(col_widths[idx], len(str(col)))
 
-    max_total_width = 90
+    max_total_width = 110
     min_width = 4
     separator_width = 3 * (len(headers) - 1)
 
@@ -732,7 +734,7 @@ def _build_pdf_document(title, headers, rows):
     top_margin = 780
     bottom_margin = 60
     header_gap = 28
-    line_height = 14
+    line_height = 12
     max_lines = max(1, int((top_margin - bottom_margin - header_gap) / line_height))
 
     def start_page(page_number):
@@ -743,7 +745,7 @@ def _build_pdf_document(title, headers, rows):
             f"72 {top_margin} Td",
             f"({heading}) Tj",
             "0 -28 Td",
-            "/F2 9 Tf",
+            "/F2 8 Tf",
         ]
 
     pages_lines = []

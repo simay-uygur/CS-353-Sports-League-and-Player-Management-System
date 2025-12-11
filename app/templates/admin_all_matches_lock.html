@@ -25,9 +25,10 @@
                     <select name="season_year" id="season_year">
                         <option value="">All Seasons</option>
                         {% for season in seasons %}
-                            <option value="{{ season.seasonyear }}" 
-                                    {% if selected_season_year == season.seasonyear %}selected{% endif %}>
-                                {{ season.seasonyear }}
+                            {% set season_val = season.seasonyear.strftime('%Y') if season.seasonyear is not string else season.seasonyear %}
+                            <option value="{{ season_val }}" 
+                                    {% if selected_season_year and selected_season_year|string == season_val|string %}selected{% endif %}>
+                                {{ season_val }}
                             </option>
                         {% endfor %}
                     </select>
@@ -39,7 +40,7 @@
                         <option value="">All Leagues</option>
                         {% for league in leagues %}
                             <option value="{{ league.leagueid }}" 
-                                    {% if selected_league_id == league.leagueid %}selected{% endif %}>
+                                    {% if selected_league_id and selected_league_id|string == league.leagueid|string %}selected{% endif %}>
                                 {{ league.leaguename }}
                             </option>
                         {% endfor %}
@@ -52,7 +53,7 @@
                         <option value="">All Tournaments</option>
                         {% for tournament in tournaments %}
                             <option value="{{ tournament.tournamentid }}" 
-                                    {% if selected_tournament_id == tournament.tournamentid %}selected{% endif %}>
+                                    {% if selected_tournament_id and selected_tournament_id|string == tournament.tournamentid|string %}selected{% endif %}>
                                 {{ tournament.tournamentname }}
                             </option>
                         {% endfor %}

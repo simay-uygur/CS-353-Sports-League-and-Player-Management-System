@@ -55,7 +55,7 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="venue">Venue <span class="optional">(optional)</span></label>
+                        <label for="venue">Venue</label>
                         <input type="text" id="venue" name="venue" placeholder="Stadium name, location, etc." value="{{ form_data.get('venue', '') }}">
                     </div>
 
@@ -77,12 +77,6 @@
 
         .required {
             color: #d32f2f;
-        }
-
-        .optional {
-            color: #999;
-            font-size: 0.85rem;
-            font-weight: normal;
         }
 
         .form-note {

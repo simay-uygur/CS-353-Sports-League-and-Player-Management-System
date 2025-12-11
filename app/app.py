@@ -99,7 +99,8 @@ ROLE_HOME_ENDPOINTS = {
     "coach": "home_coach",
     "referee": "home_referee",
     "team_owner": "home_team_owner",
-    "admin": "admin.view_tournaments", 
+    "admin": "admin.view_tournaments",
+    "tournament_admin": "admin.view_tournaments",
     "superadmin": "superadmin.view_tournaments",
 }
 
