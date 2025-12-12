@@ -1,7 +1,7 @@
 # this is a mediator file that talks with the database and does common database tasks 
 import math
 import random
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from collections import defaultdict
@@ -89,6 +89,136 @@ def fetch_all_players():
             return cur.fetchall()
     finally:
         conn.close()
+
+def fetch_filtered_players(filters):
+    conn = get_connection()
+    try:
+        name = filters.get("name")
+        nationality = filters.get("nationality")
+        min_age = filters.get("min_age")
+        max_age = filters.get("max_age")
+        current_team = filters.get("team") 
+        position = filters.get("position")
+        
+        min_birthdate = None
+        max_birthdate = None
+        if min_age and max_age:
+            today = date.today()
+            min_birthdate = date(today.year - max_age, today.month, today.day)
+            max_birthdate = date(today.year - min_age, today.month, today.day)
+
+        params = []
+        conditions = []
+        if name and name.strip() != "":
+            stripped_name = name.strip()
+            name_parts = stripped_name.split()
+            if len(name_parts) == 2:
+                conditions.append("(u.firstname ILIKE %s AND u.lastname ILIKE %s)")
+                params.append(name_parts[0])
+                params.append(name_parts[1])
+            else:
+                conditions.append("(u.firstname ILIKE %s OR u.lastname ILIKE %s)")
+                params.append(stripped_name)
+                params.append(stripped_name)
+        if nationality:
+            conditions.append("u.nationality = %s")
+            params.append(nationality)
+        if min_birthdate:
+            conditions.append("u.birthdate <= %s")
+            params.append(min_birthdate)
+        if max_birthdate:
+            conditions.append("u.birthdate >= %s")
+            params.append(max_birthdate)
+        if current_team:
+            conditions.append("t.teamid = %s")
+            params.append(current_team)
+        if position:
+            conditions.append("p.position = %s")
+            params.append(position)
+
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+        
+        query = f"""
+            SELECT u.usersid,
+                   u.firstname,
+                   u.lastname,
+                   u.nationality,
+                   u.birthdate,
+                   p.height,
+                   p.weight,
+                   p.overall,
+                   p.position,
+                   p.iseligible,
+                   t.teamid,
+                   t.teamname
+            FROM Player p
+            JOIN Employee e ON p.usersid = e.usersid
+            JOIN Users u ON p.usersid = u.usersid
+            LEFT JOIN Team t ON e.teamid = t.teamid
+            WHERE {where_clause}
+            ORDER BY u.lastname, u.firstname;
+        """ # Does not have salary information, which should exist
+        # TODO: Make a view in init.sql that returns a player and their current employment
+        
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(query, params)
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+def fetch_player_by_id(playerid):
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT u.firstname,
+                       u.lastname,
+                       p.position,
+                       aei.salary,
+                       aei.enddate,
+                       aei.teamname
+                FROM Player p
+                JOIN Users u ON p.usersid = u.usersid
+                LEFT JOIN Employee e ON p.usersid = e.usersid
+                LEFT JOIN AllEmploymentInfo aei ON p.usersid = aei.usersid
+                WHERE u.usersid = %s
+                """, (playerid,))
+            return cur.fetchone()
+    finally:
+        conn.close()
+
+
+def fetch_all_nationalities():
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT nationality
+                FROM Users
+                WHERE nationality IS NOT NULL
+                ORDER BY nationality;
+                """
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+def fetch_all_positions():
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT position
+                FROM Player
+                """
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()    
+
         
         
 def report_players(filters):
@@ -342,6 +472,167 @@ def fetch_matches_grouped(tournament_id):
 
     return dict(sorted(grouped.items()))
 
+def fetch_transferable_players(filters, coachid):
+    conn = get_connection()
+    try:
+        name = filters.get("name")
+        nationality = filters.get("nationality")
+        min_age = filters.get("min_age")
+        max_age = filters.get("max_age")
+        current_team = filters.get("team") 
+        position = filters.get("position")
+        contact_expiration_date = filters.get("contact_expiration_date")
+
+        min_birthdate = None
+        max_birthdate = None
+        if min_age and max_age:
+            today = date.today()
+            min_birthdate = date(today.year - max_age, today.month, today.day)
+            max_birthdate = date(today.year - min_age, today.month, today.day)
+
+        params = []
+        conditions = []
+        if name and name.strip() != "":
+            stripped_name = name.strip()
+            name_parts = stripped_name.split()
+            if len(name_parts) == 2:
+                conditions.append("(u.firstname ILIKE %s AND u.lastname ILIKE %s)")
+                params.append(name_parts[0])
+                params.append(name_parts[1])
+            else:
+                conditions.append("(u.firstname ILIKE %s OR u.lastname ILIKE %s)")
+                params.append(stripped_name)
+                params.append(stripped_name)
+        if nationality:
+            conditions.append("u.nationality = %s")
+            params.append(nationality)
+        if min_birthdate:
+            conditions.append("u.birthdate <= %s")
+            params.append(min_birthdate)
+        if max_birthdate:
+            conditions.append("u.birthdate >= %s")
+            params.append(max_birthdate)
+        if current_team:
+            conditions.append("aei.teamid = %s")
+            params.append(current_team)
+        if position:
+            conditions.append("p.position = %s")
+            params.append(position)
+        if contact_expiration_date:
+            conditions.append("emp.EndDate < %s")
+            params.append(contact_expiration_date)
+
+        # Exclude players from the coach's own team
+        conditions.append("e.teamid <> (SELECT teamid FROM Employee WHERE usersid = %s)")
+        params.append(coachid)
+
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                f"""
+                SELECT 
+                    p.UsersID, 
+                    u.FirstName, 
+                    u.LastName, 
+                    u.nationality,
+                    u.Email, 
+                    p.Position,
+                    u.birthdate,
+                    ce.Salary,
+                    ce.EndDate,
+                    ce.TeamName
+                FROM Player p
+                JOIN Users u ON p.UsersID = u.UsersID
+                JOIN Employee e ON p.UsersID = e.UsersID
+                LEFT JOIN CurrentEmployment ce ON p.UsersID = ce.UsersID
+                WHERE {where_clause}
+                """,
+                (params),
+            )
+            rows = cur.fetchall()
+            return rows
+    finally:
+        conn.close()
+
+def fetch_player_transfer_offers(playerid):
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT *
+                FROM Offer
+                WHERE RequestedPlayer = %s
+                AND AvailableUntil > NOW()
+                ORDER BY AvailableUntil DESC
+                """,
+                (playerid,),
+            )
+            rows = cur.fetchall()
+            return rows
+    finally:
+        conn.close()
+
+def fetch_team_transfer_offers(coachid):
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT *
+                FROM Offer o 
+                JOIN Player p ON p.usersid = o.requestedplayer
+                JOIN Users u ON u.usersid = p.usersid
+                JOIN Employee e ON e.usersid = p.usersid
+                JOIN Team t ON e.teamid = t.teamid
+                WHERE
+                    AvailableUntil > NOW()
+                    AND OfferStatus IS NULL
+                    AND t.teamid = (
+                        SELECT teamid
+                        FROM Employee e
+                        WHERE e.usersid = %s
+                    )
+                ORDER BY AvailableUntil DESC
+                """,
+                (coachid,),
+            )
+            rows = cur.fetchall()
+            return rows
+    finally:
+        conn.close()
+
+def make_transfer_offer(playerid, coachid, amount, available_until, contract_end_date):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO Offer (RequestedPlayer, RequestingCoach, OfferAmount, AvailableUntil, OfferedEndDate)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (playerid, coachid, amount, available_until, contract_end_date),
+            )
+            conn.commit()
+    finally:
+        conn.close()
+
+def finalize_transfer_offer(offerid, decision):
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                UPDATE Offer
+                SET OfferStatus = %s
+                WHERE OfferId = %s
+                """,
+                (decision, offerid,),
+            )
+            conn.commit()
+    finally:
+        conn.close()
 
 def create_tournament_with_bracket(form_data, admin_id, moderator_ids=None):
     if not admin_id:

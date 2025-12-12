@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://cdn.jsdelivr.net/npm/vanilla-calendar-pro/styles/index.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/vanilla-calendar-pro/index.js" defer></script>
+  <title>CS353</title>
+</head>
+
+<body>
+  <h1>Transfer Market</h1>
+  <!-- Player filtering Section -->
+  <form>
+    <div style="display: flex;">
+      <div>
+        <label for="nationality">Nationality</label>
+        <select name="nationality" id="nationality-filter">
+          <option value="" selected>Any</option>
+          {% for nationality in nationalities %}
+          <option value="{{ nationality['nationality'] }}">{{ nationality['nationality'] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="pos">Position</label>
+        <select name="pos" id="position-filter">
+          <option value="" selected>Any</option>
+          {% for position in positions %}
+          <option value="{{ position['position'] }}">{{ position['position'] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="minAge">Minimum Age</label>
+        <input type="number" id="minAge" name="minAge" min="15" max="200">
+      </div>
+      <div>
+        <label for="maxAge">Maximum Age</label>
+        <input type="number" id="maxAge" name="maxAge" min="15" max="200">
+      </div>
+      <div>
+        <label for="Contact Expiration Date">Contact Expiration Date</label>
+        <input type="date" id="contactExpirationDate" name="contactExpirationDate">
+      </div>
+      <div>
+        <label for="team">Team</label>
+        <select name="team" id="team-filter">
+          <option value="" selected>Any</option>
+          {{teams}}
+          {% for team in teams %}
+          <option value="{{ team['teamid'] }}">{{ team['teamname'] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button id="filter-button">Filter</button>
+    </div>
+    <!-- Search by name -->
+    <search style="display: flex;">
+      <input type="text" id="search-input" name="name" placeholder="Search...">
+      <button id="search-button">Search</button>
+    </search>
+  </form>
+
+  <!-- Player Table Section -->
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Birthdate</th>
+        <th>Nationality</th>
+        <th>Position</th>
+        <th>Team</th>
+        <th>Salary</th>
+        <th>Contact Expires Before</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for player in players %}
+      <tr>
+        <td>{{ player['firstname'] }} {{player['lastname']}}</td>
+        <td>{{ player['birthdate'] }}</td>
+        <td>{{ player['nationality'] }}</td>
+        <td>{{ player['position'] }}</td>
+        <td>{{ player['teamname'] }}</td>
+        <td>{{ player['salary'] }}</td>
+        <td>{{ player['enddate']}}</td>
+        <td><button><a href="{{url_for('coach.transfer_offer', player_id=player['usersid'])}}">Offer</a></button></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div id="calendar"></div>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // Destructure the Calendar constructor
+      const { Calendar } = window.VanillaCalendarPro;
+      // Create a calendar instance and initialize it.
+      const calendar = new Calendar('#calendar');
+      calendar.init();
+    });
+  </script>
+</body>
+
+</html>

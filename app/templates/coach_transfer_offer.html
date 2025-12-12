@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Transfer Offer</title>
+</head>
+
+<body>
+  <h1>Transfer Offer</h1>
+  <h2>Player</h2>
+  <ul>
+    <li>Name: {{ player['firstname'] }} {{ player['lastname']}}</li>
+    <li>Position: {{ player['position'] }}</li>
+    <li>Current Team: {{ player['teamname'] if 'teamname' in player else '-' }} </li>
+    <li>Current Salary: {{ player['salary'] if 'teamname' in player else '-' }}</li>
+  </ul>
+  <form method="post">
+    <label for="amount">Offer Amount</label>
+    <input name="amount" type="number" min="0" required>
+    <label for="availableUntil">Available Until</label>
+    <input type="date" name="availableUntil" id="availableUntil" required>
+    <label for="contractEndDate">Contract End Date</label>
+    <input type="date" name="offeredEndDate" id="contractEndDate">
+    <button type="submit">Send Offer</button>
+  </form>
+  <script>
+    const availableUntilInput = document.getElementById('availableUntil')
+    const contractEndDate = document.getElementById('contractEndDate')
+    const date = new Date()
+    availableUntilInput.min = date.toISOString().substring(0, 10)
+    contractEndDate.min = date.toISOString().substring(0, 10)
+  </script>
+</body>
+
+</html>
