@@ -3,6 +3,12 @@ from datetime import datetime, timedelta
 from io import BytesIO
 
 import psycopg2
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter, landscape
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
 
 from flask import Blueprint, render_template, request, redirect, url_for, session, abort, make_response
 from psycopg2.extras import RealDictCursor
@@ -128,7 +134,7 @@ def add_team_to_league(league_id, team_id):
             abort(403)
 
         # Add team to league
-    conn = get_connection()
+        conn = get_connection()
         try:
             with conn:
                 with conn.cursor() as cur:
@@ -176,8 +182,8 @@ def remove_team_from_league(league_id, team_id):
                         "DELETE FROM LeagueTeam WHERE LeagueID = %s AND TeamID = %s;",
                         (league_id, team_id),
                     )
-    finally:
-        conn.close()
+        finally:
+            conn.close()
 
         return redirect(url_for("admin.manage_league_teams", league_id=league_id))
     except psycopg2.Error as exc:
@@ -609,15 +615,37 @@ def download_report_pdf():
         return redirect(url_for("login"))
 
     report_type = request.form.get("report_type")
+    filter_info = []
+    
     try:
         if report_type == "players":
+            player_id = request.form.get("player_id")
+            currently_employed = request.form.get("currently_employed")
+            employed_before = request.form.get("employed_before")
+            employed_after = request.form.get("employed_after")
+            ended_before = request.form.get("ended_before")
+            ended_after = request.form.get("ended_after")
+            
+            if player_id:
+                filter_info.append(f"Player ID: {player_id}")
+            if currently_employed:
+                filter_info.append("Currently Employed: Yes")
+            if employed_before:
+                filter_info.append(f"Employed Before: {employed_before}")
+            if employed_after:
+                filter_info.append(f"Employed After: {employed_after}")
+            if ended_before:
+                filter_info.append(f"Ended Before: {ended_before}")
+            if ended_after:
+                filter_info.append(f"Ended After: {ended_after}")
+            
             data = report_players({
-                "player_id": _to_int(request.form.get("player_id"), "Player ID") if request.form.get("player_id") else None,
-                "currently_employed": bool(request.form.get("currently_employed")),
-                "employed_before": request.form.get("employed_before"),
-                "employed_after": request.form.get("employed_after"),
-                "ended_before": request.form.get("ended_before"),
-                "ended_after": request.form.get("ended_after"),
+                "player_id": _to_int(player_id, "Player ID") if player_id else None,
+                "currently_employed": bool(currently_employed),
+                "employed_before": employed_before,
+                "employed_after": employed_after,
+                "ended_before": ended_before,
+                "ended_after": ended_after,
             })
             title = "Player Report"
             headers = ["Name", "Email", "Position", "Team", "Start", "End"]
@@ -639,8 +667,13 @@ def download_report_pdf():
             season_year = request.form.get("season_year")
             if not season_year:
                 raise ValueError("Season year is required.")
+            
+            filter_info.append(f"League ID: {league_id}")
+            filter_info.append(f"Season No: {season_no}")
+            filter_info.append(f"Season Year: {season_year}")
+            
             data = report_league_standings(league_id, season_no, season_year)
-            title = f"League Standings - League {league_id}, Season {season_no} ({season_year})"
+            title = f"League Standings"
             headers = ["Team", "Pts", "W", "D", "L", "GF", "GA", "GD"]
             rows = [
                 [
@@ -657,11 +690,28 @@ def download_report_pdf():
             ]
             filename = "standings-report.pdf"
         elif report_type == "attendance":
-            league_id = _to_int(request.form.get("league_id"), "League ID") if request.form.get("league_id") else None
-            season_no = _to_int(request.form.get("season_no"), "Season No") if request.form.get("season_no") else None
+            league_id = request.form.get("league_id")
+            season_no = request.form.get("season_no")
             season_year_from = request.form.get("season_year_from") or None
             season_year_to = request.form.get("season_year_to") or None
-            data = report_player_attendance(league_id, season_no, season_year_from, season_year_to)
+            
+            if league_id:
+                filter_info.append(f"League ID: {league_id}")
+            if season_no:
+                filter_info.append(f"Season No: {season_no}")
+            if season_year_from:
+                filter_info.append(f"Season Year From: {season_year_from}")
+            if season_year_to:
+                filter_info.append(f"Season Year To: {season_year_to}")
+            if not filter_info:
+                filter_info.append("All Leagues and Seasons")
+            
+            data = report_player_attendance(
+                _to_int(league_id, "League ID") if league_id else None,
+                _to_int(season_no, "Season No") if season_no else None,
+                season_year_from,
+                season_year_to
+            )
             title = "Player Attendance"
             headers = ["Player", "Appearances"]
             rows = [
@@ -677,7 +727,7 @@ def download_report_pdf():
     except ValueError as exc:
         return redirect(url_for("admin.reports", error=str(exc)))
 
-    pdf_bytes = _build_pdf_document(title, headers, rows)
+    pdf_bytes = _build_pdf_document(title, headers, rows, filter_info)
 
     response = make_response(pdf_bytes)
     response.headers["Content-Type"] = "application/pdf"
@@ -685,143 +735,117 @@ def download_report_pdf():
     return response
 
 
-def _build_pdf_document(title, headers, rows):
+def _build_pdf_document(title, headers, rows, filter_info=None):
     """
-    Minimal PDF generator to export simple tabular data without external dependencies.
+    Generate PDF document with Excel-like table formatting using reportlab.
+    Uses landscape orientation if table is too wide, otherwise portrait.
     """
-    def escape(text):
-        return str(text).replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
-
-    # Build monospace table layout with width constraint
-    col_widths = [len(str(h)) for h in headers]
-    for row in rows:
-        for idx, col in enumerate(row):
-            col_widths[idx] = max(col_widths[idx], len(str(col)))
-
-    max_total_width = 110
-    min_width = 4
-    separator_width = 3 * (len(headers) - 1)
-
-    def total_width():
-        return sum(col_widths) + separator_width
-
-    # Shrink widest columns until we fit the width budget
-    while total_width() > max_total_width and any(w > min_width for w in col_widths):
-        max_idx = max(range(len(col_widths)), key=lambda i: col_widths[i])
-        if col_widths[max_idx] > min_width:
-            col_widths[max_idx] -= 1
-        else:
-            break
-
-    def truncate(text, width):
-        s = str(text)
-        if len(s) <= width:
-            return s
-        if width <= 3:
-            return s[:width]
-        return s[: width - 3] + "..."
-
-    def format_row(cells):
-        return " | ".join(truncate(cell, col_widths[i]).ljust(col_widths[i]) for i, cell in enumerate(cells))
-
-    table_lines = []
-    table_lines.append(format_row(headers))
-    table_lines.append("-+-".join("-" * w for w in col_widths))
-    for row in rows:
-        table_lines.append(format_row(row))
-
-    # Pagination settings
-    top_margin = 780
-    bottom_margin = 60
-    header_gap = 28
-    line_height = 12
-    max_lines = max(1, int((top_margin - bottom_margin - header_gap) / line_height))
-
-    def start_page(page_number):
-        heading = escape(title if page_number == 1 else f"{title} (Page {page_number})")
-        return [
-            "BT",
-            "/F1 16 Tf",
-            f"72 {top_margin} Td",
-            f"({heading}) Tj",
-            "0 -28 Td",
-            "/F2 8 Tf",
-        ]
-
-    pages_lines = []
-    current_page = start_page(1)
-    line_count = 0
-    page_number = 1
-
-    for line in table_lines:
-        if line_count >= max_lines:
-            current_page.append("ET")
-            pages_lines.append(current_page)
-            page_number += 1
-            current_page = start_page(page_number)
-            line_count = 0
-        current_page.append(f"({escape(line)}) Tj")
-        current_page.append("0 -14 Td")
-        line_count += 1
-
-    current_page.append("ET")
-    pages_lines.append(current_page)
-
-    # Build PDF objects with multi-page support
-    objects = []
-
-    def add_object(obj):
-        objects.append(obj)
-        return len(objects)
-
-    font1_id = add_object("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\n")
-    font2_id = add_object("<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>\n")
-    pages_id = add_object("")  # placeholder, fill later
-
-    page_ids = []
-    content_ids = []
-    for page_lines in pages_lines:
-        content_stream = "\n".join(page_lines).encode("latin-1", errors="replace")
-        content_id = add_object(
-            b"<< /Length "
-            + str(len(content_stream)).encode("latin-1")
-            + b" >>\nstream\n"
-            + content_stream
-            + b"\nendstream\n"
-        )
-        content_ids.append(content_id)
-        page_id = add_object(
-            f"<< /Type /Page /Parent {pages_id} 0 R /MediaBox [0 0 612 792] "
-            f"/Contents {content_id} 0 R /Resources << /Font << /F1 {font1_id} 0 R /F2 {font2_id} 0 R >> >> >>\n"
-        )
-        page_ids.append(page_id)
-
-    # Fill pages object now that we have page ids
-    objects[pages_id - 1] = (
-        f"<< /Type /Pages /Kids [{' '.join(f'{pid} 0 R' for pid in page_ids)}] /Count {len(page_ids)} >>\n"
+    buffer = BytesIO()
+    
+    # Determine page orientation based on number of columns
+    # Use landscape if more than 6 columns
+    num_cols = len(headers)
+    use_landscape = num_cols > 6
+    
+    # Calculate minimum column width needed
+    min_col_width = 1.0 * inch
+    estimated_total_width = num_cols * min_col_width
+    
+    # Check if we need landscape based on width
+    portrait_width = letter[0] - (0.5 * inch * 2)  # minus margins
+    if estimated_total_width > portrait_width:
+        use_landscape = True
+    
+    if use_landscape:
+        pagesize = landscape(letter)
+    else:
+        pagesize = letter
+    
+    page_width, page_height = pagesize
+    
+    # Create PDF document
+    doc = SimpleDocTemplate(buffer, pagesize=pagesize,
+                            rightMargin=0.5*inch, leftMargin=0.5*inch,
+                            topMargin=0.75*inch, bottomMargin=0.5*inch)
+    
+    # Container for PDF elements
+    elements = []
+    
+    # Styles
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=18,
+        textColor=colors.HexColor('#1a1a1a'),
+        spaceAfter=12,
+        alignment=TA_CENTER
     )
-
-    catalog_id = add_object(f"<< /Type /Catalog /Pages {pages_id} 0 R >>\n")
-
-    pdf_bytes = BytesIO()
-    pdf_bytes.write(b"%PDF-1.4\n")
-    offsets = []
-    for obj in objects:
-        offsets.append(pdf_bytes.tell())
-        if isinstance(obj, bytes):
-            data = obj
-        else:
-            data = obj.encode("latin-1")
-        pdf_bytes.write(data)
-
-    xref_start = pdf_bytes.tell()
-    pdf_bytes.write(f"xref\n0 {len(objects)+1}\n".encode("latin-1"))
-    pdf_bytes.write(b"0000000000 65535 f \n")
-    for i in range(len(objects)):
-        pdf_bytes.write(f"{offsets[i]:010d} 00000 n \n".encode("latin-1"))
-
-    pdf_bytes.write(
-        f"trailer\n<< /Size {len(objects)+1} /Root 1 0 R >>\nstartxref\n{xref_start}\n%%EOF".encode("latin-1")
+    
+    subtitle_style = ParagraphStyle(
+        'CustomSubtitle',
+        parent=styles['Normal'],
+        fontSize=10,
+        textColor=colors.HexColor('#666666'),
+        spaceAfter=20,
+        alignment=TA_LEFT
     )
-    pdf_bytes.seek(0)
-    return pdf_bytes.read()
+    
+    # Add title
+    elements.append(Paragraph(title, title_style))
+    elements.append(Spacer(1, 0.2*inch))
+    
+    # Add filter information if provided
+    if filter_info:
+        filter_text = "Filters: " + " | ".join(filter_info)
+        elements.append(Paragraph(filter_text, subtitle_style))
+        elements.append(Spacer(1, 0.1*inch))
+    
+    # Prepare table data
+    table_data = [headers] + rows
+    
+    # Calculate column widths - distribute evenly
+    available_width = page_width - doc.leftMargin - doc.rightMargin
+    col_widths = [available_width / num_cols] * num_cols
+    
+    # Create table
+    table = Table(table_data, colWidths=col_widths, repeatRows=1)
+    
+    # Table style - Excel-like appearance
+    table_style = TableStyle([
+        # Header row styling
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4472C4')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 11),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('TOPPADDING', (0, 0), (-1, 0), 12),
+        
+        # Data rows styling
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -1), 9),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+        ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+        ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#D0D0D0')),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 6),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+        ('TOPPADDING', (0, 1), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), 8),
+        
+        # Alternating row colors
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F2F2F2')]),
+    ])
+    
+    table.setStyle(table_style)
+    elements.append(table)
+    
+    # Build PDF
+    doc.build(elements)
+    
+    # Get PDF bytes
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+    
+    return pdf_bytes

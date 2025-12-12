@@ -22,6 +22,7 @@ from db_helper import (
 from blueprints.admin import admin_bp
 from blueprints.superadmin import superadmin_bp
 from blueprints.owner import owner_bp
+from blueprints.referee import referee_bp
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-key")
@@ -29,6 +30,7 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-key")
 app.register_blueprint(admin_bp)
 app.register_blueprint(superadmin_bp)
 app.register_blueprint(owner_bp)
+app.register_blueprint(referee_bp)
 
 @app.template_filter('strftime')
 def strftime_filter(value, format_string='%Y-%m-%d %H:%M:%S'):
@@ -53,10 +55,10 @@ def _set_default_banner():
     if role == "superadmin":
         g.banner_view_endpoint = "superadmin.view_tournaments"
         g.banner_league_endpoint = "superadmin.view_leagues"
-        g.banner_all_matches_endpoint = "admin.view_all_matches_lock"
+        g.banner_all_matches_endpoint = None
         g.banner_create_league_endpoint = None
         g.banner_owner_endpoint = None
-        g.banner_reports_endpoint = "admin.reports"
+        g.banner_reports_endpoint = None
         g.banner_statistics_endpoint = None
     elif role in ("admin", "tournament_admin"):
         g.banner_view_endpoint = "admin.view_tournaments"

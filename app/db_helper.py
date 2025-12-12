@@ -89,8 +89,8 @@ def fetch_all_players():
             return cur.fetchall()
     finally:
         conn.close()
-
-
+        
+        
 def report_players(filters):
     """
     filters: {
@@ -1029,6 +1029,7 @@ def fetch_league_matches(league_id):
                        m.awayteamname,
                        m.matchstartdatetime,
                        m.islocked,
+                       m.winnerteam,
                        s.seasonno,
                        s.seasonyear
                 FROM Match m
@@ -1482,6 +1483,78 @@ def remove_referee_from_match(match_id, referee_id):
         conn.close()
 
 
+def finalize_tournament_match_from_plays(match_id):
+    """
+    Recompute scores for a tournament match from Play rows, set winner, and lock the match.
+    Seasonal matches are ignored (handled by DB triggers elsewhere).
+    Returns True if the match was updated, False otherwise.
+    """
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT m.matchid,
+                           m.hometeamid,
+                           m.awayteamid,
+                           m.matchstartdatetime
+                    FROM Match m
+                    JOIN TournamentMatch tm ON tm.matchid = m.matchid
+                    WHERE m.matchid = %s;
+                    """,
+                    (match_id,),
+                )
+                match = cur.fetchone()
+                if not match:
+                    return False
+
+                match_start = match["matchstartdatetime"]
+                home_team_id = match["hometeamid"]
+                away_team_id = match["awayteamid"]
+
+                def _score_for_team(team_id):
+                    cur.execute(
+                        """
+                        SELECT COALESCE(SUM(COALESCE(pl.GoalsScored, 0) + COALESCE(pl.PenaltiesScored, 0)), 0) AS goals
+                        FROM Play pl
+                        JOIN Employed em ON em.UsersID = pl.PlayerID
+                        JOIN Employment e ON e.EmploymentID = em.EmploymentID
+                        WHERE pl.MatchID = %s
+                          AND em.TeamID = %s
+                          AND e.StartDate <= %s
+                          AND e.EndDate >= %s;
+                        """,
+                        (match_id, team_id, match_start, match_start),
+                    )
+                    row = cur.fetchone()
+                    return row["goals"] if row and row["goals"] is not None else 0
+
+                home_score = _score_for_team(home_team_id)
+                away_score = _score_for_team(away_team_id)
+
+                winner_team = None
+                if home_score > away_score:
+                    winner_team = home_team_id
+                elif away_score > home_score:
+                    winner_team = away_team_id
+
+                cur.execute(
+                    """
+                    UPDATE Match
+                    SET HomeTeamScore = %s,
+                        AwayTeamScore = %s,
+                        WinnerTeam = %s,
+                        IsLocked = TRUE
+                    WHERE MatchID = %s;
+                    """,
+                    (home_score, away_score, winner_team, match_id),
+                )
+                return True
+    finally:
+        conn.close()
+
+
 def fetch_seasonal_matches_for_admin(admin_id):
     """
     Fetch all seasonal matches that this admin manages (for locking/unlocking).
@@ -1538,7 +1611,7 @@ def toggle_match_lock(match_id, lock_state):
     finally:
         conn.close()
 
-
+        
 def fetch_seasons_for_dropdown():
     """Fetch distinct season years for dropdown."""
     conn = get_connection()
@@ -1940,5 +2013,4 @@ def fetch_player_offers(player_id):
             return cur.fetchall()
     finally:
         conn.close()
-
         

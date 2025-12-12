@@ -90,7 +90,7 @@
                                             <td class="table-actions">
                                                 {% set now = now() %}
                                                 {% set season_ended = season.enddate < now %}
-                                                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+                                                <div style="display: flex; gap: 0.5rem; align-items: center;">
                                                     {% if not season_ended %}
                                                     <a href="{{ url_for('admin.create_season_match_form', league_id=league_id, season_no=season.seasonno, season_year=season.seasonyear) }}" class="btn solid btn-small">
                                                         + Create Match
@@ -99,7 +99,7 @@
                                                     <span class="subtle" style="font-size: 0.85rem;">Season ended</span>
                                                     {% endif %}
                                                     {% if season_delete_endpoint %}
-                                                    <form method="POST" action="{{ url_for(season_delete_endpoint, league_id=league_id, season_no=season.seasonno, season_year=season.seasonyear) }}" onsubmit="return confirm('Delete this season?');" style="display: inline;">
+                                                    <form method="POST" action="{{ url_for(season_delete_endpoint, league_id=league_id, season_no=season.seasonno, season_year=season.seasonyear) }}" onsubmit="return confirm('Delete this season?');" style="display: inline; margin: 0;">
                                                         <button type="submit" class="btn ghost btn-small">Delete Season</button>
                                                     </form>
                                                     {% endif %}
@@ -125,7 +125,7 @@
                                     <th>Season</th>
                                     <th>Match</th>
                                     <th>Date</th>
-                                    <th>Locked</th>
+                                    <th>Winner Team</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -134,7 +134,7 @@
                                     <td>{{ match.seasonno }} ({{ match.seasonyear }})</td>
                                     <td>{{ match.hometeamname }} vs {{ match.awayteamname }}</td>
                                     <td>{{ match.matchstartdatetime|strftime('%b %d, %Y %H:%M') }}</td>
-                                    <td>{{ 'Yes' if match.islocked else 'No' }}</td>
+                                    <td>{{ match.winnerteam if match.winnerteam else 'Not Determined' }}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -256,6 +256,21 @@
 
         .seasons-full-width {
             width: 100%;
+        }
+
+        .table-actions {
+            white-space: nowrap;
+        }
+
+        .table-actions > div {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .table-actions form {
+            margin: 0;
+            display: inline-block;
         }
     </style>
 

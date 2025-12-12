@@ -25,9 +25,9 @@
                     <select name="season_year" id="season_year">
                         <option value="">All Seasons</option>
                         {% for season in seasons %}
-                            {% set season_val = season.seasonyear.strftime('%Y') if season.seasonyear is not string else season.seasonyear %}
+                            {% set season_val = season.seasonyear|string %}
                             <option value="{{ season_val }}" 
-                                    {% if selected_season_year and selected_season_year|string == season_val|string %}selected{% endif %}>
+                                    {% if selected_season_year and selected_season_year|string == season_val %}selected{% endif %}>
                                 {{ season_val }}
                             </option>
                         {% endfor %}
