@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Admin | View and Manage Leagues</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="dashboard-body">
+    {% include "_banner.html" %}
+    <main class="dashboard-container">
+        <header class="admin-header">
+            <div>
+                <p class="eyebrow">Super Admin Console</p>
+                <h1>View and Manage Leagues</h1>
+            </div>
+            {% if create_endpoint %}
+            <div>
+                <a href="{{ url_for(create_endpoint) }}" class="btn solid">Create New League</a>
+            </div>
+            {% endif %}
+        </header>
+
+        <section class="leagues-list">
+            {% if leagues %}
+                {% set grouped_leagues = {} %}
+                {% for league in leagues %}
+                    {% if league.leagueid not in grouped_leagues %}
+                        {% set _ = grouped_leagues.update({league.leagueid: {'name': league.name, 'seasons': [] , 'teams': league.teams, 'available_teams': league.available_teams, 'matches': league.matches}}) %}
+                    {% endif %}
+                    {% if league.seasonno %}
+                        {% set _ = grouped_leagues[league.leagueid]['seasons'].append(league) %}
+                    {% endif %}
+                {% endfor %}
+
+                {% for league_id, league_info in grouped_leagues.items() %}
+                <div class="league-card">
+                    <div class="league-card-header">
+                        <div>
+                            <h2>{{ league_info.name }}</h2>
+                            <p class="league-seasons-count">{{ league_info.seasons|length }} season(s)</p>
+                        </div>
+                        <div class="league-card-actions">
+                            {% if assign_endpoint %}
+                            <a class="btn solid btn-inline" href="{{ url_for(assign_endpoint, league_id=league_id) }}">Assign Admins</a>
+                            {% endif %}
+                            <form method="POST" action="{{ url_for('superadmin.delete_league_route', league_id=league_id) }}" onsubmit="return confirm('Delete this league and all associated data?');" style="display: inline;">
+                                <button type="submit" class="btn ghost btn-inline">Delete League</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="teams-list-section">
+                        <h3>Teams in League</h3>
+                        {% if league_info.teams %}
+                        <ul class="owner-list teams-constrained">
+                            {% for team in league_info.teams %}
+                            <li>{{ team.teamname }}</li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <p class="subtle">No teams assigned yet.</p>
+                        {% endif %}
+                    </div>
+
+                    <div class="seasons-full-width">
+                        <h3>Seasons</h3>
+                            {% if league_info.seasons %}
+                            <div class="seasons-table">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Season</th>
+                                            <th>Year</th>
+                                            <th>Start</th>
+                                            <th>End</th>
+                                            <th>Prize</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for season in league_info.seasons %}
+                                        <tr>
+                                            <td>{{ season.seasonno }}</td>
+                                            <td>{{ season.seasonyear }}</td>
+                                            <td>{{ season.startdate|strftime('%b %d, %Y %H:%M') }}</td>
+                                            <td>{{ season.enddate|strftime('%b %d, %Y %H:%M') }}</td>
+                                            <td>${{ "{:,.0f}".format(season.prizepool) }}</td>
+                                            <td class="table-actions">
+                                                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+                                                    {% if season_delete_endpoint %}
+                                                    <form method="POST" action="{{ url_for(season_delete_endpoint, league_id=league_id, season_no=season.seasonno, season_year=season.seasonyear) }}" onsubmit="return confirm('Delete this season?');" style="display: inline;">
+                                                        <button type="submit" class="btn ghost btn-small">Delete Season</button>
+                                                    </form>
+                                                    {% endif %}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {% else %}
+                            <p class="subtle">No seasons defined yet.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="matches-table">
+                        <h3>Seasonal Matches</h3>
+                        {% if league_info.matches %}
+                        <table class="simple-table">
+                            <thead>
+                                <tr>
+                                    <th>Season</th>
+                                    <th>Match</th>
+                                    <th>Date</th>
+                                    <th>Locked</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for match in league_info.matches %}
+                                <tr>
+                                    <td>{{ match.seasonno }} ({{ match.seasonyear }})</td>
+                                    <td>{{ match.hometeamname }} vs {{ match.awayteamname }}</td>
+                                    <td>{{ match.matchstartdatetime|strftime('%b %d, %Y %H:%M') }}</td>
+                                    <td>{{ 'Yes' if match.islocked else 'No' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        {% else %}
+                        <p class="subtle">No matches yet.</p>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+            <div class="empty-state">
+                <p>No leagues have been created yet.</p>
+            </div>
+            {% endif %}
+        </section>
+    </main>
+
+    <style>
+        .leagues-list {
+            display: grid;
+            gap: 2rem;
+        }
+
+        .league-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .league-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .league-card-header h2 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1.25rem;
+            color: #333;
+        }
+
+        .league-seasons-count {
+            margin: 0;
+            font-size: 0.875rem;
+            color: #666;
+        }
+
+        .league-body-grid {
+            margin: 1.5rem 0;
+        }
+
+        .league-body-grid > div {
+            margin-bottom: 2rem;
+        }
+
+        .league-body-grid h3 {
+            margin: 0 0 1rem 0;
+            font-size: 1.1rem;
+            color: #333;
+        }
+
+        .seasons-table table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .seasons-table th,
+        .seasons-table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .seasons-table th {
+            background-color: #f5f5f5;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .seasons-table tbody tr:hover {
+            background-color: #f9f9f9;
+        }
+
+        .btn-inline {
+            padding: 8px 14px;
+            font-size: 0.9rem;
+            line-height: 1.1;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(17, 24, 39, 0.12);
+        }
+
+        .empty-state p {
+            margin-bottom: 1.5rem;
+            font-size: 1.1rem;
+            color: #666;
+        }
+
+        .teams-list-section {
+            margin-bottom: 2rem;
+        }
+
+        .teams-constrained li {
+            background-color: #f0f4f8;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            max-width: 350px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .seasons-full-width {
+            width: 100%;
+        }
+    </style>
+
+
+</body>
+</html>

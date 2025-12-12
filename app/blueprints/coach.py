@@ -1,6 +1,17 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session
 
-from db_helper import * 
+from db_helper import (
+    fetch_transferable_players,
+    fetch_all_nationalities,
+    fetch_all_positions,
+    fetch_all_teams,
+    fetch_player_by_id,
+    make_transfer_offer,
+    fetch_team_transfer_offers,
+    finalize_transfer_offer,
+    fetch_team_by_coach,
+    fetch_team_players,
+)
 
 coach_bp = Blueprint("coach", __name__, url_prefix="/coach")
 
@@ -78,3 +89,21 @@ def evaluate_transfer_offer(offerid):
         final_decision = decision == 'accept'
         finalize_transfer_offer(offerid, final_decision)
     return redirect(url_for('.view_transfer_offers'))
+
+@coach_bp.route("/team")
+def view_team():
+    coach_id = session.get("user_id")
+    team = fetch_team_by_coach(coach_id)
+    
+    if not team:
+        # Coach doesn't have a team assigned
+        return render_template("coach_team.html", team=None, players=[])
+    
+    # Fetch players for this team
+    players = fetch_team_players(team["teamid"])
+    
+    return render_template(
+        "coach_team.html",
+        team=team,
+        players=players,
+    )

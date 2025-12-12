@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin | Create Season Match</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="dashboard-body">
+    {% include "_banner.html" %}
+    <main class="dashboard-container">
+        <header class="admin-header">
+            <div>
+                <p class="eyebrow">Admin Console</p>
+                <h1>Create Match</h1>
+                <p class="subtitle">{{ league_name }} • Season {{ season_no }} ({{ season_year }})</p>
+            </div>
+            <div>
+                <a href="{{ url_for('admin.view_leagues') }}" class="btn solid">&larr; Back to Leagues</a>
+            </div>
+        </header>
+
+        {% if error_message %}
+        <div class="form-message error">{{ error_message }}</div>
+        {% endif %}
+
+        <section class="create-layout">
+            <form class="create-card" method="POST" novalidate>
+                <div class="create-card-inner">
+                    <p class="form-note">Create a new match for this season by selecting home and away teams.</p>
+
+                    <div class="form-group">
+                        <label for="home-team">Home Team <span class="required">*</span></label>
+                        <select id="home-team" name="home_team_id" required>
+                            <option value="">Select home team...</option>
+                            {% for team in teams %}
+                            <option value="{{ team.teamid }}" {% if form_data.get('home_team_id') == team.teamid|string %}selected{% endif %}>{{ team.teamname }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="away-team">Away Team <span class="required">*</span></label>
+                        <select id="away-team" name="away_team_id" required>
+                            <option value="">Select away team...</option>
+                            {% for team in teams %}
+                            <option value="{{ team.teamid }}" {% if form_data.get('away_team_id') == team.teamid|string %}selected{% endif %}>{{ team.teamname }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="start-datetime">Match Start Date & Time <span class="required">*</span></label>
+                        <input type="datetime-local" id="start-datetime" name="start_datetime" required value="{{ form_data.get('start_datetime', '') }}">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="venue">Venue</label>
+                        <input type="text" id="venue" name="venue" placeholder="Stadium name, location, etc." value="{{ form_data.get('venue', '') }}">
+                    </div>
+
+                    <div class="form-action-buttons">
+                        <a href="{{ url_for('admin.view_leagues') }}" class="btn solid">Cancel</a>
+                        <button type="submit" class="btn solid">Create Match</button>
+                    </div>
+                </div>
+            </form>
+        </section>
+    </main>
+
+    <style>
+        .subtitle {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 0.25rem;
+        }
+
+        .required {
+            color: #d32f2f;
+        }
+
+        .form-note {
+            color: #666;
+            margin-bottom: 1.5rem;
+            font-size: 0.95rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 0.5rem;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-family: inherit;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #111827;
+            box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.1);
+        }
+
+        .form-action-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+            margin-top: 2rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .form-action-buttons button,
+        .form-action-buttons a {
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+    </style>
+</body>
+</html>

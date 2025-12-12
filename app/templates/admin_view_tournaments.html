@@ -16,7 +16,7 @@
             </div>
             <div class="admin-actions">
                 {% if allow_create %}
-                <a class="add-tournament-link" href="{{ url_for(create_endpoint) }}">+ Add Tournament</a>
+                <a class="btn solid" href="{{ url_for(create_endpoint) }}">Create New Tournament</a>
                 {% endif %}
                 
             </div>
@@ -47,7 +47,7 @@
                     {% endfor %}
                 </ul>
                 {% else %}
-                <p class="empty-state">No tournaments assigned to you yet.</p>
+                <p class="empty-state">No tournaments available.</p>
                 {% endif %}
 
                 

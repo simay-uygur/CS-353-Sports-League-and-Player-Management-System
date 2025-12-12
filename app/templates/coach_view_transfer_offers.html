@@ -5,36 +5,60 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CS353 - View Transfer Offers</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 
-<body>
-  <h1>Transfer Offers</h1>
-  <table>
-    <thead>
-      <tr>
-        <th>For Player</th>
-        <th>Offering Team</th>
-        <th>Offer Amount</th>
-        <th>Available Until</th>
-        <th>Decision</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for transfer_offer in transfer_offers %}
-      <tr>
-        <td>{{ transfer_offer['firstname'] }} {{ transfer_offer['lastname'] }}</td>
-        <td>{{ transfer_offer['teamname']}}</td>
-        <td>{{ transfer_offer['offeramount']}}</td>
-        <td>{{ transfer_offer['availableuntil'] }}</td>
-        <td>{{ transfer_offer['offeredenddate'] }}</td>
-        <td><form name="decide_offer" action="{{ url_for('coach.evaluate_transfer_offer', offerid=transfer_offer['offerid']) }}" method="post">
-          <button type="submit" name="decision" value="accept">Accept</button>
-          <button type="submit" name="decision" value="reject">Reject</button>
-        </form></td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<body class="dashboard-body">
+  {% include "_banner.html" %}
+  <div class="dashboard-container">
+    <div class="admin-header">
+      <div>
+        <p class="eyebrow">Manage offers from other coaches for your players</p>
+        <h1>Incoming Transfer Offers</h1>
+      </div>
+      <div class="admin-actions">
+        <a href="{{ url_for('coach.view_transfer_market') }}" class="back-link">← Back to Transfer Market</a>
+      </div>
+    </div>
+
+    {% if transfer_offers %}
+    <div class="bracket-panel">
+      <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr style="border-bottom: 2px solid #e5e7eb;">
+            <th style="text-align: left; padding: 0.75rem 1rem; color: #0f172a;">Player Name</th>
+            <th style="text-align: left; padding: 0.75rem 1rem; color: #0f172a;">Offering Team</th>
+            <th style="text-align: left; padding: 0.75rem 1rem; color: #0f172a;">Offer Amount</th>
+            <th style="text-align: left; padding: 0.75rem 1rem; color: #0f172a;">Available Until</th>
+            <th style="text-align: left; padding: 0.75rem 1rem; color: #0f172a;">Contract End</th>
+            <th style="text-align: center; padding: 0.75rem 1rem; color: #0f172a;">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for transfer_offer in transfer_offers %}
+          <tr style="border-bottom: 1px solid #e5e7eb;">
+            <td style="padding: 0.75rem 1rem; font-weight: 600;">{{ transfer_offer['firstname'] }} {{ transfer_offer['lastname'] }}</td>
+            <td style="padding: 0.75rem 1rem; color: #6b7280;">{{ transfer_offer['teamname']}}</td>
+            <td style="padding: 0.75rem 1rem; color: #6b7280;">{{ transfer_offer['offeramount']}}</td>
+            <td style="padding: 0.75rem 1rem; color: #6b7280;">{{ transfer_offer['availableuntil'] }}</td>
+            <td style="padding: 0.75rem 1rem; color: #6b7280;">{{ transfer_offer['offeredenddate'] }}</td>
+            <td style="padding: 0.75rem 1rem; text-align: center;">
+              <form name="decide_offer" action="{{ url_for('coach.evaluate_transfer_offer', offerid=transfer_offer['offerid']) }}" method="post" style="display: inline-flex; gap: 0.5rem; justify-content: center;">
+                <button type="submit" name="decision" value="accept" class="btn solid" style="padding: 0.5rem 1rem;">Accept</button>
+                <button type="submit" name="decision" value="reject" class="btn solid" style="padding: 0.5rem 1rem; background: #ef4444;">Reject</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="auth-card" style="margin: auto; margin-top: 2rem; text-align: center;">
+      <p style="color: #5b6475; font-size: 1rem;">No incoming transfer offers at this time.</p>
+    </div>
+    {% endif %}
+  </div>
 </body>
 
 </html>

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sports League | My Trainings</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="dashboard-body">
+    {% include "_banner.html" %}
+    <main class="dashboard-container">
+        <header class="admin-header">
+            <div>
+                <p class="eyebrow">Player Dashboard</p>
+                <h1>My Trainings</h1>
+            </div>
+            <a href="{{ url_for('home_player') }}" class="back-link" style="background: #0f172a; color: white; border-color: #0f172a;">← Back to Dashboard</a>
+        </header>
+
+        {% if trainings %}
+        <div class="table-card">
+            <table class="simple-table">
+                <thead>
+                    <tr>
+                        <th>Date & Time</th>
+                        <th>Location</th>
+                        <th>Focus</th>
+                        <th>Coach</th>
+                        <th>Team</th>
+                        <th>Attendance Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for training in trainings %}
+                    <tr>
+                        <td>
+                            <strong>{{ training.sessiondate|strftime('%Y-%m-%d') }}</strong><br>
+                            <span class="subtle">{{ training.sessiondate|strftime('%H:%M') }}</span>
+                        </td>
+                        <td>{{ training.location }}</td>
+                        <td>{{ training.focus }}</td>
+                        <td>{{ training.coachfirstname }} {{ training.coachlastname }}</td>
+                        <td>{{ training.teamname }}</td>
+                        <td>
+                            {% if training.attendancestatus is not none %}
+                                {% if training.attendancestatus == 1 %}
+                                    <span class="status-badge eligible">Attended</span>
+                                {% elif training.attendancestatus == 0 %}
+                                    <span class="status-badge ineligible">Absent</span>
+                                {% else %}
+                                    <span class="status-badge" style="background: #fef3c7; color: #92400e;">Pending</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="subtle">Not registered</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if training.sessiondate > now and training.attendancestatus is none %}
+                                <form method="POST" action="{{ url_for('update_training_attendance', session_id=training.sessionid) }}" style="display: inline-block; margin: 0;">
+                                    <input type="hidden" name="status" value="1">
+                                    <button type="submit" class="btn small solid" style="margin-right: 0.5rem;">Join</button>
+                                </form>
+                                <form method="POST" action="{{ url_for('update_training_attendance', session_id=training.sessionid) }}" style="display: inline-block; margin: 0;">
+                                    <input type="hidden" name="status" value="0">
+                                    <button type="submit" class="btn small ghost">Skip</button>
+                                </form>
+                            {% else %}
+                                <span class="subtle">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="card">
+            <p class="subtle">No training sessions found.</p>
+        </div>
+        {% endif %}
+    </main>
+</body>
+</html>
+

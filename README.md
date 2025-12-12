@@ -36,6 +36,36 @@ docker compose down -v
 ## Notes
 - All database interactions are implemented with raw SQL per project specification; no ORM is used.
 
-## Features
-- Superadmin can create tournaments and assign admins.
-- Admins and superadmins can delete tournaments from the tournament view; deletion also cleans up bracket matches safely.
+## User Roles & Functionalities
+
+### Superadmin
+- **Tournament Management**: Create tournaments with bracket generation and assign tournament admins
+- **League Management**: Create leagues with multiple seasons, assign teams, and assign admins to seasons
+- **Admin Assignment**: Assign admins to all seasons at once or individually per season
+- **Delete Operations**: Delete tournaments, leagues, and seasons with cascading cleanup
+
+### Admin / Tournament Admin
+- **Tournament Management**: View assigned tournaments and their bracket structures
+- **League Management**: View assigned leagues with teams, seasons, and matches
+- **Team Management**: Add/remove teams from leagues they manage
+- **Match Creation**: Create seasonal matches for leagues with validation (team availability, date conflicts)
+- **Referee Assignment**: Assign referees to tournament and league matches
+- **Match Locking**: Lock/unlock league matches to prevent modifications
+- **Match Filtering**: Filter all matches by season year (year only), league, or tournament
+- **Reports**: Generate and download player reports, league standings, and attendance reports as PDFs
+
+### Team Owner
+- View owned teams and their rosters
+- Manage team information
+
+### Coach
+- View team information
+- Manage training and player development
+
+### Player
+- View personal statistics and match history
+- View team and match information
+
+### Referee
+- View assigned matches
+- Access match details for officiating

@@ -6,11 +6,20 @@
     <title>Sports League | Team Owner Home</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
-<body class="auth-body">
-    <main class="auth-card">
+<body class="dashboard-body">
+    {% include "_banner.html" %}
+    <main class="dashboard-container">
+        <header class="admin-header">
+            <div>
+                <p class="eyebrow">Team Owner Console</p>
+                <h1>Team Owner Home</h1>
+            </div>
+            <div>
+                <a href="{{ url_for('owner.view_teams') }}" class="btn solid">My Teams</a>
+            </div>
+        </header>
         <section>
-            <h1>Team Owner Home</h1>
-            <p class="subtitle">Welcome, owner. Your dashboard will appear here.</p>
+            <p class="subtitle">Welcome, owner. Access your teams and manage transfers.</p>
         </section>
     </main>
 </body>

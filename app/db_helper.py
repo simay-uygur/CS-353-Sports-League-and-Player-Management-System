@@ -219,6 +219,214 @@ def fetch_all_positions():
     finally:
         conn.close()    
 
+        
+        
+def report_players(filters):
+    """
+    filters: {
+      all_players: bool,
+      currently_employed: bool,
+      player_id: int|None,
+      employed_before: datetime|None,
+      employed_after: datetime|None,
+      ended_before: datetime|None,
+      ended_after: datetime|None,
+    }
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            clauses = []
+            params = []
+
+            if filters.get("player_id"):
+                clauses.append("p.UsersID = %s")
+                params.append(filters["player_id"])
+
+            if filters.get("currently_employed"):
+                clauses.append("e.EndDate >= NOW()")
+
+            if filters.get("employed_before"):
+                clauses.append("e.StartDate <= %s")
+                params.append(filters["employed_before"])
+
+            if filters.get("employed_after"):
+                clauses.append("e.StartDate >= %s")
+                params.append(filters["employed_after"])
+
+            if filters.get("ended_before"):
+                clauses.append("e.EndDate <= %s")
+                params.append(filters["ended_before"])
+
+            if filters.get("ended_after"):
+                clauses.append("e.EndDate >= %s")
+                params.append(filters["ended_after"])
+
+            where_sql = " WHERE " + " AND ".join(clauses) if clauses else ""
+
+            cur.execute(
+                f"""
+                SELECT p.UsersID,
+                       u.FirstName,
+                       u.LastName,
+                       u.Email,
+                       p.Position,
+                       p.Height,
+                       p.Weight,
+                       e.StartDate,
+                       e.EndDate,
+                       t.TeamName
+                FROM Player p
+                JOIN Users u ON u.UsersID = p.UsersID
+                LEFT JOIN Employed em ON em.UsersID = p.UsersID
+                LEFT JOIN Employment e ON e.EmploymentID = em.EmploymentID
+                LEFT JOIN Team t ON t.TeamID = em.TeamID
+                {where_sql}
+                ORDER BY u.LastName, u.FirstName, e.StartDate NULLS LAST;
+                """,
+                tuple(params),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def report_league_standings(league_id, season_no, season_year):
+    """Simple standings: wins/draws/losses/points from SeasonalMatch scores."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT
+                    m.HomeTeamID,
+                    m.AwayTeamID,
+                    m.HomeTeamName,
+                    m.AwayTeamName,
+                    m.HomeTeamScore,
+                    m.AwayTeamScore
+                FROM Match m
+                JOIN SeasonalMatch sm ON m.MatchID = sm.MatchID
+                WHERE sm.LeagueID = %s AND sm.SeasonNo = %s AND sm.SeasonYear = %s
+                """,
+                (league_id, season_no, season_year),
+            )
+            rows = cur.fetchall()
+
+    finally:
+        conn.close()
+
+    stats = {}
+
+    def ensure(team_id, name):
+        if team_id not in stats:
+            stats[team_id] = {
+                "teamid": team_id,
+                "teamname": name,
+                "played": 0,
+                "wins": 0,
+                "draws": 0,
+                "losses": 0,
+                "gf": 0,
+                "ga": 0,
+                "points": 0,
+            }
+
+    for row in rows:
+        home_id = row["hometeamid"]
+        away_id = row["awayteamid"]
+        home_name = row["hometeamname"]
+        away_name = row["awayteamname"]
+        hs = row["hometeamscore"]
+        as_ = row["awayteamscore"]
+        if hs is None or as_ is None:
+            continue
+        ensure(home_id, home_name)
+        ensure(away_id, away_name)
+        stats[home_id]["played"] += 1
+        stats[away_id]["played"] += 1
+        stats[home_id]["gf"] += hs
+        stats[home_id]["ga"] += as_
+        stats[away_id]["gf"] += as_
+        stats[away_id]["ga"] += hs
+        if hs > as_:
+            stats[home_id]["wins"] += 1
+            stats[home_id]["points"] += 3
+            stats[away_id]["losses"] += 1
+        elif hs < as_:
+            stats[away_id]["wins"] += 1
+            stats[away_id]["points"] += 3
+            stats[home_id]["losses"] += 1
+        else:
+            stats[home_id]["draws"] += 1
+            stats[away_id]["draws"] += 1
+            stats[home_id]["points"] += 1
+            stats[away_id]["points"] += 1
+
+    return sorted(stats.values(), key=lambda s: (-s["points"], -(s["gf"] - s["ga"]), -s["wins"]))
+
+
+def report_player_attendance(date_from=None, date_to=None, player_id=None, team_id=None, all_teams=False):
+    """
+    Counts training attendance per player from TrainingAttendance table.
+    Filters by training session dates, optionally by player_id, team_id, or all teams.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            clauses = []
+            params = []
+            
+            # Base query joins TrainingAttendance with TrainingSession, Coach, Employee, Team, and Users
+            query = """
+                SELECT 
+                    u.UsersID AS PlayerID,
+                    u.FirstName,
+                    u.LastName,
+                    COUNT(*) AS appearances
+                FROM TrainingAttendance ta
+                JOIN TrainingSession ts ON ta.SessionID = ts.SessionID
+                JOIN Coach c ON ts.CoachID = c.UsersID
+                JOIN Employee e ON c.UsersID = e.UsersID
+                JOIN Team t ON e.TeamID = t.TeamID
+                JOIN Users u ON ta.PlayerID = u.UsersID
+                WHERE ta.Status = 1
+            """
+            
+            # Filter by training session date range
+            if date_from:
+                clauses.append("ts.SessionDate >= %s")
+                params.append(date_from)
+            
+            if date_to:
+                clauses.append("ts.SessionDate <= %s")
+                params.append(date_to)
+            
+            # Filter by specific player
+            if player_id:
+                clauses.append("ta.PlayerID = %s")
+                params.append(player_id)
+            
+            # Filter by team (unless all_teams is True)
+            if not all_teams and team_id:
+                clauses.append("t.TeamID = %s")
+                params.append(team_id)
+            
+            if clauses:
+                query += " AND " + " AND ".join(clauses)
+            
+            query += """
+                GROUP BY u.UsersID, u.FirstName, u.LastName
+                ORDER BY appearances DESC, u.LastName, u.FirstName;
+            """
+            
+            cur.execute(query, tuple(params))
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+        
+        
 def fetch_matches_grouped(tournament_id):
     """
     Fetch tournament bracket with all rounds (including those without matches).
@@ -269,18 +477,24 @@ def fetch_transferable_players(filters, coachid):
     try:
         name = filters.get("name")
         nationality = filters.get("nationality")
-        min_age = filters.get("min_age")
-        max_age = filters.get("max_age")
+        
+        min_age = None
+        max_age = None
+        if filters.get("min_age"):
+            min_age = int(filters.get("min_age"))
+        if filters.get("max_age"):
+            max_age = int(filters.get("max_age"))
         current_team = filters.get("team") 
         position = filters.get("position")
         contact_expiration_date = filters.get("contact_expiration_date")
 
         min_birthdate = None
         max_birthdate = None
-        if min_age and max_age:
-            today = date.today()
-            min_birthdate = date(today.year - max_age, today.month, today.day)
-            max_birthdate = date(today.year - min_age, today.month, today.day)
+        today = date.today()
+        if max_age:
+            max_birthdate= date(today.year - max_age, today.month, today.day)
+        if min_age:
+            min_birthdate = date(today.year - min_age, today.month, today.day)
 
         params = []
         conditions = []
@@ -305,7 +519,7 @@ def fetch_transferable_players(filters, coachid):
             conditions.append("u.birthdate >= %s")
             params.append(max_birthdate)
         if current_team:
-            conditions.append("aei.teamid = %s")
+            conditions.append("ce.teamid = %s")
             params.append(current_team)
         if position:
             conditions.append("p.position = %s")
@@ -489,6 +703,12 @@ def create_tournament_with_bracket(form_data, admin_id, moderator_ids=None):
 
                 leaf_match_ids = _build_bracket_tree(cur, tournament_id, team_ids, start_date)
 
+        # NOTE: Play rows are now created automatically via the database trigger
+        # trg_auto_create_plays_on_match_insert when matches are inserted.
+        # The following code is commented out as the trigger handles this:
+        # for match_id in leaf_match_ids:
+        #     create_plays_for_match_players_on_insert(match_id)
+
         return {"tournament_id": tournament_id, "match_ids": leaf_match_ids}
     finally:
         conn.close()        
@@ -647,6 +867,9 @@ def _build_bracket_tree(cur, tournament_id, team_ids, start_date):
             """,
             (match_id, tournament_id, leaf_round_no),
         )
+
+        # Seed Play rows for the tournament match (uses employment at match start)
+        create_plays_for_match_players_on_insert(match_id)
     
     return created_match_ids        
   
@@ -760,6 +983,7 @@ def _insert_play_rows_for_match(match_id, include_tournament_matches=False):
                     if cur.fetchone():
                         return 0
 
+                #checks also whether player is eligible _ _ _ at that date? or now  - i can delete is eligible 
                 cur.execute(
                     """
                     WITH active_players AS (
@@ -864,6 +1088,1491 @@ def _ensure_admin_record(cur, admin_id):
         """,
         (admin_id,),
     )
+
+
+def fetch_all_leagues():
+    """Fetch all leagues with their seasons."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT l.leagueid,
+                       l.name,
+                       s.seasonno,
+                       s.seasonyear,
+                       s.startdate,
+                       s.enddate,
+                       s.prizepool
+                FROM League l
+                LEFT JOIN Season s ON l.leagueid = s.leagueid
+                ORDER BY l.name, s.seasonyear DESC, s.seasonno DESC;
+                """
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_admin_leagues(admin_id):
+    """Fetch leagues and seasons moderated by a specific admin."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT l.leagueid,
+                       l.name,
+                       s.seasonno,
+                       s.seasonyear,
+                       s.startdate,
+                       s.enddate,
+                       s.prizepool
+                FROM SeasonModeration sm
+                JOIN Season s
+                    ON sm.leagueid = s.leagueid
+                    AND sm.seasonno = s.seasonno
+                    AND sm.seasonyear = s.seasonyear
+                JOIN League l ON l.leagueid = sm.leagueid
+                WHERE sm.adminid = %s
+                ORDER BY l.name, s.seasonyear DESC, s.seasonno DESC;
+                """,
+                (admin_id,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_league_by_id(league_id):
+    """Fetch a single league with all its seasons and admin assignments."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT l.leagueid,
+                       l.name,
+                       s.seasonno,
+                       s.seasonyear,
+                       s.startdate,
+                       s.enddate,
+                       s.prizepool,
+                       sm.adminid
+                FROM League l
+                LEFT JOIN Season s ON l.leagueid = s.leagueid
+                LEFT JOIN SeasonModeration sm ON l.leagueid = sm.leagueid 
+                    AND s.seasonno = sm.seasonno 
+                    AND s.seasonyear = sm.seasonyear
+                WHERE l.leagueid = %s
+                ORDER BY s.seasonyear DESC, s.seasonno DESC;
+                """,
+                (league_id,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_league_teams(league_id):
+    """Teams currently associated to a league."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT t.teamid, t.teamname
+                FROM LeagueTeam lt
+                JOIN Team t ON lt.teamid = t.teamid
+                WHERE lt.leagueid = %s
+                ORDER BY t.teamname;
+                """,
+                (league_id,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_league_available_teams(league_id):
+    """Teams not yet associated to this league."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT t.teamid, t.teamname
+                FROM Team t
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM LeagueTeam lt
+                    WHERE lt.teamid = t.teamid AND lt.leagueid = %s
+                )
+                ORDER BY t.teamname;
+                """,
+                (league_id,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def add_team_to_league(league_id, team_id):
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO LeagueTeam (LeagueID, TeamID)
+                    VALUES (%s, %s)
+                    ON CONFLICT DO NOTHING;
+                    """,
+                    (league_id, team_id),
+                )
+    finally:
+        conn.close()
+
+
+def delete_season(league_id, season_no, season_year):
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    DELETE FROM Season
+                    WHERE LeagueID = %s AND SeasonNo = %s AND SeasonYear = %s;
+                    """,
+                    (league_id, season_no, season_year),
+                )
+    finally:
+        conn.close()
+
+
+def delete_league(league_id):
+    """Delete a league and all associated data."""
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    DELETE FROM League
+                    WHERE LeagueID = %s;
+                    """,
+                    (league_id,),
+                )
+    finally:
+        conn.close()
+
+
+def create_season_match(league_id, season_no, season_year, home_team_id, away_team_id, start_dt, venue):
+    """Create a Match and link it to SeasonalMatch for the given season."""
+    if home_team_id == away_team_id:
+        raise ValueError("Home and away team cannot be the same.")
+
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO Match (
+                        HomeTeamID, AwayTeamID,
+                        MatchStartDatetime, MatchEndDatetime,
+                        VenuePlayed,
+                        HomeTeamName, AwayTeamName,
+                        HomeTeamScore, AwayTeamScore, WinnerTeam, IsLocked
+                    )
+                    SELECT %s, %s, %s, NULL, %s, ht.teamname, at.teamname, NULL, NULL, NULL, FALSE
+                    FROM Team ht, Team at
+                    WHERE ht.teamid = %s AND at.teamid = %s
+                    RETURNING MatchID;
+                    """,
+                    (home_team_id, away_team_id, start_dt, venue, home_team_id, away_team_id),
+                )
+                match_id = cur.fetchone()[0]
+
+                cur.execute(
+                    """
+                    INSERT INTO SeasonalMatch (MatchID, LeagueID, SeasonNo, SeasonYear)
+                    VALUES (%s, %s, %s, %s);
+                    """,
+                    (match_id, league_id, season_no, season_year),
+                )
+
+                return match_id
+    finally:
+        conn.close()
+
+
+def team_has_match_on_date(team_id, date_str):
+    """
+    Check if a team already has any match scheduled on the given date (YYYY-MM-DD).
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT 1
+                FROM Match
+                WHERE DATE(matchstartdatetime) = %s
+                  AND (hometeamid = %s OR awayteamid = %s)
+                LIMIT 1;
+                """,
+                (date_str, team_id, team_id),
+            )
+            return cur.fetchone() is not None
+    finally:
+        conn.close()
+
+
+def fetch_league_matches(league_id):
+    """All seasonal matches for a league with season info."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT m.matchid,
+                       m.hometeamname,
+                       m.awayteamname,
+                       m.matchstartdatetime,
+                       m.islocked,
+                       m.winnerteam,
+                       s.seasonno,
+                       s.seasonyear
+                FROM Match m
+                JOIN SeasonalMatch sm ON m.matchid = sm.matchid
+                JOIN Season s ON sm.leagueid = s.leagueid
+                    AND sm.seasonno = s.seasonno
+                    AND sm.seasonyear = s.seasonyear
+                WHERE sm.leagueid = %s
+                ORDER BY s.seasonyear DESC, s.seasonno DESC, m.matchstartdatetime DESC;
+                """,
+                (league_id,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+def create_league_with_seasons(league_name, seasons_data, team_ids=None):
+    """
+    Create a league and its seasons in a single transaction.
+    
+    seasons_data: List of dicts with keys:
+        - start_date: Start date (YYYY-MM-DD format)
+        - start_time: Start time (HH:MM format)
+        - end_date: End date (YYYY-MM-DD format)
+        - end_time: End time (HH:MM format)
+        - prize_pool: Prize pool amount (int)
+    
+    team_ids: List of team IDs to associate with this league (optional)
+    
+    Returns: {'league_id': int}
+    """
+    if not league_name or not league_name.strip():
+        raise ValueError("League name is required.")
+    
+    if not seasons_data:
+        raise ValueError("At least one season is required.")
+    
+    validated_seasons = []
+    for i, season in enumerate(seasons_data):
+        season_no = i + 1
+        start_date_str = season.get("start_date", "").strip()
+        start_time_str = season.get("start_time", "00:00").strip()
+        end_date_str = season.get("end_date", "").strip()
+        end_time_str = season.get("end_time", "23:59").strip()
+        prize_pool = season.get("prize_pool", 0)
         
+        if not start_date_str or not end_date_str:
+            raise ValueError(f"Season {season_no}: Start date and end date are required.")
         
+        try:
+            start_datetime = datetime.strptime(f"{start_date_str} {start_time_str}", "%Y-%m-%d %H:%M")
+            end_datetime = datetime.strptime(f"{end_date_str} {end_time_str}", "%Y-%m-%d %H:%M")
+        except ValueError:
+            raise ValueError(f"Season {season_no}: Invalid date or time format. Use YYYY-MM-DD for dates and HH:MM for times.")
+        
+        if start_datetime >= end_datetime:
+            raise ValueError(f"Season {season_no}: Start datetime must be before end datetime.")
+        
+        if int(prize_pool) <= 0:
+            raise ValueError(f"Season {season_no}: Prize pool must be greater than 0.")
+        
+        validated_seasons.append({
+            "season_no": season_no,
+            "season_year": start_datetime.date(),
+            "start_datetime": start_datetime,
+            "end_datetime": end_datetime,
+            "prize_pool": int(prize_pool),
+        })
+
+    # Ensure seasons do not overlap
+    sorted_seasons = sorted(validated_seasons, key=lambda s: s["start_datetime"])
+    for i in range(len(sorted_seasons) - 1):
+        current = sorted_seasons[i]
+        nxt = sorted_seasons[i + 1]
+        if current["end_datetime"] > nxt["start_datetime"]:
+            raise ValueError(
+                f"Season {current['season_no']} and Season {nxt['season_no']} overlap. "
+                "Please adjust the start/end dates and times."
+            )
+    
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                # Insert league
+                cur.execute(
+                    """
+                    INSERT INTO League (Name)
+                    VALUES (%s)
+                    RETURNING LeagueID;
+                    """,
+                    (league_name.strip(),),
+                )
+                league_id = cur.fetchone()[0]
+                
+                # Insert seasons using validated data
+                for season in validated_seasons:
+                    cur.execute(
+                        """
+                        INSERT INTO Season (LeagueID, SeasonNo, SeasonYear, StartDate, EndDate, PrizePool)
+                        VALUES (%s, %s, %s, %s, %s, %s);
+                        """,
+                        (
+                            league_id,
+                            season["season_no"],
+                            season["season_year"],
+                            season["start_datetime"],
+                            season["end_datetime"],
+                            season["prize_pool"],
+                        ),
+                    )
+                
+                # Insert team-league associations if provided
+                if team_ids:
+                    for team_id in team_ids:
+                        cur.execute(
+                            """
+                            INSERT INTO LeagueTeam (LeagueID, TeamID)
+                            VALUES (%s, %s);
+                            """,
+                            (league_id, int(team_id)),
+                        )
+        
+        return {"league_id": league_id}
+    finally:
+        conn.close()
+
+
+def assign_admins_to_season(league_id, season_no, season_year, admin_ids):
+    """
+    Assign admins to a specific season.
+    Replaces all existing admin assignments for that season.
+    
+    admin_ids: List of admin user IDs
+    """
+    if not admin_ids:
+        raise ValueError("At least one admin must be assigned.")
+    
+    admin_ids = [int(aid) for aid in admin_ids if aid]
+    admin_ids = list(dict.fromkeys(admin_ids))  # Remove duplicates
+    
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                # Ensure all admins exist in Admin table
+                for admin_id in admin_ids:
+                    _ensure_admin_record(cur, admin_id)
+                
+                # Delete existing assignments for this season
+                cur.execute(
+                    """
+                    DELETE FROM SeasonModeration
+                    WHERE LeagueID = %s AND SeasonNo = %s AND SeasonYear = %s;
+                    """,
+                    (league_id, season_no, season_year),
+                )
+                
+                # Insert new assignments
+                for admin_id in admin_ids:
+                    cur.execute(
+                        """
+                        INSERT INTO SeasonModeration (LeagueID, SeasonNo, SeasonYear, AdminID)
+                        VALUES (%s, %s, %s, %s);
+                        """,
+                        (league_id, season_no, season_year, admin_id),
+                    )
+    finally:
+        conn.close()
+
+
+def assign_same_admins_to_all_seasons(league_id, admin_ids):
+    """
+    Assign the same set of admins to all seasons of a league.
+    Replaces all existing admin assignments for all seasons.
+    """
+    if not admin_ids:
+        raise ValueError("At least one admin must be assigned.")
+    
+    admin_ids = [int(aid) for aid in admin_ids if aid]
+    admin_ids = list(dict.fromkeys(admin_ids))  # Remove duplicates
+    
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Ensure all admins exist in Admin table
+                for admin_id in admin_ids:
+                    _ensure_admin_record(cur, admin_id)
+                
+                # Get all seasons for this league
+                cur.execute(
+                    """
+                    SELECT seasonno, seasonyear
+                    FROM Season
+                    WHERE leagueid = %s;
+                    """,
+                    (league_id,),
+                )
+                seasons = cur.fetchall()
+                
+                if not seasons:
+                    raise ValueError("League has no seasons.")
+                
+                # Delete existing assignments for this league
+                cur.execute(
+                    """
+                    DELETE FROM SeasonModeration
+                    WHERE LeagueID = %s;
+                    """,
+                    (league_id,),
+                )
+                
+                # Insert new assignments for all seasons
+                for season in seasons:
+                    for admin_id in admin_ids:
+                        cur.execute(
+                            """
+                            INSERT INTO SeasonModeration (LeagueID, SeasonNo, SeasonYear, AdminID)
+                            VALUES (%s, %s, %s, %s);
+                            """,
+                            (league_id, season["seasonno"], season["seasonyear"], admin_id),
+                        )
+    finally:
+        conn.close()
+
+
+def fetch_available_coaches():
+    """Fetch coaches who don't have a team assigned (TeamID IS NULL)."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT 
+                    c.UsersID,
+                    u.FirstName,
+                    u.LastName,
+                    u.Email,
+                    c.Certification
+                FROM Coach c
+                JOIN Users u ON c.UsersID = u.UsersID
+                JOIN Employee e ON c.UsersID = e.UsersID
+                WHERE e.TeamID IS NULL
+                ORDER BY u.LastName, u.FirstName;
+                """,
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_all_coaches():
+    """Fetch all coaches with their current team info."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT 
+                    c.UsersID,
+                    u.FirstName,
+                    u.LastName,
+                    u.Email,
+                    c.Certification,
+                    e.TeamID,
+                    t.TeamName
+                FROM Coach c
+                JOIN Users u ON c.UsersID = u.UsersID
+                JOIN Employee e ON c.UsersID = e.UsersID
+                LEFT JOIN Team t ON e.TeamID = t.TeamID
+                ORDER BY u.LastName, u.FirstName;
+                """,
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def employ_coach_to_team(coach_id, team_id, owner_id):
+    """
+    Assign a coach to a team. Validates that:
+    - Coach exists
+    - Team belongs to the owner
+    - Ends previous coach's employment (sets their TeamID to NULL)
+    - Updates new coach's Employee.TeamID
+    """
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                # Verify team belongs to owner
+                cur.execute(
+                    """
+                    SELECT TeamID FROM Team WHERE TeamID = %s AND OwnerID = %s;
+                    """,
+                    (team_id, owner_id),
+                )
+                if not cur.fetchone():
+                    raise ValueError("Team does not belong to you.")
+                
+                # Verify coach exists
+                cur.execute(
+                    """
+                    SELECT e.UsersID, e.TeamID
+                    FROM Employee e
+                    JOIN Coach c ON e.UsersID = c.UsersID
+                    WHERE e.UsersID = %s;
+                    """,
+                    (coach_id,),
+                )
+                coach_row = cur.fetchone()
+                if not coach_row:
+                    raise ValueError("Coach not found.")
+                
+                # Find current coach for this team and end their employment
+                cur.execute(
+                    """
+                    SELECT e.UsersID
+                    FROM Employee e
+                    JOIN Coach c ON e.UsersID = c.UsersID
+                    WHERE e.TeamID = %s;
+                    """,
+                    (team_id,),
+                )
+                current_coach_row = cur.fetchone()
+                if current_coach_row and current_coach_row[0] != coach_id:
+                    # End previous coach's employment
+                    cur.execute(
+                        """
+                        UPDATE Employee
+                        SET TeamID = NULL
+                        WHERE UsersID = %s;
+                        """,
+                        (current_coach_row[0],),
+                    )
+                
+                # Assign new coach to team
+                cur.execute(
+                    """
+                    UPDATE Employee
+                    SET TeamID = %s
+                    WHERE UsersID = %s;
+                    """,
+                    (team_id, coach_id),
+                )
+                
+                if cur.rowcount == 0:
+                    raise ValueError("Failed to assign coach to team.")
+    finally:
+        conn.close()
+
+
+def fetch_all_referees():
+    """Fetch all referees."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT r.usersid,
+                       u.firstname,
+                       u.lastname,
+                       u.email
+                FROM Referee r
+                JOIN Users u ON r.usersid = u.usersid
+                ORDER BY u.lastname, u.firstname;
+                """
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_team_players(team_id):
+    """Fetch all players currently on a team."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT 
+                    u.UsersID,
+                    u.FirstName,
+                    u.LastName,
+                    u.Email,
+                    p.Position,
+                    p.Height,
+                    p.Weight,
+                    p.Overall
+                FROM Employee e
+                JOIN Player p ON e.UsersID = p.UsersID
+                JOIN Users u ON e.UsersID = u.UsersID
+                WHERE e.TeamID = %s
+                ORDER BY u.LastName, u.FirstName;
+                """,
+                (team_id,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_team_by_coach(coach_id):
+    """Return the team assigned to the given coach."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT t.TeamID, t.TeamName, t.EstablishedDate, t.HomeVenue, t.OwnerID,
+                       u.FirstName as OwnerFirstName, u.LastName as OwnerLastName, u.Email as OwnerEmail
+                FROM Employee e
+                JOIN Team t ON e.TeamID = t.TeamID
+                JOIN TeamOwner to_owner ON t.OwnerID = to_owner.UsersID
+                JOIN Users u ON to_owner.UsersID = u.UsersID
+                WHERE e.UsersID = %s AND e.TeamID IS NOT NULL;
+                """,
+                (coach_id,),
+            )
+            return cur.fetchone()
+    finally:
+        conn.close()
+
+
+def fetch_teams_by_owner(owner_id):
+    """Return teams owned by the given owner."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT TeamID, TeamName, EstablishedDate, HomeVenue
+                FROM Team
+                WHERE OwnerID = %s
+                ORDER BY TeamName;
+                """,
+                (owner_id,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_other_team_owners(current_owner_id):
+    """Return other owners who don't have teams (available for transfer)."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT towner.UsersID,
+                       u.FirstName,
+                       u.LastName,
+                       u.Email,
+                       towner.NetWorth
+                FROM TeamOwner towner
+                JOIN Users u ON u.UsersID = towner.UsersID
+                LEFT JOIN Team t ON t.OwnerID = towner.UsersID
+                WHERE towner.UsersID <> %s
+                  AND t.TeamID IS NULL
+                ORDER BY u.LastName, u.FirstName;
+                """,
+                (current_owner_id,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def transfer_team_owner(team_id, current_owner_id, new_owner_id):
+    """Transfer ownership of a team to a different owner."""
+    if current_owner_id == new_owner_id:
+        raise ValueError("New owner must be different.")
+
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                # Verify team belongs to current owner
+                cur.execute(
+                    """
+                    SELECT TeamID FROM Team WHERE TeamID = %s AND OwnerID = %s;
+                    """,
+                    (team_id, current_owner_id),
+                )
+                if not cur.fetchone():
+                    raise ValueError("Transfer failed; team not owned by current owner.")
+                
+                # Check if new owner already has a team
+                cur.execute(
+                    """
+                    SELECT TeamID, TeamName FROM Team WHERE OwnerID = %s;
+                    """,
+                    (new_owner_id,),
+                )
+                existing_team = cur.fetchone()
+                if existing_team:
+                    raise ValueError(f"Transfer failed; the new owner already owns a team ({existing_team[1]}). Each owner can only own one team.")
+                
+                # Perform the transfer
+                cur.execute(
+                    """
+                    UPDATE Team
+                    SET OwnerID = %s
+                    WHERE TeamID = %s AND OwnerID = %s;
+                    """,
+                    (new_owner_id, team_id, current_owner_id),
+                )
+                if cur.rowcount == 0:
+                    raise ValueError("Transfer failed; team not owned by current owner.")
+    finally:
+        conn.close()
+
+def fetch_admin_tournament_matches(admin_id):
+    """
+    Fetch all tournament and seasonal matches that this admin manages.
+    Returns matches with their basic info and any assigned referees.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT
+                       m.matchid,
+                       m.hometeamname,
+                       m.awayteamname,
+                       m.matchstartdatetime,
+                       m.matchenddatetime,
+                       m.hometeamscore,
+                       m.awayteamscore,
+                       m.winnerteam,
+                       m.islocked,
+                       CASE 
+                           WHEN tm.matchid IS NOT NULL THEN 'tournament'
+                           WHEN sm.matchid IS NOT NULL THEN 'seasonal'
+                           ELSE 'unknown'
+                       END as match_type,
+                       t.tournamentid,
+                       t.name as tournament_name,
+                       l.leagueid,
+                       l.name as league_name
+                FROM Match m
+                LEFT JOIN TournamentMatch tm ON m.matchid = tm.matchid
+                LEFT JOIN Tournament t ON t.tournamentid = (
+                    SELECT tournamentid FROM Round WHERE t_matchid = m.matchid
+                )
+                LEFT JOIN SeasonalMatch sm ON m.matchid = sm.matchid
+                LEFT JOIN League l ON sm.leagueid = l.leagueid
+                WHERE t.tournamentid IN (
+                    SELECT t_id FROM TournamentModeration WHERE adminid = %s
+                ) OR sm.leagueid IN (
+                    SELECT leagueid FROM SeasonModeration WHERE adminid = %s
+                )
+                ORDER BY m.matchstartdatetime DESC;
+                """,
+                (admin_id, admin_id),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_match_with_referees(match_id):
+    """Fetch a specific match with its assigned referees."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT m.matchid,
+                       m.hometeamname,
+                       m.awayteamname,
+                       m.matchstartdatetime,
+                       m.matchenddatetime,
+                       m.hometeamscore,
+                       m.awayteamscore,
+                       m.winnerteam,
+                       m.islocked,
+                       CASE 
+                           WHEN tm.matchid IS NOT NULL THEN 'tournament'
+                           WHEN sm.matchid IS NOT NULL THEN 'seasonal'
+                           ELSE 'unknown'
+                       END as match_type
+                FROM Match m
+                LEFT JOIN TournamentMatch tm ON m.matchid = tm.matchid
+                LEFT JOIN SeasonalMatch sm ON m.matchid = sm.matchid
+                WHERE m.matchid = %s;
+                """,
+                (match_id,),
+            )
+            match = cur.fetchone()
+            
+            if not match:
+                return None
+            
+            # Fetch assigned referees for this match
+            cur.execute(
+                """
+                SELECT r.usersid,
+                       u.firstname,
+                       u.lastname,
+                       u.email
+                FROM RefereeMatchAttendance rma
+                JOIN Referee r ON rma.refereeid = r.usersid
+                JOIN Users u ON r.usersid = u.usersid
+                WHERE rma.matchid = %s
+                ORDER BY u.lastname, u.firstname;
+                """,
+                (match_id,),
+            )
+            match_dict = dict(match)
+            match_dict["referees"] = cur.fetchall()
+            return match_dict
+    finally:
+        conn.close()
+
+
+def assign_referee_to_match(match_id, referee_id):
+    """Assign a referee to a match (in RefereeMatchAttendance)."""
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO RefereeMatchAttendance (MatchID, RefereeID)
+                    VALUES (%s, %s)
+                    ON CONFLICT DO NOTHING;
+                    """,
+                    (match_id, referee_id),
+                )
+    finally:
+        conn.close()
+
+
+def remove_referee_from_match(match_id, referee_id):
+    """Remove a referee from a match."""
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    DELETE FROM RefereeMatchAttendance
+                    WHERE MatchID = %s AND RefereeID = %s;
+                    """,
+                    (match_id, referee_id),
+                )
+    finally:
+        conn.close()
+
+
+def finalize_tournament_match_from_plays(match_id):
+    """
+    Recompute scores for a tournament match from Play rows, set winner, and lock the match.
+    Seasonal matches are ignored (handled by DB triggers elsewhere).
+    Returns True if the match was updated, False otherwise.
+    """
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT m.matchid,
+                           m.hometeamid,
+                           m.awayteamid,
+                           m.matchstartdatetime
+                    FROM Match m
+                    JOIN TournamentMatch tm ON tm.matchid = m.matchid
+                    WHERE m.matchid = %s;
+                    """,
+                    (match_id,),
+                )
+                match = cur.fetchone()
+                if not match:
+                    return False
+
+                match_start = match["matchstartdatetime"]
+                home_team_id = match["hometeamid"]
+                away_team_id = match["awayteamid"]
+
+                def _score_for_team(team_id):
+                    cur.execute(
+                        """
+                        SELECT COALESCE(SUM(COALESCE(pl.GoalsScored, 0) + COALESCE(pl.PenaltiesScored, 0)), 0) AS goals
+                        FROM Play pl
+                        JOIN Employed em ON em.UsersID = pl.PlayerID
+                        JOIN Employment e ON e.EmploymentID = em.EmploymentID
+                        WHERE pl.MatchID = %s
+                          AND em.TeamID = %s
+                          AND e.StartDate <= %s
+                          AND e.EndDate >= %s;
+                        """,
+                        (match_id, team_id, match_start, match_start),
+                    )
+                    row = cur.fetchone()
+                    return row["goals"] if row and row["goals"] is not None else 0
+
+                home_score = _score_for_team(home_team_id)
+                away_score = _score_for_team(away_team_id)
+
+                winner_team = None
+                if home_score > away_score:
+                    winner_team = home_team_id
+                elif away_score > home_score:
+                    winner_team = away_team_id
+
+                cur.execute(
+                    """
+                    UPDATE Match
+                    SET HomeTeamScore = %s,
+                        AwayTeamScore = %s,
+                        WinnerTeam = %s,
+                        IsLocked = TRUE
+                    WHERE MatchID = %s;
+                    """,
+                    (home_score, away_score, winner_team, match_id),
+                )
+                return True
+    finally:
+        conn.close()
+
+
+def fetch_seasonal_matches_for_admin(admin_id):
+    """
+    Fetch all seasonal matches that this admin manages (for locking/unlocking).
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT m.matchid,
+                       m.hometeamname,
+                       m.awayteamname,
+                       m.matchstartdatetime,
+                       m.hometeamscore,
+                       m.awayteamscore,
+                       m.islocked,
+                       l.leagueid,
+                       l.name as league_name,
+                       s.seasonno,
+                       s.seasonyear
+                FROM Match m
+                JOIN SeasonalMatch sm ON m.matchid = sm.matchid
+                JOIN Season s ON sm.leagueid = s.leagueid 
+                    AND sm.seasonno = s.seasonno 
+                    AND sm.seasonyear = s.seasonyear
+                JOIN League l ON s.leagueid = l.leagueid
+                JOIN SeasonModeration smod ON s.leagueid = smod.leagueid 
+                    AND s.seasonno = smod.seasonno 
+                    AND s.seasonyear = smod.seasonyear
+                WHERE smod.adminid = %s
+                ORDER BY m.matchstartdatetime DESC;
+                """,
+                (admin_id,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def toggle_match_lock(match_id, lock_state):
+    """Toggle the lock state of a match."""
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE Match
+                    SET IsLocked = %s
+                    WHERE MatchID = %s;
+                    """,
+                    (lock_state, match_id),
+                )
+    finally:
+        conn.close()
+
+        
+def fetch_seasons_for_dropdown():
+    """Fetch distinct season years for dropdown."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT EXTRACT(YEAR FROM SeasonYear)::INT AS seasonyear
+                FROM Season
+                ORDER BY seasonyear DESC;
+                """
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_leagues_for_dropdown():
+    """Fetch all leagues for dropdown."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT leagueid, name AS leaguename
+                FROM League
+                ORDER BY name;
+                """
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_tournaments_for_dropdown():
+    """Fetch all tournaments for dropdown."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT tournamentid, name AS tournamentname
+                FROM Tournament
+                ORDER BY name;
+                """
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_all_matches_with_filters(admin_id, season_year=None, league_id=None, tournament_id=None):
+    """
+    Fetch all matches (league and tournament) that the admin can manage,
+    with optional filters for season year, league, or tournament.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Build the query dynamically based on filters
+            query = """
+                -- League matches (seasonal matches)
+                SELECT DISTINCT
+                    m.matchid,
+                    m.hometeamname,
+                    m.awayteamname,
+                    m.matchstartdatetime,
+                    m.hometeamscore,
+                    m.awayteamscore,
+                    m.islocked,
+                    'league' as match_type,
+                    l.leagueid,
+                    l.name as league_name,
+                    s.seasonno,
+                    s.seasonyear,
+                    NULL::INT as tournamentid,
+                    NULL::VARCHAR as tournament_name
+                FROM Match m
+                JOIN SeasonalMatch sm ON m.matchid = sm.matchid
+                JOIN Season s ON sm.leagueid = s.leagueid 
+                    AND sm.seasonno = s.seasonno 
+                    AND sm.seasonyear = s.seasonyear
+                JOIN League l ON s.leagueid = l.leagueid
+                JOIN SeasonModeration smod ON s.leagueid = smod.leagueid 
+                    AND s.seasonno = smod.seasonno 
+                    AND s.seasonyear = smod.seasonyear
+                WHERE smod.adminid = %s
+            """
+            params = [admin_id]
+            
+            if season_year:
+                query += " AND EXTRACT(YEAR FROM s.seasonyear) = %s"
+                params.append(season_year)
+            
+            if league_id:
+                query += " AND l.leagueid = %s"
+                params.append(int(league_id))
+            
+            query += """
+                UNION ALL
+                
+                -- Tournament matches
+                SELECT DISTINCT
+                    m.matchid,
+                    m.hometeamname,
+                    m.awayteamname,
+                    m.matchstartdatetime,
+                    m.hometeamscore,
+                    m.awayteamscore,
+                    m.islocked,
+                    'tournament' as match_type,
+                    NULL::INT as leagueid,
+                    NULL::VARCHAR as league_name,
+                    NULL::INT as seasonno,
+                    NULL::DATE as seasonyear,
+                    t.tournamentid,
+                    t.name as tournament_name
+                FROM Match m
+                JOIN TournamentMatch tm ON m.matchid = tm.matchid
+                JOIN Round r ON r.t_matchid = tm.matchid
+                JOIN Tournament t ON r.tournamentid = t.tournamentid
+                JOIN TournamentModeration tmod ON t.tournamentid = tmod.t_id
+                WHERE tmod.adminid = %s
+            """
+            params.append(admin_id)
+            
+            if tournament_id:
+                query += " AND t.tournamentid = %s"
+                params.append(int(tournament_id))
+            
+            query += " ORDER BY matchstartdatetime DESC;"
+            
+            cur.execute(query, params)
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def toggle_league_match_lock_by_admin(match_id, admin_id):
+    """
+    Toggle lock/unlock for a league match with admin permission check.
+    Returns the number of rows affected (0 if no permission, 1 if successful).
+    """
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                # Try to update league match
+                cur.execute(
+                    """
+                    UPDATE Match M1
+                    SET IsLocked = NOT IsLocked
+                    WHERE EXISTS (
+                        SELECT 1
+                        FROM SeasonModeration SMo1
+                        JOIN Season S1 USING (LeagueID, SeasonNo, SeasonYear)
+                        JOIN SeasonalMatch SMa1 USING (LeagueID, SeasonNo, SeasonYear)
+                        WHERE SMa1.MatchID = %s
+                        AND M1.MatchID = SMa1.MatchID
+                        AND SMo1.AdminID = %s
+                    );
+                    """,
+                    (match_id, admin_id),
+                )
+                rows_affected = cur.rowcount
+                return rows_affected
+    finally:
+        conn.close()
+
+
+def toggle_tournament_match_lock_by_admin(match_id, admin_id):
+    """
+    Toggle lock/unlock for a tournament match with admin permission check.
+    Returns the number of rows affected (0 if no permission, 1 if successful).
+    NOTE: Based on requirements, tournament matches should NOT be locked via this page.
+    This method is provided for completeness but may not be used.
+    """
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                # Try to update tournament match
+                cur.execute(
+                    """
+                    UPDATE Match M1
+                    SET IsLocked = NOT IsLocked
+                    WHERE EXISTS (
+                        SELECT 1
+                        FROM TournamentModeration TMOD
+                        JOIN Tournament T ON TMOD.T_ID = T.TournamentID
+                        JOIN Round R ON T.TournamentID = R.TournamentID
+                        JOIN TournamentMatch TM ON R.T_MatchID = TM.MatchID
+                        WHERE TM.MatchID = %s
+                        AND M1.MatchID = TM.MatchID
+                        AND TMOD.AdminID = %s
+                    );
+                    """,
+                    (match_id, admin_id),
+                )
+                rows_affected = cur.rowcount
+                return rows_affected
+    finally:
+        conn.close()
+
+
+def fetch_player_stats_all(player_id):
+    """Fetch overall statistics for a player from PlayerStatsAll view."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT *
+                FROM PlayerStatsAll
+                WHERE UsersID = %s;
+                """,
+                (player_id,),
+            )
+            return cur.fetchone()
+    finally:
+        conn.close()
+
+
+def fetch_player_season_stats(player_id, league_id=None, season_no=None, season_year=None):
+    """
+    Fetch season-specific statistics for a player.
+    If all parameters are provided, returns stats for that specific season.
+    If only player_id is provided, returns all seasons the player participated in.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            query = """
+                SELECT *
+                FROM PlayerSeasonStats
+                WHERE UsersID = %s
+            """
+            params = [player_id]
+            
+            if league_id is not None:
+                query += " AND LeagueID = %s"
+                params.append(league_id)
+            
+            if season_no is not None:
+                query += " AND SeasonNo = %s"
+                params.append(season_no)
+            
+            if season_year is not None:
+                query += " AND SeasonYear = %s"
+                params.append(season_year)
+            
+            query += " ORDER BY SeasonYear DESC, SeasonNo DESC, Name;"
+            
+            cur.execute(query, params)
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_player_tournament_stats(player_id):
+    """Fetch tournament statistics for a player from PlayerTournamentStats view."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT *
+                FROM PlayerTournamentStats
+                WHERE UsersID = %s
+                ORDER BY TournamentID DESC;
+                """,
+                (player_id,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_player_available_seasons(player_id):
+    """Fetch distinct league/season combinations that a player has participated in."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT
+                    LeagueID,
+                    Name AS LeagueName,
+                    SeasonNo,
+                    SeasonYear
+                FROM PlayerSeasonStats
+                WHERE UsersID = %s
+                ORDER BY SeasonYear DESC, SeasonNo DESC, Name;
+                """,
+                (player_id,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_player_available_leagues(player_id):
+    """Fetch distinct leagues that a player has participated in."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT
+                    LeagueID,
+                    Name AS LeagueName
+                FROM PlayerSeasonStats
+                WHERE UsersID = %s
+                ORDER BY Name;
+                """,
+                (player_id,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_player_trainings(player_id):
+    """
+    Fetch all training sessions for a player, including attendance status.
+    Returns trainings from coaches on the same team, ordered by date (upcoming first).
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT 
+                    TS.SessionID,
+                    TS.SessionDate,
+                    TS.Location,
+                    TS.Focus,
+                    TS.CoachID,
+                    UC.FirstName AS CoachFirstName,
+                    UC.LastName AS CoachLastName,
+                    TA.Status AS AttendanceStatus,
+                    T.TeamID,
+                    T.TeamName
+                FROM TrainingSession TS
+                JOIN Coach CO ON TS.CoachID = CO.UsersID
+                JOIN Employee E ON CO.UsersID = E.UsersID
+                JOIN Team T ON E.TeamID = T.TeamID
+                JOIN Users UC ON CO.UsersID = UC.UsersID
+                LEFT JOIN TrainingAttendance TA ON TS.SessionID = TA.SessionID AND TA.PlayerID = %s
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM Employee E2
+                    WHERE E2.UsersID = %s
+                    AND E2.TeamID = T.TeamID
+                )
+                ORDER BY TS.SessionDate DESC;
+                """,
+                (player_id, player_id),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_player_offers(player_id):
+    """
+    Fetch all offers and invites for a player.
+    Returns offers ordered by date (newest first).
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT 
+                    O.OfferID,
+                    O.OfferDate,
+                    O.AvailableUntil,
+                    O.OfferStatus,
+                    O.RequestingCoach,
+                    RC.FirstName AS RequestingCoachFirstName,
+                    RC.LastName AS RequestingCoachLastName,
+                    O.ResponsibleCoach,
+                    RSC.FirstName AS ResponsibleCoachFirstName,
+                    RSC.LastName AS ResponsibleCoachLastName,
+                    E.TeamID,
+                    T.TeamName
+                FROM Offer O
+                JOIN Coach C ON O.RequestingCoach = C.UsersID
+                JOIN Employee E ON C.UsersID = E.UsersID
+                JOIN Team T ON E.TeamID = T.TeamID
+                JOIN Users RC ON O.RequestingCoach = RC.UsersID
+                LEFT JOIN Users RSC ON O.ResponsibleCoach = RSC.UsersID
+                WHERE O.RequestedPlayer = %s
+                ORDER BY O.OfferDate DESC;
+                """,
+                (player_id,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def update_training_attendance(player_id, session_id, status):
+    """
+    Update or insert training attendance for a player.
+    Status: 1 = Attended/Joined, 0 = Skipped/Absent
+    """
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                # Check if training session exists and is in the future
+                cur.execute(
+                    """
+                    SELECT SessionDate FROM TrainingSession WHERE SessionID = %s;
+                    """,
+                    (session_id,),
+                )
+                session_row = cur.fetchone()
+                if not session_row:
+                    raise ValueError("Training session not found.")
+                
+                # Verify player is on the same team as the coach
+                cur.execute(
+                    """
+                    SELECT 1
+                    FROM TrainingSession ts
+                    JOIN Coach c ON ts.CoachID = c.UsersID
+                    JOIN Employee e_coach ON c.UsersID = e_coach.UsersID
+                    JOIN Employee e_player ON e_player.UsersID = %s
+                    WHERE ts.SessionID = %s
+                    AND e_coach.TeamID = e_player.TeamID;
+                    """,
+                    (player_id, session_id),
+                )
+                if not cur.fetchone():
+                    raise ValueError("You are not on the same team as this training's coach.")
+                
+                # Insert or update attendance
+                cur.execute(
+                    """
+                    INSERT INTO TrainingAttendance (SessionID, PlayerID, Status)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (SessionID, PlayerID)
+                    DO UPDATE SET Status = EXCLUDED.Status;
+                    """,
+                    (session_id, player_id, status),
+                )
+    finally:
+        conn.close()
         
