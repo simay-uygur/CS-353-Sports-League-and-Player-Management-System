@@ -269,18 +269,24 @@ def fetch_transferable_players(filters, coachid):
     try:
         name = filters.get("name")
         nationality = filters.get("nationality")
-        min_age = filters.get("min_age")
-        max_age = filters.get("max_age")
+        
+        min_age = None
+        max_age = None
+        if filters.get("min_age"):
+            min_age = int(filters.get("min_age"))
+        if filters.get("max_age"):
+            max_age = int(filters.get("max_age"))
         current_team = filters.get("team") 
         position = filters.get("position")
         contact_expiration_date = filters.get("contact_expiration_date")
 
         min_birthdate = None
         max_birthdate = None
-        if min_age and max_age:
-            today = date.today()
-            min_birthdate = date(today.year - max_age, today.month, today.day)
-            max_birthdate = date(today.year - min_age, today.month, today.day)
+        today = date.today()
+        if max_age:
+            max_birthdate= date(today.year - max_age, today.month, today.day)
+        if min_age:
+            min_birthdate = date(today.year - min_age, today.month, today.day)
 
         params = []
         conditions = []
@@ -305,7 +311,7 @@ def fetch_transferable_players(filters, coachid):
             conditions.append("u.birthdate >= %s")
             params.append(max_birthdate)
         if current_team:
-            conditions.append("aei.teamid = %s")
+            conditions.append("ce.teamid = %s")
             params.append(current_team)
         if position:
             conditions.append("p.position = %s")
