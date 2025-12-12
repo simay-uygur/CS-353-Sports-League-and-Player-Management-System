@@ -22,10 +22,11 @@
     <tbody>
       {% for transfer_offer in transfer_offers %}
       <tr>
-        <td>{{ transfer_offer['playername'] }}</td>
-        <td>{{ transfer_offer['offeringteam']}}</td>
+        <td>{{ transfer_offer['firstname'] }} {{ transfer_offer['lastname'] }}</td>
+        <td>{{ transfer_offer['teamname']}}</td>
         <td>{{ transfer_offer['offeramount']}}</td>
-        <td>{{ transfer_offer['availableuntil']}}</td>
+        <td>{{ transfer_offer['availableuntil'] }}</td>
+        <td>{{ transfer_offer['offeredenddate'] }}</td>
         <td><form name="decide_offer" action="{{ url_for('coach.evaluate_transfer_offer', offerid=transfer_offer['offerid']) }}" method="post">
           <button type="submit" name="decision" value="accept">Accept</button>
           <button type="submit" name="decision" value="reject">Reject</button>

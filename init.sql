@@ -252,7 +252,8 @@ CREATE TABLE Offer (
   RequestedPlayer INT NOT NULL,
   OfferedEndDate TIMESTAMP NOT NULL,
   AvailableUntil TIMESTAMP NOT NULL,
-  OfferStatus INT NOT NULL,
+  OfferAmount INT NOT NULL,
+  OfferStatus BOOLEAN,
   PRIMARY KEY (OfferID),
   FOREIGN KEY (RequestingCoach) REFERENCES Coach(UsersID) ON DELETE CASCADE,
   FOREIGN KEY (RequestedPlayer) REFERENCES Player(UsersID) ON DELETE CASCADE
@@ -485,6 +486,14 @@ JOIN Users U1 ON U1.UsersID = P1.PlayerID
 JOIN Round R1 ON R1.T_MatchID = TM1.MatchID
 JOIN Tournament T1 USING (TournamentID)
 GROUP BY U1.UsersID, U1.FirstName, U1.LastName, T1.TournamentID, T1.Name;
+
+CREATE OR REPLACE VIEW CurrentEmployment AS (
+  SELECT DISTINCT ON (UsersID) 
+   *
+  FROM AllEmploymentInfo
+  WHERE EndDate > NOW()
+  ORDER BY UsersID, StartDate DESC
+);
 
 -- functions 
 
@@ -781,13 +790,12 @@ CREATE OR REPLACE FUNCTION handle_accepted_transfer_offer()
 RETURNS TRIGGER AS $$
 DECLARE
   v_requesting_coach_team INT;
-  v_player_current_team INT;
   v_current_employment_id INT;
   v_current_employment_salary INT;
   v_new_employment_id INT;
 BEGIN
   -- Only process when OfferStatus changes to 1 (accepted)
-  IF NEW.OfferStatus = 1 AND (OLD.OfferStatus IS NULL OR OLD.OfferStatus != 1) THEN
+  IF NEW.OfferStatus = TRUE AND (OLD.OfferStatus IS NULL OR OLD.OfferStatus != TRUE) THEN
     
     -- Get the requesting coach's team
     SELECT TeamID INTO v_requesting_coach_team
@@ -797,27 +805,24 @@ BEGIN
     -- Only proceed if the coach has a team
     IF v_requesting_coach_team IS NOT NULL THEN
       
-      -- Get the player's current team and active employment
-      SELECT e.TeamID, em.EmploymentID, emp.Salary
-      INTO v_player_current_team, v_current_employment_id, v_current_employment_salary
-      FROM Employee e
-      LEFT JOIN Employed em ON e.UsersID = em.UsersID 
-        AND em.EmploymentID = (
-          SELECT EmploymentID FROM Employed 
-          WHERE UsersID = NEW.RequestedPlayer 
-          ORDER BY EmploymentID DESC LIMIT 1
-        )
-      LEFT JOIN Employment emp ON em.EmploymentID = emp.EmploymentID
-      WHERE e.UsersID = NEW.RequestedPlayer;
+      -- Get the player's most recent employment
+      SELECT em.EmploymentID, emp.Salary
+      INTO v_current_employment_id, v_current_employment_salary
+      FROM Employed em
+      JOIN Employment emp ON em.EmploymentID = emp.EmploymentID
+      WHERE em.UsersID = NEW.RequestedPlayer
+      AND emp.EndDate > NOW()
+      ORDER BY emp.StartDate DESC
+      LIMIT 1;
       
-      -- If player is currently in a team, end their current employment
+      -- If player has active employment, end it
       IF v_current_employment_id IS NOT NULL THEN
         UPDATE Employment
         SET EndDate = NOW()
         WHERE EmploymentID = v_current_employment_id;
       END IF;
       
-      -- Update the player's team
+      -- Update the player's team in Employee table
       UPDATE Employee
       SET TeamID = v_requesting_coach_team
       WHERE UsersID = NEW.RequestedPlayer;
@@ -871,7 +876,8 @@ INSERT INTO Users (
   ('Sofia', 'Coach', 'coach4@example.com', REPEAT('h', 64), REPEAT('z', 32), NOW(), '555-0104', TO_DATE('1987-09-05','YYYY-MM-DD'), 'coach', 'Turkey'),
   ('tl', 'Admin', 'a@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'admin', 'Local'),
   ('super', 'super', 'sa@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'superadmin', 'Local'),
-  ('coach', 'coach', 'c@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'coach', 'Local');
+  ('coach', 'coach', 'c@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'coach', 'Local'),
+  ('coach2', 'coach2', 'c2@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'coach', 'Local');
 
 INSERT INTO SuperAdmin (UsersID)
 SELECT UsersID FROM Users WHERE Email = 'sa@gmail.com';
@@ -926,13 +932,15 @@ JOIN Team t ON t.OwnerID = (SELECT UsersID FROM Users WHERE Email = CASE
   WHEN u.Email = 'coach2@example.com' THEN 'owner2@example.com'
   WHEN u.Email = 'coach3@example.com' THEN 'owner3@example.com'
   WHEN u.Email = 'coach4@example.com' THEN 'owner1@example.com'
+  WHEN u.Email = 'c@gmail.com' THEN 'owner1@example.com'
+  WHEN u.Email = 'c2@gmail.com' THEN 'owner2@example.com'
 END)
-WHERE u.Email IN ('coach1@example.com', 'coach2@example.com', 'coach3@example.com', 'coach4@example.com');
+WHERE u.Email IN ('coach1@example.com', 'coach2@example.com', 'coach3@example.com', 'coach4@example.com', 'c@gmail.com', 'c2@gmail.com');
 
 INSERT INTO Coach (UsersID, Certification)
 SELECT u.UsersID, 'UEFA A License'
 FROM Users u
-WHERE u.Email IN ('coach1@example.com', 'coach2@example.com', 'coach3@example.com', 'coach4@example.com');
+WHERE u.Email IN ('coach1@example.com', 'coach2@example.com', 'coach3@example.com', 'coach4@example.com', 'c@gmail.com', 'c2@gmail.com');
 
 -- 112 players (14 per team) with ongoing employment
 WITH player_data AS (

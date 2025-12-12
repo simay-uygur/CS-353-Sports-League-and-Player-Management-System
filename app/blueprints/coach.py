@@ -51,31 +51,30 @@ def transfer_offer(player_id):
     if not player_id:
         return redirect(url_for('.view_transfer_market'))
     if request.method == "POST":
-        amount = request.args.get("amount")
-        available_until = request.args.get("availableUntil")
-        if not amount or not available_until or not player_id:
-            pass
+        amount = request.form.get("amount")
+        available_until = request.form.get("availableUntil")
+        offered_end_date = request.form.get("offeredEndDate")
+        
+        coach_id = session['user_id']
+        make_transfer_offer(player_id, coach_id, amount, available_until, offered_end_date)
+        return redirect(url_for('.view_transfer_market', message="Transfer offer made successfully."))
 
     player = fetch_player_by_id(player_id)
     return render_template("coach_transfer_offer.html", player=player)
 
 @coach_bp.route("/view_transfer_offers")
 def view_transfer_offers():
-    transfer_offers=[{'offerid': 32}]
+    coachid = session['user_id']
+    transfer_offers = fetch_team_transfer_offers(coachid)
     return render_template('coach_view_transfer_offers.html', transfer_offers=transfer_offers)
 
-@coach_bp.route("/evaluate_transfer_offer/<offerid>")
+@coach_bp.route("/evaluate_transfer_offer/<offerid>", methods=["GET", "POST"])
 def evaluate_transfer_offer(offerid):
     if request.method == 'POST':
-        decision = request.args.get("decision")
+        decision = request.form.get("decision")
         if not decision:
-            # no action can be taken, I guess return
-            return
-        elif decision == 'accept':
-            # accept logic
-            pass
-        elif decision == 'reject':
-            # reject logic
-            pass
-        # either render a page or redirect to the view_transfer_offer page with a message 'you accepted this offer etc. etc.'
+            return redirect(url_for('.view_transfer_offers'))
+        
+        final_decision = decision == 'accept'
+        finalize_transfer_offer(offerid, final_decision)
     return redirect(url_for('.view_transfer_offers'))

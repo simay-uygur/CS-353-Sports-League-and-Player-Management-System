@@ -174,9 +174,14 @@ def fetch_player_by_id(playerid):
                 """
                 SELECT u.firstname,
                        u.lastname,
-                       p.position
+                       p.position,
+                       aei.salary,
+                       aei.enddate,
+                       aei.teamname
                 FROM Player p
                 JOIN Users u ON p.usersid = u.usersid
+                LEFT JOIN Employee e ON p.usersid = e.usersid
+                LEFT JOIN AllEmploymentInfo aei ON p.usersid = aei.usersid
                 WHERE u.usersid = %s
                 """, (playerid,))
             return cur.fetchone()
@@ -300,7 +305,7 @@ def fetch_transferable_players(filters, coachid):
             conditions.append("u.birthdate >= %s")
             params.append(max_birthdate)
         if current_team:
-            conditions.append("t.teamid = %s")
+            conditions.append("aei.teamid = %s")
             params.append(current_team)
         if position:
             conditions.append("p.position = %s")
@@ -309,12 +314,12 @@ def fetch_transferable_players(filters, coachid):
             conditions.append("emp.EndDate < %s")
             params.append(contact_expiration_date)
 
+        # Exclude players from the coach's own team
+        conditions.append("e.teamid <> (SELECT teamid FROM Employee WHERE usersid = %s)")
+        params.append(coachid)
+
         where_clause = " AND ".join(conditions) if conditions else "1=1"
 
-        # TODO: Right now, there is no coach filtration, because
-        # I'm testing on an account not part of a team. In this case
-        # I can't see any teams when I filter for "teams that I'm not
-        # a part of."
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 f"""
@@ -326,15 +331,13 @@ def fetch_transferable_players(filters, coachid):
                     u.Email, 
                     p.Position,
                     u.birthdate,
-                    emp.Salary,
-                    emp.enddate,
-                    t.teamname
+                    ce.Salary,
+                    ce.EndDate,
+                    ce.TeamName
                 FROM Player p
-                JOIN Employee e ON p.UsersID = e.UsersID
                 JOIN Users u ON p.UsersID = u.UsersID
-                LEFT JOIN Employed em ON p.UsersID = em.UsersID
-                LEFT JOIN Employment emp ON em.EmploymentID = emp.EmploymentID
-                LEFT JOIN Team t ON e.teamid = t.teamid
+                JOIN Employee e ON p.UsersID = e.UsersID
+                LEFT JOIN CurrentEmployment ce ON p.UsersID = ce.UsersID
                 WHERE {where_clause}
                 """,
                 (params),
@@ -372,6 +375,7 @@ def fetch_team_transfer_offers(coachid):
                 SELECT *
                 FROM Offer o 
                 JOIN Player p ON p.usersid = o.requestedplayer
+                JOIN Users u ON u.usersid = p.usersid
                 JOIN Employee e ON e.usersid = p.usersid
                 JOIN Team t ON e.teamid = t.teamid
                 WHERE
@@ -388,6 +392,21 @@ def fetch_team_transfer_offers(coachid):
             )
             rows = cur.fetchall()
             return rows
+    finally:
+        conn.close()
+
+def make_transfer_offer(playerid, coachid, amount, available_until, contract_end_date):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO Offer (RequestedPlayer, RequestingCoach, OfferAmount, AvailableUntil, OfferedEndDate)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (playerid, coachid, amount, available_until, contract_end_date),
+            )
+            conn.commit()
     finally:
         conn.close()
 
