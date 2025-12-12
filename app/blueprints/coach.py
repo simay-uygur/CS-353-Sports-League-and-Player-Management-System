@@ -7,6 +7,8 @@ from db_helper import (
     fetch_all_teams,
     fetch_player_by_id,
     make_transfer_offer,
+    fetch_team_transfer_offers,
+    finalize_transfer_offer,
     fetch_team_by_coach,
     fetch_team_players,
 )
@@ -70,6 +72,23 @@ def transfer_offer(player_id):
 
     player = fetch_player_by_id(player_id)
     return render_template("coach_transfer_offer.html", player=player)
+
+@coach_bp.route("/view_transfer_offers")
+def view_transfer_offers():
+    coachid = session['user_id']
+    transfer_offers = fetch_team_transfer_offers(coachid)
+    return render_template('coach_view_transfer_offers.html', transfer_offers=transfer_offers)
+
+@coach_bp.route("/evaluate_transfer_offer/<offerid>", methods=["GET", "POST"])
+def evaluate_transfer_offer(offerid):
+    if request.method == 'POST':
+        decision = request.form.get("decision")
+        if not decision:
+            return redirect(url_for('.view_transfer_offers'))
+        
+        final_decision = decision == 'accept'
+        finalize_transfer_offer(offerid, final_decision)
+    return redirect(url_for('.view_transfer_offers'))
 
 @coach_bp.route("/team")
 def view_team():
