@@ -5,26 +5,44 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Transfer Offer</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 
-<body>
-  <h1>Transfer Offer</h1>
-  <h2>Player</h2>
-  <ul>
-    <li>Name: {{ player['firstname'] }} {{ player['lastname']}}</li>
-    <li>Position: {{ player['position'] }}</li>
-    <li>Current Team: {{ player['teamname'] if 'teamname' in player else '-' }} </li>
-    <li>Current Salary: {{ player['salary'] if 'teamname' in player else '-' }}</li>
-  </ul>
-  <form method="post">
-    <label for="amount">Offer Amount</label>
-    <input name="amount" type="number" min="0" required>
-    <label for="availableUntil">Available Until</label>
-    <input type="date" name="availableUntil" id="availableUntil" required>
-    <label for="contractEndDate">Contract End Date</label>
-    <input type="date" name="offeredEndDate" id="contractEndDate">
-    <button type="submit">Send Offer</button>
-  </form>
+<body class="auth-body">
+  <div class="auth-card">
+    <h1>Transfer Offer</h1>
+    <p class="subtitle">Create an offer for this player</p>
+
+    <div style="margin-bottom: 2rem; padding: 1.5rem; background: #f8f9fa; border-radius: 10px;">
+      <h2 style="margin: 0 0 1rem; font-size: 1.1rem;">Player Information</h2>
+      <div style="font-size: 0.95rem; line-height: 1.8;">
+        <div><strong>Name:</strong> {{ player['firstname'] }} {{ player['lastname']}}</div>
+        <div><strong>Position:</strong> {{ player['position'] }}</div>
+        <div><strong>Current Team:</strong> {{ player['teamname'] if 'teamname' in player else '-' }}</div>
+        <div><strong>Current Salary:</strong> {{ player['salary'] if 'salary' in player else '-' }}</div>
+      </div>
+    </div>
+
+    <form method="post">
+      <div class="form-group">
+        <label for="amount">Offer Amount</label>
+        <input name="amount" type="number" min="0" required>
+      </div>
+
+      <div class="form-group">
+        <label for="availableUntil">Available Until</label>
+        <input type="date" name="availableUntil" id="availableUntil" required>
+      </div>
+
+      <div class="form-group">
+        <label for="contractEndDate">Contract End Date</label>
+        <input type="date" name="offeredEndDate" id="contractEndDate" required>
+      </div>
+
+      <button type="submit">Send Offer</button>
+    </form>
+  </div>
+
   <script>
     const availableUntilInput = document.getElementById('availableUntil')
     const contractEndDate = document.getElementById('contractEndDate')
