@@ -1744,6 +1744,28 @@ def fetch_team_players(team_id):
         conn.close()
 
 
+def fetch_team_by_coach(coach_id):
+    """Return the team assigned to the given coach."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT t.TeamID, t.TeamName, t.EstablishedDate, t.HomeVenue, t.OwnerID,
+                       u.FirstName as OwnerFirstName, u.LastName as OwnerLastName, u.Email as OwnerEmail
+                FROM Employee e
+                JOIN Team t ON e.TeamID = t.TeamID
+                JOIN TeamOwner to_owner ON t.OwnerID = to_owner.UsersID
+                JOIN Users u ON to_owner.UsersID = u.UsersID
+                WHERE e.UsersID = %s AND e.TeamID IS NOT NULL;
+                """,
+                (coach_id,),
+            )
+            return cur.fetchone()
+    finally:
+        conn.close()
+
+
 def fetch_teams_by_owner(owner_id):
     """Return teams owned by the given owner."""
     conn = get_connection()

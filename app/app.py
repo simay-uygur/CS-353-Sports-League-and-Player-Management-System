@@ -81,6 +81,15 @@ def _set_default_banner():
         g.banner_reports_endpoint = None
         g.banner_statistics_endpoint = None
         g.banner_employ_coach_endpoint = "owner.employ_coach"
+    elif role == "coach":
+        g.banner_view_endpoint = None
+        g.banner_league_endpoint = None
+        g.banner_all_matches_endpoint = None
+        g.banner_create_league_endpoint = None
+        g.banner_owner_endpoint = "coach.view_team"
+        g.banner_reports_endpoint = None
+        g.banner_statistics_endpoint = None
+        g.banner_transfer_market_endpoint = "coach.view_transfer_market"
     elif role == "player":
         g.banner_view_endpoint = None
         g.banner_league_endpoint = None
