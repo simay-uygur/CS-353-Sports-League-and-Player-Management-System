@@ -52,7 +52,7 @@ def strftime_filter(value, format_string='%Y-%m-%d %H:%M:%S'):
 @app.context_processor
 def inject_now():
     """Make datetime.now() available in templates."""
-    return {'now': datetime.now}
+    return {'now': datetime.now()}
 @app.before_request
 def _set_default_banner():
     role = session.get("role")

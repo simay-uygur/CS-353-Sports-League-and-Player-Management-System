@@ -88,7 +88,6 @@
                                             <td>{{ season.enddate|strftime('%b %d, %Y %H:%M') }}</td>
                                             <td>${{ "{:,.0f}".format(season.prizepool) }}</td>
                                             <td class="table-actions">
-                                                {% set now = now() %}
                                                 {% set season_ended = season.enddate < now %}
                                                 <div style="display: flex; gap: 0.5rem; align-items: center;">
                                                     {% if not season_ended %}
