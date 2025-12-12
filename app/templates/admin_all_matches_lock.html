@@ -13,55 +13,105 @@
             <div>
                 <p class="eyebrow">Admin Console</p>
                 <h1>View All Matches</h1>
-                <p class="subtitle">Lock/Unlock League Matches | View Tournament Matches</p>
+                <p class="subtitle">You can lock/unlock league matches and view tournament matches here.</p>
             </div>
         </header>
 
         <!-- Filters Section -->
         <section class="filters-section">
             <form method="GET" action="{{ url_for('admin.view_all_matches_lock') }}" class="filters-form">
-                <div class="filter-group">
-                    <label for="season_year">Season (Year)</label>
-                    <select name="season_year" id="season_year">
-                        <option value="">All Seasons</option>
-                        {% for season in seasons %}
-                            {% set season_val = season.seasonyear|string %}
-                            <option value="{{ season_val }}" 
-                                    {% if selected_season_year and selected_season_year|string == season_val %}selected{% endif %}>
-                                {{ season_val }}
-                            </option>
-                        {% endfor %}
-                    </select>
-                </div>
+                <div class="filters-main-row">
+                    <!-- Season Filter Group -->
+                    <div class="filter-group-complete">
+                        <label for="season_year_search">Season (Year)</label>
+                        <input type="search"
+                               id="season_year_search"
+                               class="season-year-search"
+                               placeholder="Search seasons"
+                               aria-label="Search seasons">
+                        <div class="checkbox-list season-year-checkbox-list">
+                            <label class="checkbox-line">
+                                <input type="checkbox"
+                                       name="season_year"
+                                       value=""
+                                       {% if not selected_season_year %}checked{% endif %}>
+                                <span>All Seasons</span>
+                            </label>
+                            {% for season in seasons %}
+                                {% set season_val = season.seasonyear|string %}
+                                <label class="checkbox-line" data-season-search="{{ season_val }}">
+                                    <input type="checkbox"
+                                           name="season_year"
+                                           value="{{ season_val }}"
+                                           {% if selected_season_year and selected_season_year|string == season_val %}checked{% endif %}>
+                                    <span>{{ season_val }}</span>
+                                </label>
+                            {% endfor %}
+                        </div>
+                    </div>
 
-                <div class="filter-group">
-                    <label for="league_id">League</label>
-                    <select name="league_id" id="league_id">
-                        <option value="">All Leagues</option>
-                        {% for league in leagues %}
-                            <option value="{{ league.leagueid }}" 
-                                    {% if selected_league_id and selected_league_id|string == league.leagueid|string %}selected{% endif %}>
-                                {{ league.leaguename }}
-                            </option>
-                        {% endfor %}
-                    </select>
-                </div>
+                    <!-- League Filter Group -->
+                    <div class="filter-group-complete">
+                        <label for="league_search">League</label>
+                        <input type="search"
+                               id="league_search"
+                               class="league-search"
+                               placeholder="Search leagues"
+                               aria-label="Search leagues">
+                        <div class="checkbox-list league-checkbox-list">
+                            <label class="checkbox-line">
+                                <input type="checkbox"
+                                       name="league_id"
+                                       value=""
+                                       {% if not selected_league_id %}checked{% endif %}>
+                                <span>All Leagues</span>
+                            </label>
+                            {% for league in leagues %}
+                                <label class="checkbox-line" data-league-search="{{ league.leaguename|lower }}">
+                                    <input type="checkbox"
+                                           name="league_id"
+                                           value="{{ league.leagueid }}"
+                                           {% if selected_league_id and selected_league_id|string == league.leagueid|string %}checked{% endif %}>
+                                    <span>{{ league.leaguename }}</span>
+                                </label>
+                            {% endfor %}
+                        </div>
+                    </div>
 
-                <div class="filter-group">
-                    <label for="tournament_id">Tournament</label>
-                    <select name="tournament_id" id="tournament_id">
-                        <option value="">All Tournaments</option>
-                        {% for tournament in tournaments %}
-                            <option value="{{ tournament.tournamentid }}" 
-                                    {% if selected_tournament_id and selected_tournament_id|string == tournament.tournamentid|string %}selected{% endif %}>
-                                {{ tournament.tournamentname }}
-                            </option>
-                        {% endfor %}
-                    </select>
-                </div>
+                    <!-- Tournament Filter Group -->
+                    <div class="filter-group-complete">
+                        <label for="tournament_search">Tournament</label>
+                        <input type="search"
+                               id="tournament_search"
+                               class="tournament-search"
+                               placeholder="Search tournaments"
+                               aria-label="Search tournaments">
+                        <div class="checkbox-list tournament-checkbox-list">
+                            <label class="checkbox-line">
+                                <input type="checkbox"
+                                       name="tournament_id"
+                                       value=""
+                                       {% if not selected_tournament_id %}checked{% endif %}>
+                                <span>All Tournaments</span>
+                            </label>
+                            {% for tournament in tournaments %}
+                                <label class="checkbox-line" data-tournament-search="{{ tournament.tournamentname|lower }}">
+                                    <input type="checkbox"
+                                           name="tournament_id"
+                                           value="{{ tournament.tournamentid }}"
+                                           {% if selected_tournament_id and selected_tournament_id|string == tournament.tournamentid|string %}checked{% endif %}>
+                                    <span>{{ tournament.tournamentname }}</span>
+                                </label>
+                            {% endfor %}
+                        </div>
+                    </div>
 
-                <button type="submit" class="btn small">Apply Filters</button>
-                <a href="{{ url_for('admin.view_all_matches_lock') }}" class="btn small ghost">Clear Filters</a>
+                    <!-- Action Buttons -->
+                    <div class="filters-actions">
+                        <button type="submit" class="btn small">Apply Filters</button>
+                        <a href="{{ url_for('admin.view_all_matches_lock') }}" class="btn small ghost">Clear Filters</a>
+                    </div>
+                </div>
             </form>
         </section>
 
@@ -181,35 +231,87 @@
         }
 
         .filters-form {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            align-items: end;
+            width: 100%;
         }
 
-        .filter-group {
+        .filters-main-row {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+
+        .filter-group-complete {
             display: flex;
             flex-direction: column;
             gap: 0.5rem;
+            flex: 1;
+            min-width: 200px;
+            max-width: 300px;
         }
 
-        .filter-group label {
+        .filter-group-complete label {
             font-weight: 600;
             font-size: 0.875rem;
             color: #333;
         }
 
-        .filter-group select {
+        .filter-group-complete input[type="search"] {
             padding: 0.6rem;
             border: 1px solid #ddd;
             border-radius: 4px;
             font-size: 0.95rem;
             background-color: white;
+            width: 100%;
         }
 
-        .filter-group select:focus {
+        .filter-group-complete input[type="search"]:focus {
             outline: none;
             border-color: #007bff;
+            box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+        }
+
+        .filter-group-complete .checkbox-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            padding: 0.5rem;
+            background-color: #fafafa;
+            width: 100%;
+        }
+
+        .filter-group-complete .checkbox-line {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .filter-group-complete .checkbox-line:hover {
+            background-color: #f0f0f0;
+        }
+
+        .filter-group-complete .checkbox-line input[type="checkbox"] {
+            margin: 0;
+            cursor: pointer;
+        }
+
+        .filter-group-complete .checkbox-line.is-hidden {
+            display: none;
+        }
+
+        .filters-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            justify-content: flex-start;
+            align-items: flex-start;
+            flex-shrink: 0;
+            padding-top: 1.5rem;
         }
 
         .matches-section {
@@ -358,5 +460,79 @@
             margin-top: 0.5rem;
         }
     </style>
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            // Season Year search
+            const seasonSearch = document.querySelector(".season-year-search");
+            const seasonRows = document.querySelectorAll(".season-year-checkbox-list .checkbox-line");
+            if (seasonSearch) {
+                seasonSearch.addEventListener("input", function (event) {
+                    const query = (event.target.value || "").toLowerCase().trim();
+                    seasonRows.forEach(row => {
+                        const haystack = (row.dataset.seasonSearch || row.innerText || "").toLowerCase();
+                        const match = !query || haystack.includes(query);
+                        row.classList.toggle("is-hidden", !match);
+                    });
+                });
+            }
+
+            // League search
+            const leagueSearch = document.querySelector(".league-search");
+            const leagueRows = document.querySelectorAll(".league-checkbox-list .checkbox-line");
+            if (leagueSearch) {
+                leagueSearch.addEventListener("input", function (event) {
+                    const query = (event.target.value || "").toLowerCase().trim();
+                    leagueRows.forEach(row => {
+                        const haystack = (row.dataset.leagueSearch || row.innerText || "").toLowerCase();
+                        const match = !query || haystack.includes(query);
+                        row.classList.toggle("is-hidden", !match);
+                    });
+                });
+            }
+
+            // Tournament search
+            const tournamentSearch = document.querySelector(".tournament-search");
+            const tournamentRows = document.querySelectorAll(".tournament-checkbox-list .checkbox-line");
+            if (tournamentSearch) {
+                tournamentSearch.addEventListener("input", function (event) {
+                    const query = (event.target.value || "").toLowerCase().trim();
+                    tournamentRows.forEach(row => {
+                        const haystack = (row.dataset.tournamentSearch || row.innerText || "").toLowerCase();
+                        const match = !query || haystack.includes(query);
+                        row.classList.toggle("is-hidden", !match);
+                    });
+                });
+            }
+
+            // Handle "All" option logic - if "All" is checked, uncheck others; if any specific is checked, uncheck "All"
+            function setupAllOptionLogic(containerSelector, allCheckboxSelector) {
+                const container = document.querySelector(containerSelector);
+                if (!container) return;
+                
+                const allCheckbox = container.querySelector(allCheckboxSelector);
+                const specificCheckboxes = container.querySelectorAll('input[type="checkbox"]:not([value=""])');
+                
+                if (allCheckbox) {
+                    allCheckbox.addEventListener("change", function() {
+                        if (this.checked) {
+                            specificCheckboxes.forEach(cb => cb.checked = false);
+                        }
+                    });
+                }
+                
+                specificCheckboxes.forEach(cb => {
+                    cb.addEventListener("change", function() {
+                        if (this.checked && allCheckbox) {
+                            allCheckbox.checked = false;
+                        }
+                    });
+                });
+            }
+
+            setupAllOptionLogic(".season-year-checkbox-list", 'input[value=""]');
+            setupAllOptionLogic(".league-checkbox-list", 'input[value=""]');
+            setupAllOptionLogic(".tournament-checkbox-list", 'input[value=""]');
+        });
+    </script>
 </body>
 </html>

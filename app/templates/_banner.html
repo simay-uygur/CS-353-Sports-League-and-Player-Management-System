@@ -20,13 +20,22 @@
         <a href="{{ url_for(g.banner_create_league_endpoint) }}" class="nav-link">Create League</a>
         {% endif %}
         {% if g.get("banner_owner_endpoint") %}
-        <a href="{{ url_for(g.banner_owner_endpoint) }}" class="nav-link">My Teams</a>
+        <a href="{{ url_for(g.banner_owner_endpoint) }}" class="nav-link">My Team</a>
         {% endif %}
         {% if g.get("banner_reports_endpoint") %}
         <a href="{{ url_for(g.banner_reports_endpoint) }}" class="nav-link">Reports</a>
         {% endif %}
         {% if g.get("banner_statistics_endpoint") %}
         <a href="{{ url_for(g.banner_statistics_endpoint) }}" class="nav-link">Statistics</a>
+        {% endif %}
+        {% if g.get("banner_trainings_endpoint") %}
+        <a href="{{ url_for(g.banner_trainings_endpoint) }}" class="nav-link">View Trainings</a>
+        {% endif %}
+        {% if g.get("banner_offers_endpoint") %}
+        <a href="{{ url_for(g.banner_offers_endpoint) }}" class="nav-link">View Offers</a>
+        {% endif %}
+        {% if g.get("banner_employ_coach_endpoint") %}
+        <a href="{{ url_for(g.banner_employ_coach_endpoint) }}" class="nav-link">Employ Coach</a>
         {% endif %}
     </nav>
     <div class="top-banner__actions">

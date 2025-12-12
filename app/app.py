@@ -17,6 +17,7 @@ from db_helper import (
     fetch_player_available_leagues,
     fetch_player_trainings,
     fetch_player_offers,
+    update_training_attendance as update_training_attendance_db,
 )
 
 from blueprints.admin import admin_bp
@@ -76,6 +77,7 @@ def _set_default_banner():
         g.banner_owner_endpoint = "owner.view_teams"
         g.banner_reports_endpoint = None
         g.banner_statistics_endpoint = None
+        g.banner_employ_coach_endpoint = "owner.employ_coach"
     elif role == "player":
         g.banner_view_endpoint = None
         g.banner_league_endpoint = None
@@ -84,6 +86,8 @@ def _set_default_banner():
         g.banner_owner_endpoint = None
         g.banner_reports_endpoint = None
         g.banner_statistics_endpoint = "home_player"
+        g.banner_trainings_endpoint = "view_trainings"
+        g.banner_offers_endpoint = "view_offers"
     else:
         g.banner_view_endpoint = None
         g.banner_league_endpoint = None
@@ -175,8 +179,29 @@ def view_trainings():
         return redirect(url_for("login"))
     
     trainings = fetch_player_trainings(player_id)
+    from datetime import datetime
+    now = datetime.now()
     
-    return render_template("player_trainings.html", trainings=trainings)
+    return render_template("player_trainings.html", trainings=trainings, now=now)
+
+
+@app.route("/player/trainings/<int:session_id>/attendance", methods=["POST"])
+def update_training_attendance(session_id):
+    player_id = session.get("user_id")
+    if not player_id or session.get("role") != "player":
+        return redirect(url_for("login"))
+    
+    status = request.form.get("status")
+    if status not in ("0", "1"):
+        return redirect(url_for("view_trainings"))
+    
+    try:
+        update_training_attendance_db(player_id, session_id, int(status))
+    except ValueError as exc:
+        # Could add flash message here if needed
+        pass
+    
+    return redirect(url_for("view_trainings"))
 
 
 @app.route("/player/offers")
@@ -202,7 +227,7 @@ def home_referee():
 
 @app.route("/home/team-owner")
 def home_team_owner():
-    return render_template("home_team_owner.html")
+    return redirect(url_for("owner.view_teams"))
 
 
 @app.route("/home/tournament-admin")

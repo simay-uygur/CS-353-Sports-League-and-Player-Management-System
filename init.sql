@@ -3,8 +3,8 @@ CREATE TABLE Users (
   FirstName VARCHAR(30) NOT NULL,
   LastName VARCHAR(30) NOT NULL,
   Email VARCHAR(255) NOT NULL UNIQUE,
-  HashedPassword CHAR(255) NOT NULL,
-  Salt CHAR(255) NOT NULL,
+  HashedPassword TEXT NOT NULL,
+  Salt TEXT NOT NULL,
   PasswordDate TIMESTAMP,
   PhoneNumber VARCHAR(25),
   BirthDate TIMESTAMP NOT NULL,
@@ -863,6 +863,11 @@ INSERT INTO Users (
   ('Sara', 'Sato', 'o6@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'team_owner', 'Netherlands'),
   ('Omar', 'Ochoa', 'o7@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'team_owner', 'Morocco'),
   ('Priya', 'Patel', 'o8@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'team_owner', 'India'),
+  -- Additional team owners without teams
+  ('David', 'Thompson', 'o9@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'team_owner', 'UK'),
+  ('Emma', 'Wilson', 'o10@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'team_owner', 'Australia'),
+  ('James', 'Anderson', 'o11@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'team_owner', 'New Zealand'),
+  ('Sophie', 'Martin', 'o12@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'team_owner', 'Belgium'),
   -- Coaches
   ('John', 'Carter', 'c1@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'coach', 'USA'),
   ('Maria', 'Lopez', 'c2@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'coach', 'Spain'),
@@ -902,7 +907,11 @@ FROM (
     ('o5@gmail.com', 700000.000),
     ('o6@gmail.com', 670000.000),
     ('o7@gmail.com', 640000.000),
-    ('o8@gmail.com', 710000.000)
+    ('o8@gmail.com', 710000.000),
+    ('o9@gmail.com', 690000.000),
+    ('o10@gmail.com', 660000.000),
+    ('o11@gmail.com', 680000.000),
+    ('o12@gmail.com', 700000.000)
 ) AS data(email, net_worth)
 JOIN Users u ON u.Email = data.email;
 
@@ -1135,9 +1144,61 @@ INSERT INTO Player (UsersID, Height, Weight, Overall, Position, IsEligible)
 SELECT pwi.UsersID, pwi.height_cm, pwi.weight_kg, '85', pwi.position, 'eligible'
 FROM players_with_ids pwi;
 
+-- Trigger to auto-mark training attendance as skipped when training time arrives
+CREATE OR REPLACE FUNCTION auto_mark_training_skipped()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- For each player on the coach's team who doesn't have a TrainingAttendance record
+    INSERT INTO TrainingAttendance (SessionID, PlayerID, Status)
+    SELECT 
+        NEW.SessionID,
+        e_player.UsersID,
+        0  -- Status 0 = Skipped
+    FROM Employee e_coach
+    JOIN Employee e_player ON e_coach.TeamID = e_player.TeamID
+    JOIN Player p ON e_player.UsersID = p.UsersID
+    WHERE e_coach.UsersID = NEW.CoachID
+      AND e_player.UsersID != e_coach.UsersID  -- Don't include the coach
+      AND NOT EXISTS (
+          SELECT 1 
+          FROM TrainingAttendance ta 
+          WHERE ta.SessionID = NEW.SessionID 
+          AND ta.PlayerID = e_player.UsersID
+      )
+    ON CONFLICT (SessionID, PlayerID) DO NOTHING;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
--- Migrate password storage away from CHAR padding
-ALTER TABLE Users ALTER COLUMN HashedPassword TYPE TEXT;
-ALTER TABLE Users ALTER COLUMN Salt TYPE TEXT;
-UPDATE Users SET HashedPassword = RTRIM(HashedPassword);
-UPDATE Users SET Salt = RTRIM(Salt);
+CREATE TRIGGER trg_auto_mark_training_skipped
+AFTER INSERT OR UPDATE OF SessionDate ON TrainingSession
+FOR EACH ROW
+WHEN (NEW.SessionDate <= NOW())
+EXECUTE FUNCTION auto_mark_training_skipped();
+
+-- Function to process existing trainings that have passed
+CREATE OR REPLACE FUNCTION process_past_trainings()
+RETURNS void AS $$
+BEGIN
+    -- Mark all players as skipped for trainings that have passed and don't have attendance records
+    INSERT INTO TrainingAttendance (SessionID, PlayerID, Status)
+    SELECT DISTINCT
+        ts.SessionID,
+        e_player.UsersID,
+        0  -- Status 0 = Skipped
+    FROM TrainingSession ts
+    JOIN Employee e_coach ON ts.CoachID = e_coach.UsersID
+    JOIN Employee e_player ON e_coach.TeamID = e_player.TeamID
+    JOIN Player p ON e_player.UsersID = p.UsersID
+    WHERE ts.SessionDate <= NOW()
+      AND e_player.UsersID != e_coach.UsersID
+      AND NOT EXISTS (
+          SELECT 1 
+          FROM TrainingAttendance ta 
+          WHERE ta.SessionID = ts.SessionID 
+          AND ta.PlayerID = e_player.UsersID
+      )
+    ON CONFLICT (SessionID, PlayerID) DO NOTHING;
+END;
+$$ LANGUAGE plpgsql;

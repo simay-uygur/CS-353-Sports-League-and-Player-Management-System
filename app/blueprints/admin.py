@@ -475,11 +475,13 @@ def view_all_matches_lock():
     if not admin_id:
         return redirect(url_for("login"))
     
-    # Get filter parameters
-    season_year_param = request.args.get("season_year")
-    season_year = int(season_year_param) if season_year_param else None
-    league_id = request.args.get("league_id")
-    tournament_id = request.args.get("tournament_id")
+    # Get filter parameters - handle both single and multiple values
+    season_year_params = request.args.getlist("season_year")
+    season_year = int(season_year_params[0]) if season_year_params and season_year_params[0] else None
+    league_id_params = request.args.getlist("league_id")
+    league_id = league_id_params[0] if league_id_params and league_id_params[0] else None
+    tournament_id_params = request.args.getlist("tournament_id")
+    tournament_id = tournament_id_params[0] if tournament_id_params and tournament_id_params[0] else None
     
     # Fetch dropdown data
     seasons = fetch_seasons_for_dropdown()
@@ -495,9 +497,9 @@ def view_all_matches_lock():
         seasons=seasons,
         leagues=leagues,
         tournaments=tournaments,
-        selected_season_year=season_year_param,
-        selected_league_id=league_id,
-        selected_tournament_id=tournament_id,
+        selected_season_year=season_year_params[0] if season_year_params and season_year_params[0] else None,
+        selected_league_id=league_id_params[0] if league_id_params and league_id_params[0] else None,
+        selected_tournament_id=tournament_id_params[0] if tournament_id_params and tournament_id_params[0] else None,
     )
 
 
@@ -589,15 +591,17 @@ def reports():
                     raise ValueError("Season year is required.")
                 standings_report = report_league_standings(league_id, season_no, season_year)
             elif report_type == "attendance":
-                league_id = _to_int(request.form.get("league_id"), "League ID") if request.form.get("league_id") else None
-                season_no = _to_int(request.form.get("season_no"), "Season No") if request.form.get("season_no") else None
-                season_year_from = request.form.get("season_year_from") or None
-                season_year_to = request.form.get("season_year_to") or None
-                attendance_report = report_player_attendance(league_id, season_no, season_year_from, season_year_to)
+                date_from = request.form.get("date_from") or None
+                date_to = request.form.get("date_to") or None
+                player_id = _to_int(request.form.get("player_id"), "Player ID") if request.form.get("player_id") else None
+                team_id = _to_int(request.form.get("team_id"), "Team ID") if request.form.get("team_id") else None
+                all_teams = bool(request.form.get("all_teams"))
+                attendance_report = report_player_attendance(date_from, date_to, player_id, team_id, all_teams)
         except ValueError as exc:
             error_message = str(exc)
 
     leagues = fetch_all_leagues()
+    teams = fetch_all_teams()
     return render_template(
         "admin_reports.html",
         error_message=error_message,
@@ -605,6 +609,7 @@ def reports():
         standings_report=standings_report,
         attendance_report=attendance_report,
         leagues=leagues,
+        teams=teams,
     )
 
 
@@ -690,29 +695,33 @@ def download_report_pdf():
             ]
             filename = "standings-report.pdf"
         elif report_type == "attendance":
-            league_id = request.form.get("league_id")
-            season_no = request.form.get("season_no")
-            season_year_from = request.form.get("season_year_from") or None
-            season_year_to = request.form.get("season_year_to") or None
+            date_from = request.form.get("date_from") or None
+            date_to = request.form.get("date_to") or None
+            player_id = request.form.get("player_id")
+            team_id = request.form.get("team_id")
+            all_teams = request.form.get("all_teams")
             
-            if league_id:
-                filter_info.append(f"League ID: {league_id}")
-            if season_no:
-                filter_info.append(f"Season No: {season_no}")
-            if season_year_from:
-                filter_info.append(f"Season Year From: {season_year_from}")
-            if season_year_to:
-                filter_info.append(f"Season Year To: {season_year_to}")
+            if date_from:
+                filter_info.append(f"Date From: {date_from}")
+            if date_to:
+                filter_info.append(f"Date To: {date_to}")
+            if player_id:
+                filter_info.append(f"Player ID: {player_id}")
+            if team_id:
+                filter_info.append(f"Team ID: {team_id}")
+            if all_teams:
+                filter_info.append("All Teams: Yes")
             if not filter_info:
-                filter_info.append("All Leagues and Seasons")
+                filter_info.append("All Trainings")
             
             data = report_player_attendance(
-                _to_int(league_id, "League ID") if league_id else None,
-                _to_int(season_no, "Season No") if season_no else None,
-                season_year_from,
-                season_year_to
+                date_from,
+                date_to,
+                _to_int(player_id, "Player ID") if player_id else None,
+                _to_int(team_id, "Team ID") if team_id else None,
+                bool(all_teams)
             )
-            title = "Player Attendance"
+            title = "Training Attendance Report"
             headers = ["Player", "Appearances"]
             rows = [
                 [

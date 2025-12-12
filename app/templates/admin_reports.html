@@ -68,22 +68,26 @@
             </div>
 
             <div class="card">
-                <h3>Player Attendance</h3>
+                <h3>Training Attendance</h3>
                 <form method="POST">
                     <input type="hidden" name="report_type" value="attendance">
-                    <label>League (optional)</label>
-                    <select name="league_id">
-                        <option value="">All leagues</option>
-                        {% for l in leagues %}
-                        <option value="{{ l.leagueid }}" {% if request.form.get('league_id') == l.leagueid|string %}selected{% endif %}>{{ l.name }}</option>
+                    <label>Date From (optional)</label>
+                    <input type="date" name="date_from" value="{{ request.form.get('date_from','') }}">
+                    <label>Date To (optional)</label>
+                    <input type="date" name="date_to" value="{{ request.form.get('date_to','') }}">
+                    <label>Player ID (optional)</label>
+                    <input type="text" inputmode="numeric" pattern="[0-9]*" name="player_id" placeholder="e.g. 12" value="{{ request.form.get('player_id','') }}">
+                    <label>Team (optional)</label>
+                    <select name="team_id">
+                        <option value="">All teams</option>
+                        {% for t in teams %}
+                        <option value="{{ t.teamid }}" {% if request.form.get('team_id') == t.teamid|string %}selected{% endif %}>{{ t.teamname }}</option>
                         {% endfor %}
                     </select>
-                    <label>Season No (optional)</label>
-                    <input type="text" inputmode="numeric" pattern="[0-9]*" name="season_no" value="{{ request.form.get('season_no','') }}">
-                    <label>Season Year From (optional)</label>
-                    <input type="date" name="season_year_from" value="{{ request.form.get('season_year_from','') }}">
-                    <label>Season Year To (optional)</label>
-                    <input type="date" name="season_year_to" value="{{ request.form.get('season_year_to','') }}">
+                    <label class="checkbox-field">
+                        <input type="checkbox" name="all_teams" {% if request.form.get('all_teams') %}checked{% endif %}>
+                        <span>All Teams</span>
+                    </label>
                     <button type="submit" class="btn solid">Generate</button>
                 </form>
             </div>
@@ -188,15 +192,16 @@
 
         {% if attendance_report is not none %}
         <section class="report-table">
-            <h3>Player Attendance</h3>
+            <h3>Training Attendance Report</h3>
             {% if attendance_report %}
             <div class="report-actions">
                 <form method="POST" action="{{ url_for('admin.download_report_pdf') }}" class="inline-form">
                     <input type="hidden" name="report_type" value="attendance">
-                    <input type="hidden" name="league_id" value="{{ request.form.get('league_id', '') }}">
-                    <input type="hidden" name="season_no" value="{{ request.form.get('season_no', '') }}">
-                    <input type="hidden" name="season_year_from" value="{{ request.form.get('season_year_from', '') }}">
-                    <input type="hidden" name="season_year_to" value="{{ request.form.get('season_year_to', '') }}">
+                    <input type="hidden" name="date_from" value="{{ request.form.get('date_from', '') }}">
+                    <input type="hidden" name="date_to" value="{{ request.form.get('date_to', '') }}">
+                    <input type="hidden" name="player_id" value="{{ request.form.get('player_id', '') }}">
+                    <input type="hidden" name="team_id" value="{{ request.form.get('team_id', '') }}">
+                    <input type="hidden" name="all_teams" value="{{ 1 if request.form.get('all_teams') else '' }}">
                     <button type="submit" class="btn solid btn-small">Download PDF</button>
                 </form>
             </div>
@@ -205,7 +210,7 @@
                     <thead>
                         <tr>
                             <th>Player</th>
-                            <th>Appearances</th>
+                            <th>Training Appearances</th>
                         </tr>
                     </thead>
                     <tbody>

@@ -236,47 +236,61 @@ def report_league_standings(league_id, season_no, season_year):
     return sorted(stats.values(), key=lambda s: (-s["points"], -(s["gf"] - s["ga"]), -s["wins"]))
 
 
-def report_player_attendance(league_id=None, season_no=None, season_year_from=None, season_year_to=None):
+def report_player_attendance(date_from=None, date_to=None, player_id=None, team_id=None, all_teams=False):
     """
-    Counts appearances per player across matches; optionally filtered by league/season and year range.
+    Counts training attendance per player from TrainingAttendance table.
+    Filters by training session dates, optionally by player_id, team_id, or all teams.
     """
     conn = get_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             clauses = []
             params = []
-            join_clause = ""
-            if league_id:
-                join_clause = "JOIN SeasonalMatch sm ON sm.MatchID = pl.MatchID"
-                clauses.append("sm.LeagueID = %s")
-                params.append(league_id)
-                if season_no:
-                    clauses.append("sm.SeasonNo = %s")
-                    params.append(season_no)
-                if season_year_from:
-                    clauses.append("sm.SeasonYear >= %s")
-                    params.append(season_year_from)
-                if season_year_to:
-                    clauses.append("sm.SeasonYear <= %s")
-                    params.append(season_year_to)
-
-            where_sql = " WHERE " + " AND ".join(clauses) if clauses else ""
-
-            cur.execute(
-                f"""
-                SELECT pl.PlayerID,
-                       u.FirstName,
-                       u.LastName,
-                       COUNT(*) AS appearances
-                FROM Play pl
-                JOIN Users u ON u.UsersID = pl.PlayerID
-                {join_clause}
-                {where_sql}
-                GROUP BY pl.PlayerID, u.FirstName, u.LastName
+            
+            # Base query joins TrainingAttendance with TrainingSession, Coach, Employee, Team, and Users
+            query = """
+                SELECT 
+                    u.UsersID AS PlayerID,
+                    u.FirstName,
+                    u.LastName,
+                    COUNT(*) AS appearances
+                FROM TrainingAttendance ta
+                JOIN TrainingSession ts ON ta.SessionID = ts.SessionID
+                JOIN Coach c ON ts.CoachID = c.UsersID
+                JOIN Employee e ON c.UsersID = e.UsersID
+                JOIN Team t ON e.TeamID = t.TeamID
+                JOIN Users u ON ta.PlayerID = u.UsersID
+                WHERE ta.Status = 1
+            """
+            
+            # Filter by training session date range
+            if date_from:
+                clauses.append("ts.SessionDate >= %s")
+                params.append(date_from)
+            
+            if date_to:
+                clauses.append("ts.SessionDate <= %s")
+                params.append(date_to)
+            
+            # Filter by specific player
+            if player_id:
+                clauses.append("ta.PlayerID = %s")
+                params.append(player_id)
+            
+            # Filter by team (unless all_teams is True)
+            if not all_teams and team_id:
+                clauses.append("t.TeamID = %s")
+                params.append(team_id)
+            
+            if clauses:
+                query += " AND " + " AND ".join(clauses)
+            
+            query += """
+                GROUP BY u.UsersID, u.FirstName, u.LastName
                 ORDER BY appearances DESC, u.LastName, u.FirstName;
-                """,
-                tuple(params),
-            )
+            """
+            
+            cur.execute(query, tuple(params))
             return cur.fetchall()
     finally:
         conn.close()
@@ -1257,6 +1271,132 @@ def assign_same_admins_to_all_seasons(league_id, admin_ids):
         conn.close()
 
 
+def fetch_available_coaches():
+    """Fetch coaches who don't have a team assigned (TeamID IS NULL)."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT 
+                    c.UsersID,
+                    u.FirstName,
+                    u.LastName,
+                    u.Email,
+                    c.Certification
+                FROM Coach c
+                JOIN Users u ON c.UsersID = u.UsersID
+                JOIN Employee e ON c.UsersID = e.UsersID
+                WHERE e.TeamID IS NULL
+                ORDER BY u.LastName, u.FirstName;
+                """,
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_all_coaches():
+    """Fetch all coaches with their current team info."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT 
+                    c.UsersID,
+                    u.FirstName,
+                    u.LastName,
+                    u.Email,
+                    c.Certification,
+                    e.TeamID,
+                    t.TeamName
+                FROM Coach c
+                JOIN Users u ON c.UsersID = u.UsersID
+                JOIN Employee e ON c.UsersID = e.UsersID
+                LEFT JOIN Team t ON e.TeamID = t.TeamID
+                ORDER BY u.LastName, u.FirstName;
+                """,
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def employ_coach_to_team(coach_id, team_id, owner_id):
+    """
+    Assign a coach to a team. Validates that:
+    - Coach exists
+    - Team belongs to the owner
+    - Ends previous coach's employment (sets their TeamID to NULL)
+    - Updates new coach's Employee.TeamID
+    """
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                # Verify team belongs to owner
+                cur.execute(
+                    """
+                    SELECT TeamID FROM Team WHERE TeamID = %s AND OwnerID = %s;
+                    """,
+                    (team_id, owner_id),
+                )
+                if not cur.fetchone():
+                    raise ValueError("Team does not belong to you.")
+                
+                # Verify coach exists
+                cur.execute(
+                    """
+                    SELECT e.UsersID, e.TeamID
+                    FROM Employee e
+                    JOIN Coach c ON e.UsersID = c.UsersID
+                    WHERE e.UsersID = %s;
+                    """,
+                    (coach_id,),
+                )
+                coach_row = cur.fetchone()
+                if not coach_row:
+                    raise ValueError("Coach not found.")
+                
+                # Find current coach for this team and end their employment
+                cur.execute(
+                    """
+                    SELECT e.UsersID
+                    FROM Employee e
+                    JOIN Coach c ON e.UsersID = c.UsersID
+                    WHERE e.TeamID = %s;
+                    """,
+                    (team_id,),
+                )
+                current_coach_row = cur.fetchone()
+                if current_coach_row and current_coach_row[0] != coach_id:
+                    # End previous coach's employment
+                    cur.execute(
+                        """
+                        UPDATE Employee
+                        SET TeamID = NULL
+                        WHERE UsersID = %s;
+                        """,
+                        (current_coach_row[0],),
+                    )
+                
+                # Assign new coach to team
+                cur.execute(
+                    """
+                    UPDATE Employee
+                    SET TeamID = %s
+                    WHERE UsersID = %s;
+                    """,
+                    (team_id, coach_id),
+                )
+                
+                if cur.rowcount == 0:
+                    raise ValueError("Failed to assign coach to team.")
+    finally:
+        conn.close()
+
+
 def fetch_all_referees():
     """Fetch all referees."""
     conn = get_connection()
@@ -1272,6 +1412,35 @@ def fetch_all_referees():
                 JOIN Users u ON r.usersid = u.usersid
                 ORDER BY u.lastname, u.firstname;
                 """
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_team_players(team_id):
+    """Fetch all players currently on a team."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT 
+                    u.UsersID,
+                    u.FirstName,
+                    u.LastName,
+                    u.Email,
+                    p.Position,
+                    p.Height,
+                    p.Weight,
+                    p.Overall
+                FROM Employee e
+                JOIN Player p ON e.UsersID = p.UsersID
+                JOIN Users u ON e.UsersID = u.UsersID
+                WHERE e.TeamID = %s
+                ORDER BY u.LastName, u.FirstName;
+                """,
+                (team_id,),
             )
             return cur.fetchall()
     finally:
@@ -1298,7 +1467,7 @@ def fetch_teams_by_owner(owner_id):
 
 
 def fetch_other_team_owners(current_owner_id):
-    """Return other owners to transfer to."""
+    """Return other owners who don't have teams (available for transfer)."""
     conn = get_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -1311,7 +1480,9 @@ def fetch_other_team_owners(current_owner_id):
                        towner.NetWorth
                 FROM TeamOwner towner
                 JOIN Users u ON u.UsersID = towner.UsersID
+                LEFT JOIN Team t ON t.OwnerID = towner.UsersID
                 WHERE towner.UsersID <> %s
+                  AND t.TeamID IS NULL
                 ORDER BY u.LastName, u.FirstName;
                 """,
                 (current_owner_id,),
@@ -1330,6 +1501,28 @@ def transfer_team_owner(team_id, current_owner_id, new_owner_id):
     try:
         with conn:
             with conn.cursor() as cur:
+                # Verify team belongs to current owner
+                cur.execute(
+                    """
+                    SELECT TeamID FROM Team WHERE TeamID = %s AND OwnerID = %s;
+                    """,
+                    (team_id, current_owner_id),
+                )
+                if not cur.fetchone():
+                    raise ValueError("Transfer failed; team not owned by current owner.")
+                
+                # Check if new owner already has a team
+                cur.execute(
+                    """
+                    SELECT TeamID, TeamName FROM Team WHERE OwnerID = %s;
+                    """,
+                    (new_owner_id,),
+                )
+                existing_team = cur.fetchone()
+                if existing_team:
+                    raise ValueError(f"Transfer failed; the new owner already owns a team ({existing_team[1]}). Each owner can only own one team.")
+                
+                # Perform the transfer
                 cur.execute(
                     """
                     UPDATE Team
@@ -2011,6 +2204,56 @@ def fetch_player_offers(player_id):
                 (player_id,),
             )
             return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def update_training_attendance(player_id, session_id, status):
+    """
+    Update or insert training attendance for a player.
+    Status: 1 = Attended/Joined, 0 = Skipped/Absent
+    """
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                # Check if training session exists and is in the future
+                cur.execute(
+                    """
+                    SELECT SessionDate FROM TrainingSession WHERE SessionID = %s;
+                    """,
+                    (session_id,),
+                )
+                session_row = cur.fetchone()
+                if not session_row:
+                    raise ValueError("Training session not found.")
+                
+                # Verify player is on the same team as the coach
+                cur.execute(
+                    """
+                    SELECT 1
+                    FROM TrainingSession ts
+                    JOIN Coach c ON ts.CoachID = c.UsersID
+                    JOIN Employee e_coach ON c.UsersID = e_coach.UsersID
+                    JOIN Employee e_player ON e_player.UsersID = %s
+                    WHERE ts.SessionID = %s
+                    AND e_coach.TeamID = e_player.TeamID;
+                    """,
+                    (player_id, session_id),
+                )
+                if not cur.fetchone():
+                    raise ValueError("You are not on the same team as this training's coach.")
+                
+                # Insert or update attendance
+                cur.execute(
+                    """
+                    INSERT INTO TrainingAttendance (SessionID, PlayerID, Status)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (SessionID, PlayerID)
+                    DO UPDATE SET Status = EXCLUDED.Status;
+                    """,
+                    (session_id, player_id, status),
+                )
     finally:
         conn.close()
         

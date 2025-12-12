@@ -1239,8 +1239,23 @@ button:hover {
 }
 
 .transfer-form select,
-.table-card .inline-form select {
-    min-width: 140px;
+.table-card .inline-form select,
+.form-select {
+    width: 280px;
+    min-width: 280px;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.375rem;
+    background: #fff;
+    font-size: 0.9rem;
+    color: #0f172a;
+}
+
+.transfer-form select:focus,
+.form-select:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 @media (max-width: 900px) {
