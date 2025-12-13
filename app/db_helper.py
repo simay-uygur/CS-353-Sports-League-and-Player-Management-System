@@ -384,7 +384,7 @@ def report_player_attendance(date_from=None, date_to=None, player_id=None, team_
 
             # Base query joins TrainingAttendance with TrainingSession, Coach, Employee, Team, and Users
             query = """
-                SELECT 
+                SELECT
                     u.UsersID AS PlayerID,
                     u.FirstName,
                     u.LastName,
@@ -596,7 +596,7 @@ def fetch_team_transfer_offers(coachid):
             cur.execute(
                 """
                 SELECT *
-                FROM Offer o 
+                FROM Offer o
                 JOIN Player p ON p.usersid = o.requestedplayer
                 JOIN Users u ON u.usersid = p.usersid
                 JOIN Employee e ON e.usersid = p.usersid
@@ -1179,8 +1179,8 @@ def fetch_league_by_id(league_id):
                        sm.adminid
                 FROM League l
                 LEFT JOIN Season s ON l.leagueid = s.leagueid
-                LEFT JOIN SeasonModeration sm ON l.leagueid = sm.leagueid 
-                    AND s.seasonno = sm.seasonno 
+                LEFT JOIN SeasonModeration sm ON l.leagueid = sm.leagueid
+                    AND s.seasonno = sm.seasonno
                     AND s.seasonyear = sm.seasonyear
                 WHERE l.leagueid = %s
                 ORDER BY s.seasonyear DESC, s.seasonno DESC;
