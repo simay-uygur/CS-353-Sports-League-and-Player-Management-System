@@ -916,3 +916,206 @@ ALTER TABLE Users ALTER COLUMN HashedPassword TYPE TEXT;
 ALTER TABLE Users ALTER COLUMN Salt TYPE TEXT;
 UPDATE Users SET HashedPassword = RTRIM(HashedPassword);
 UPDATE Users SET Salt = RTRIM(Salt);
+
+
+
+---------------------------------------------------------------------------------------------------------------------------
+
+-- 1. USERS (SuperAdmin, Admin, TeamOwner, Referee, Coach, Player)
+-- Password for all is "password" (hashed/salted placeholder)
+-- ----------------------------------------------------------------------------
+
+-- SuperAdmin
+INSERT INTO Users (FirstName, LastName, Email, HashedPassword, Salt, BirthDate, Role, Nationality)
+VALUES ('Super', 'Admin', 'super@admin.com', 'hash123', 'salt123', '1980-01-01', 'SuperAdmin', 'USA');
+
+INSERT INTO SuperAdmin (UsersID) VALUES ((SELECT UsersID FROM Users WHERE Email='super@admin.com'));
+
+-- Admins
+INSERT INTO Users (FirstName, LastName, Email, HashedPassword, Salt, BirthDate, Role, Nationality)
+VALUES ('League', 'Admin', 'admin@league.com', 'hash123', 'salt123', '1985-05-15', 'Admin', 'UK');
+
+INSERT INTO Admin (UsersID) VALUES ((SELECT UsersID FROM Users WHERE Email='admin@league.com'));
+
+-- Team Owners
+INSERT INTO Users (FirstName, LastName, Email, HashedPassword, Salt, BirthDate, Role, Nationality)
+VALUES 
+('Ali', 'Koc', 'ali@fenerbahce.com', 'hash123', 'salt123', '1967-04-02', 'TeamOwner', 'Turkey'),
+('Dursun', 'Ozbek', 'dursun@galatasaray.com', 'hash123', 'salt123', '1950-01-01', 'TeamOwner', 'Turkey');
+
+INSERT INTO TeamOwner (UsersID, NetWorth)
+VALUES 
+((SELECT UsersID FROM Users WHERE Email='ali@fenerbahce.com'), 1000000.00),
+((SELECT UsersID FROM Users WHERE Email='dursun@galatasaray.com'), 500000.00);
+
+-- Referees
+INSERT INTO Users (FirstName, LastName, Email, HashedPassword, Salt, BirthDate, Role, Nationality)
+VALUES ('Cuneyt', 'Cakir', 'cuneyt@ref.com', 'hash123', 'salt123', '1976-11-23', 'Referee', 'Turkey');
+
+INSERT INTO Referee (UsersID, Certification)
+VALUES ((SELECT UsersID FROM Users WHERE Email='cuneyt@ref.com'), 'FIFA Pro');
+
+-- 2. TEAMS
+-- ----------------------------------------------------------------------------
+INSERT INTO Team (OwnerID, TeamName, EstablishedDate, HomeVenue)
+VALUES 
+((SELECT UsersID FROM Users WHERE Email='ali@fenerbahce.com'), 'Fenerbahce', '1907-05-03', 'Sukru Saracoglu'),
+((SELECT UsersID FROM Users WHERE Email='dursun@galatasaray.com'), 'Galatasaray', '1905-10-01', 'RAMS Park');
+
+-- 3. EMPLOYEES (Coaches & Players)
+-- Note: Employee table is a supertype for Coach and Player
+-- ----------------------------------------------------------------------------
+
+-- Coaches
+INSERT INTO Users (FirstName, LastName, Email, HashedPassword, Salt, BirthDate, Role, Nationality)
+VALUES 
+('Jose', 'Mourinho', 'jose@fb.com', 'hash123', 'salt123', '1963-01-26', 'Coach', 'Portugal'),
+('Okan', 'Buruk', 'okan@gs.com', 'hash123', 'salt123', '1973-10-19', 'Coach', 'Turkey');
+
+INSERT INTO Employee (UsersID, TeamID) VALUES 
+((SELECT UsersID FROM Users WHERE Email='jose@fb.com'), (SELECT TeamID FROM Team WHERE TeamName='Fenerbahce')),
+((SELECT UsersID FROM Users WHERE Email='okan@gs.com'), (SELECT TeamID FROM Team WHERE TeamName='Galatasaray'));
+
+INSERT INTO Coach (UsersID, Certification) VALUES 
+((SELECT UsersID FROM Users WHERE Email='jose@fb.com'), 'UEFA Pro'),
+((SELECT UsersID FROM Users WHERE Email='okan@gs.com'), 'UEFA Pro');
+
+-- Players (Fenerbahce)
+INSERT INTO Users (FirstName, LastName, Email, HashedPassword, Salt, BirthDate, Role, Nationality)
+VALUES 
+('Edin', 'Dzeko', 'dzeko@fb.com', 'hash123', 'salt123', '1986-03-17', 'Player', 'Bosnia'),
+('Dusan', 'Tadic', 'tadic@fb.com', 'hash123', 'salt123', '1988-11-20', 'Player', 'Serbia'),
+('Fred', 'Rodrigues', 'fred@fb.com', 'hash123', 'salt123', '1993-03-05', 'Player', 'Brazil'),
+('Dominik', 'Livakovic', 'liva@fb.com', 'hash123', 'salt123', '1995-01-09', 'Player', 'Croatia');
+
+INSERT INTO Employee (UsersID, TeamID)
+SELECT UsersID, (SELECT TeamID FROM Team WHERE TeamName='Fenerbahce') 
+FROM Users WHERE Email IN ('dzeko@fb.com', 'tadic@fb.com', 'fred@fb.com', 'liva@fb.com');
+
+INSERT INTO Player (UsersID, Height, Weight, Overall, Position, IsEligible)
+VALUES 
+((SELECT UsersID FROM Users WHERE Email='dzeko@fb.com'), 193, 80, '85', 'Striker', 'TRUE'),
+((SELECT UsersID FROM Users WHERE Email='tadic@fb.com'), 181, 76, '84', 'Winger', 'TRUE'),
+((SELECT UsersID FROM Users WHERE Email='fred@fb.com'), 169, 64, '81', 'Midfielder', 'TRUE'),
+((SELECT UsersID FROM Users WHERE Email='liva@fb.com'), 188, 79, '82', 'Goalkeeper', 'TRUE');
+
+-- Players (Galatasaray)
+INSERT INTO Users (FirstName, LastName, Email, HashedPassword, Salt, BirthDate, Role, Nationality)
+VALUES 
+('Mauro', 'Icardi', 'icardi@gs.com', 'hash123', 'salt123', '1993-02-19', 'Player', 'Argentina'),
+('Fernando', 'Muslera', 'muslera@gs.com', 'hash123', 'salt123', '1986-06-16', 'Player', 'Uruguay'),
+('Kerem', 'Akturkoglu', 'kerem@gs.com', 'hash123', 'salt123', '1998-10-21', 'Player', 'Turkey'),
+('Lucas', 'Torreira', 'lucas@gs.com', 'hash123', 'salt123', '1996-02-11', 'Player', 'Uruguay');
+
+INSERT INTO Employee (UsersID, TeamID)
+SELECT UsersID, (SELECT TeamID FROM Team WHERE TeamName='Galatasaray') 
+FROM Users WHERE Email IN ('icardi@gs.com', 'muslera@gs.com', 'kerem@gs.com', 'lucas@gs.com');
+
+INSERT INTO Player (UsersID, Height, Weight, Overall, Position, IsEligible)
+VALUES 
+((SELECT UsersID FROM Users WHERE Email='icardi@gs.com'), 181, 75, '86', 'Striker', 'TRUE'),
+((SELECT UsersID FROM Users WHERE Email='muslera@gs.com'), 190, 84, '83', 'Goalkeeper', 'TRUE'),
+((SELECT UsersID FROM Users WHERE Email='kerem@gs.com'), 173, 68, '80', 'Winger', 'TRUE'),
+((SELECT UsersID FROM Users WHERE Email='lucas@gs.com'), 166, 60, '82', 'Midfielder', 'TRUE');
+
+-- 4. EMPLOYMENT CONTRACTS (Required for View logic in triggers [cite: 63, 86])
+-- ----------------------------------------------------------------------------
+INSERT INTO Employment (StartDate, EndDate, Salary)
+VALUES ('2023-01-01', '2027-01-01', 5000000);
+
+-- Link employees to contracts (Assuming generic contract for seeding simplicity)
+INSERT INTO Employed (EmploymentID, UsersID, TeamID)
+SELECT 
+    (SELECT MAX(EmploymentID) FROM Employment), 
+    UsersID, 
+    TeamID 
+FROM Employee 
+WHERE TeamID IS NOT NULL;
+
+
+-- 5. LEAGUES & SEASONS
+-- ----------------------------------------------------------------------------
+INSERT INTO League (Name) VALUES ('Super Lig');
+
+INSERT INTO Season (LeagueID, SeasonNo, SeasonYear, StartDate, EndDate, PrizePool)
+VALUES (
+    (SELECT LeagueID FROM League WHERE Name='Super Lig'),
+    1,
+    '2025-01-01',
+    '2025-08-01 00:00:00',
+    '2026-05-30 00:00:00',
+    100000000
+);
+
+-- Link Admin to Season Moderation [cite: 91]
+INSERT INTO SeasonModeration (LeagueID, SeasonNo, SeasonYear, AdminID)
+VALUES (
+    (SELECT LeagueID FROM League WHERE Name='Super Lig'),
+    1,
+    '2025-01-01',
+    (SELECT UsersID FROM Users WHERE Email='admin@league.com')
+);
+
+-- 6. MATCHES (Today's match for testing Referee View [cite: 72])
+-- ----------------------------------------------------------------------------
+-- Using NOW() ensures the match appears in the "Today's Matches" view regardless of when you run this
+INSERT INTO Match (
+    HomeTeamID, AwayTeamID, MatchStartDatetime, MatchEndDatetime, 
+    VenuePlayed, HomeTeamName, AwayTeamName, 
+    HomeTeamScore, AwayTeamScore, WinnerTeam, IsLocked
+)
+VALUES (
+    (SELECT TeamID FROM Team WHERE TeamName='Fenerbahce'),
+    (SELECT TeamID FROM Team WHERE TeamName='Galatasaray'),
+    NOW()::timestamp, 
+    NULL,
+    'Sukru Saracoglu',
+    'Fenerbahce',
+    'Galatasaray',
+    0, 0, NULL, FALSE
+);
+
+-- Link Match to Season [cite: 75]
+INSERT INTO SeasonalMatch (MatchID, LeagueID, SeasonNo, SeasonYear)
+VALUES (
+    (SELECT MAX(MatchID) FROM Match),
+    (SELECT LeagueID FROM League WHERE Name='Super Lig'),
+    1,
+    '2025-01-01'
+);
+
+-- Assign Referee to Match [cite: 95]
+INSERT INTO RefereeMatchAttendance (MatchID, RefereeID)
+VALUES (
+    (SELECT MAX(MatchID) FROM Match),
+    (SELECT UsersID FROM Users WHERE Email='cuneyt@ref.com')
+);
+
+-- 7. MATCH PLAY DATA (Initial Data for Stats Testing [cite: 64])
+-- ----------------------------------------------------------------------------
+
+-- Insert Dzeko playing in the match (Start of game)
+INSERT INTO Play (
+    MatchID, PlayerID, SubstitutionID, StartTime, StopTime, 
+    SuccessfulPasses, GoalsScored, PenaltiesScored, AssistsMade, TotalPasses, YellowCards, RedCards, Saves
+)
+VALUES (
+    (SELECT MAX(MatchID) FROM Match),
+    (SELECT UsersID FROM Users WHERE Email='dzeko@fb.com'),
+    NULL,
+    0, 90, 
+    0, 0, 0, 0, 0, 0, 0, 0
+);
+
+-- Insert Icardi playing in the match
+INSERT INTO Play (
+    MatchID, PlayerID, SubstitutionID, StartTime, StopTime, 
+    SuccessfulPasses, GoalsScored, PenaltiesScored, AssistsMade, TotalPasses, YellowCards, RedCards, Saves
+)
+VALUES (
+    (SELECT MAX(MatchID) FROM Match),
+    (SELECT UsersID FROM Users WHERE Email='icardi@gs.com'),
+    NULL,
+    0, 90, 
+    0, 0, 0, 0, 0, 0, 0, 0
+);

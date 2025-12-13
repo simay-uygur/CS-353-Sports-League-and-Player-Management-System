@@ -1,4 +1,4 @@
-# this is a mediator file that talks with the database and does common database tasks 
+# this is a mediator file that talks with the database and does common database tasks
 import math
 import random
 from datetime import datetime, timedelta
@@ -10,11 +10,12 @@ import os
 
 from db import get_connection
 
+
 def execute_query(query, params=None):
     conn = None
     cursor = None
     try:
-        conn = db.get_connection()
+        conn = get_connection()
         cursor = conn.cursor()
         cursor.execute(query, params)
         if query.strip().upper().startswith("SELECT"):
@@ -33,12 +34,13 @@ def execute_query(query, params=None):
             cursor.close()
         if conn:
             conn.close()
-            
+
+
 def fetch_one(query, params=None):
     conn = None
     cursor = None
     try:
-        conn = db.get_connection()
+        conn = get_connection()
         cursor = conn.cursor()
         cursor.execute(query, params)
         result = cursor.fetchone()
@@ -53,9 +55,8 @@ def fetch_one(query, params=None):
             cursor.close()
         if conn:
             conn.close()
-            
-            
-            
+
+
 def fetch_all_teams():
     conn = get_connection()
     try:
@@ -71,8 +72,8 @@ def fetch_all_teams():
             return cur.fetchall()
     finally:
         conn.close()
-        
-        
+
+
 def fetch_all_players():
     conn = get_connection()
     try:
@@ -89,20 +90,19 @@ def fetch_all_players():
             return cur.fetchall()
     finally:
         conn.close()
-        
-        
+
+
 def fetch_matches_grouped(tournament_id):
     """
     Fetch tournament bracket with all rounds (including those without matches).
     Returns rounds grouped by level (for display).
     """
-    
-    
+
     def _round_level(round_no):
         if round_no <= 0:
             return 1
         return math.floor(math.log2(round_no)) + 1
-  
+
     conn = get_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -139,7 +139,8 @@ def fetch_matches_grouped(tournament_id):
 
 def create_tournament_with_bracket(form_data, admin_id, moderator_ids=None):
     if not admin_id:
-        raise ValueError("You must be signed in as an admin to create tournaments.")
+        raise ValueError(
+            "You must be signed in as an admin to create tournaments.")
 
     name = (form_data.get("tournament_name") or "").strip()
     if not name:
@@ -148,7 +149,7 @@ def create_tournament_with_bracket(form_data, admin_id, moderator_ids=None):
     start_date_str = (form_data.get("tournament_start_date") or "").strip()
     if not start_date_str:
         raise ValueError("Tournament start date is required.")
-    
+
     try:
         start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
     except ValueError:
@@ -158,11 +159,13 @@ def create_tournament_with_bracket(form_data, admin_id, moderator_ids=None):
     size = len(team_ids)
 
     if size < 2:
-        raise ValueError("Please select at least two teams for this tournament.")
+        raise ValueError(
+            "Please select at least two teams for this tournament.")
 
     # Check if size is power of 2
     if (size & (size - 1)) != 0:
-        raise ValueError("Please select a power of 2 number of teams (2, 4, 8, 16, etc.).")
+        raise ValueError(
+            "Please select a power of 2 number of teams (2, 4, 8, 16, etc.).")
 
     if len(set(team_ids)) != len(team_ids):
         raise ValueError("Each team can only be selected once.")
@@ -198,17 +201,18 @@ def create_tournament_with_bracket(form_data, admin_id, moderator_ids=None):
                         (tournament_id, moderator_id),
                     )
 
-                leaf_match_ids = _build_bracket_tree(cur, tournament_id, team_ids, start_date)
+                leaf_match_ids = _build_bracket_tree(
+                    cur, tournament_id, team_ids, start_date)
 
         return {"tournament_id": tournament_id, "match_ids": leaf_match_ids}
     finally:
-        conn.close()        
-        
-        
+        conn.close()
+
+
 def _build_bracket_tree(cur, tournament_id, team_ids, start_date):
     """
     Build complete binary bracket tree in memory, then INSERT all at once.
-    
+
     Steps:
     1. Validate team_count is power of 2
     2. Calculate tree depth (leaf level)
@@ -216,7 +220,7 @@ def _build_bracket_tree(cur, tournament_id, team_ids, start_date):
     4. INSERT all rounds into DB (single transaction)
     5. CREATE matches ONLY for leaf rounds
     6. UPDATE leaf rounds with MatchID
-    
+
     Tree structure:
     - Root: RoundNo=1, ParentRoundNo=NULL
     - Level L: 2^L nodes, RoundNo from 2^L to 2^L + (2^L - 1)
@@ -224,22 +228,22 @@ def _build_bracket_tree(cur, tournament_id, team_ids, start_date):
     - Each leaf has exactly 1 match
     """
     team_count = len(team_ids)
-    
+
     # Validate power of 2 (already done in _create_tournament_with_bracket, but be safe)
     if (team_count & (team_count - 1)) != 0:
         raise ValueError("Team count must be a power of 2.")
-    
+
     # Calculate depth
     # depth = level of leaves
     # leaf count = 2^depth = team_count / 2
     # So depth = log2(team_count) - 1
     depth = int(math.log2(team_count)) - 1
-    
+
     # Helper functions
     def get_round_no(level, index):
         """Convert (level, index) to RoundNo. RoundNo = 2^level + index."""
         return (1 << level) + index
-    
+
     def get_children(level, index):
         """Get (child1_round_no, child2_round_no) for node at (level, index)."""
         if level == depth:
@@ -249,7 +253,7 @@ def _build_bracket_tree(cur, tournament_id, team_ids, start_date):
         child1_no = get_round_no(child_level, index * 2)
         child2_no = get_round_no(child_level, index * 2 + 1)
         return child1_no, child2_no
-    
+
     def get_parent(level, index):
         """Get parent_round_no for node at (level, index)."""
         if level == 0:
@@ -258,19 +262,21 @@ def _build_bracket_tree(cur, tournament_id, team_ids, start_date):
         parent_level = level - 1
         parent_index = index // 2
         return get_round_no(parent_level, parent_index)
-    
+
     # Generate all rounds in memory (no DB access yet)
-    rounds_to_insert = []  # List of tuples: (tournament_id, round_no, child1_no, child2_no, parent_no)
-    
+    # List of tuples: (tournament_id, round_no, child1_no, child2_no, parent_no)
+    rounds_to_insert = []
+
     for level in range(depth + 1):
         nodes_at_level = 1 << level  # 2^level
         for index in range(nodes_at_level):
             round_no = get_round_no(level, index)
             child1, child2 = get_children(level, index)
             parent = get_parent(level, index)
-            
-            rounds_to_insert.append((tournament_id, round_no, child1, child2, parent))
-    
+
+            rounds_to_insert.append(
+                (tournament_id, round_no, child1, child2, parent))
+
     # INSERT all rounds with links left NULL, then set them after all rows exist
     for tournament_id_val, round_no, child1_no, child2_no, parent_no in rounds_to_insert:
         cur.execute(
@@ -292,33 +298,33 @@ def _build_bracket_tree(cur, tournament_id, team_ids, start_date):
             """,
             (child1_no, child2_no, parent_no, tournament_id_val, round_no),
         )
-    
+
     # CREATE matches for leaf rounds only
     # Shuffle teams and pair them
     shuffled_ids = team_ids[:]
     random.shuffle(shuffled_ids)
     team_names = lookup_team_names(cur, team_ids)
-    
+
     # Create pairs: (team0, team1), (team2, team3), ...
     leaf_pairs = [
         (shuffled_ids[i], shuffled_ids[i + 1])
         for i in range(0, len(shuffled_ids), 2)
     ]
-    
+
     created_match_ids = []
-    
+
     for leaf_index, (home_team_id, away_team_id) in enumerate(leaf_pairs):
         leaf_round_no = get_round_no(depth, leaf_index)
-        
+
         home_team_name = team_names.get(home_team_id)
         away_team_name = team_names.get(away_team_id)
         if not home_team_name or not away_team_name:
             raise ValueError("One or more selected teams no longer exist.")
-        
+
         # Match datetime: start_date + (leaf_index * 1 day), 19:00
         match_datetime = start_date + timedelta(days=leaf_index)
         match_datetime = match_datetime.replace(hour=19, minute=0, second=0)
-        
+
         # INSERT Match
         cur.execute(
             """
@@ -338,17 +344,18 @@ def _build_bracket_tree(cur, tournament_id, team_ids, start_date):
             VALUES (%s, %s, %s, NULL, NULL, %s, %s, NULL, NULL, NULL, FALSE)
             RETURNING MatchID;
             """,
-            (home_team_id, away_team_id, match_datetime, home_team_name, away_team_name),
+            (home_team_id, away_team_id, match_datetime,
+             home_team_name, away_team_name),
         )
         match_id = cur.fetchone()[0]
         created_match_ids.append(match_id)
-        
+
         # INSERT into TournamentMatch
         cur.execute(
             "INSERT INTO TournamentMatch (MatchID) VALUES (%s);",
             (match_id,),
         )
-        
+
         # UPDATE leaf round with match ID
         cur.execute(
             """
@@ -358,11 +365,10 @@ def _build_bracket_tree(cur, tournament_id, team_ids, start_date):
             """,
             (match_id, tournament_id, leaf_round_no),
         )
-    
-    return created_match_ids        
-  
-  
-  
+
+    return created_match_ids
+
+
 def lookup_team_names(cur, team_ids):
     if not team_ids:
         return {}
@@ -375,8 +381,8 @@ def lookup_team_names(cur, team_ids):
         (team_ids,),
     )
     return {row[0]: row[1] for row in cur.fetchall()}
-  
-  
+
+
 def fetch_tournaments(admin_id):
     conn = get_connection()
     try:
@@ -439,7 +445,7 @@ def delete_tournament_and_matches(tournament_id):
     finally:
         conn.close()
 
-        
+
 def _insert_play_rows_for_match(match_id, include_tournament_matches=False):
     """
     Shared insertion logic to add Play rows for a match.
@@ -575,6 +581,3 @@ def _ensure_admin_record(cur, admin_id):
         """,
         (admin_id,),
     )
-        
-        
-        

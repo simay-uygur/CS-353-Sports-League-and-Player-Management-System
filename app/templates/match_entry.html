@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center;">
+  <h2 id="matchTitle">Loading Match...</h2>
+  <div>
+    <button class="btn btn-dark" id="tabRoster" onclick="switchTab('roster')">Roster</button>
+    <button class="btn btn-outline" id="tabInjuries" onclick="switchTab('injuries')">Injuries</button>
+  </div>
+</div>
+
+<div id="rosterView" class="roster-container card" style="margin-top: 20px;">
+
+  <div>
+    <h3>Home Roster</h3>
+    <ul id="homeRoster" class="roster-list"></ul>
+  </div>
+
+  <div>
+    <h3>Away Roster</h3>
+    <ul id="awayRoster" class="roster-list"></ul>
+  </div>
+
+  <div id="inputPanel" style="background: #fdfdfd; padding: 15px; border-left: 1px solid #eee;">
+    <h3 id="selectedPlayerName">Select a Player</h3>
+    <form id="playForm" onsubmit="event.preventDefault(); savePlay();">
+      <input type="hidden" id="selectedPlayerId">
+
+      <div class="form-grid">
+        <div>
+          <label>Start Time</label>
+          <input type="number" id="startTime" name="starttime" placeholder="Min">
+        </div>
+        <div>
+          <label>End Time</label>
+          <input type="number" id="endTime" name="stoptime" placeholder="Min">
+        </div>
+        <div>
+          <label>Goals</label>
+          <input type="number" id="goals" value="0">
+        </div>
+        <div>
+          <label>Assists</label>
+          <input type="number" id="assists" value="0">
+        </div>
+        <div>
+          <label>Yellow Cards</label>
+          <input type="number" id="yellow" value="0">
+        </div>
+        <div>
+          <label>Red Cards</label>
+          <input type="number" id="red" value="0">
+        </div>
+      </div>
+
+      <div style="margin: 20px 0;">
+        <label>
+          <input type="checkbox" id="isSubstituted" onchange="toggleSubDropdown()">
+          Substituted
+        </label>
+
+        <div id="subDropdownContainer" style="display:none; margin-top: 10px;">
+          <label>Subbed In Player ID:</label>
+          <input type="number" id="subId" placeholder="ID">
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-dark" style="width: 100%">Save Player Stats</button>
+    </form>
+  </div>
+</div>
+
+<div id="injuryView" class="card" style="display: none; margin-top: 20px;">
+  <h3>Record Injury</h3>
+  <div class="form-grid">
+    <input type="text" id="injType" placeholder="Injury Type">
+    <input type="date" id="injDate">
+    <textarea id="injDesc" placeholder="Description"
+      style="grid-column: span 2; width: 100%; padding: 10px;"></textarea>
+  </div>
+  <button class="btn btn-dark" onclick="saveInjury()">Save Injury</button>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const MATCH_ID = {{match_id}};
+  let currentTab = 'roster';
+
+  function switchTab(tab) {
+    currentTab = tab;
+    document.getElementById('rosterView').style.display = tab === 'roster' ? 'grid' : 'none';
+    document.getElementById('injuryView').style.display = tab === 'injuries' ? 'block' : 'none';
+  }
+
+  function toggleSubDropdown() {
+    const isChecked = document.getElementById('isSubstituted').checked;
+    document.getElementById('subDropdownContainer').style.display = isChecked ? 'block' : 'none';
+  }
+
+  async function loadRosters() {
+    // Fetch Home Roster [cite: 1054]
+    const homeRes = await fetch(`${API_BASE}/match/${MATCH_ID}/roster/home`);
+    const homeData = await homeRes.json();
+    renderRosterList(homeData, 'homeRoster');
+
+    // Fetch Away Roster [cite: 1096]
+    const awayRes = await fetch(`${API_BASE}/match/${MATCH_ID}/roster/away`);
+    const awayData = await awayRes.json();
+    renderRosterList(awayData, 'awayRoster');
+
+    // Set Title based on data
+    if (homeData.length > 0) {
+      document.getElementById('matchTitle').innerText = `Match Details`;
+    }
+  }
+
+  function renderRosterList(players, elementId) {
+    const ul = document.getElementById(elementId);
+    ul.innerHTML = '';
+    players.forEach(p => {
+      const li = document.createElement('li');
+      li.className = 'roster-item';
+      // Visual indicator for eligibility/injury [cite: 1149]
+      const status = p.disciplinarilypunished ? '<span style="color:red; font-size:10px; margin-left:5px">(Banned)</span>' : '';
+
+      li.innerHTML = `<div class="avatar">${p.firstname[0]}</div> ${p.firstname} ${p.lastname} ${status}`;
+      li.onclick = () => selectPlayer(p);
+      ul.appendChild(li);
+    });
+  }
+
+  function selectPlayer(player) {
+    // Clear highlights
+    document.querySelectorAll('.roster-item').forEach(el => el.classList.remove('active'));
+
+    document.getElementById('selectedPlayerName').innerText = `${player.firstname} ${player.lastname}`;
+    document.getElementById('selectedPlayerId').value = player.usersid;
+
+    // Reset form or fill with existing data (Source 1187 logic)
+    document.getElementById('goals').value = player.goalsscored || 0;
+    // ... (fill other fields similarly)
+  }
+
+  async function savePlay() {
+    const pid = document.getElementById('selectedPlayerId').value;
+    if (!pid) return alert("Select a player first");
+
+    const payload = {
+      matchid: MATCH_ID,
+      playerid: pid,
+      goalsscored: document.getElementById('goals').value,
+      // ... collect other fields
+      substitutionid: document.getElementById('isSubstituted').checked ? document.getElementById('subId').value : null
+    };
+
+    // Call API Source [1187-1234]
+    const res = await fetch(`${API_BASE}/match/play/save`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok) alert("Saved successfully");
+  }
+
+  loadRosters();
+</script>
+{% endblock %}
