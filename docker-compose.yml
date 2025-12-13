@@ -32,3 +32,6 @@ services:
       - FLASK_SECRET_KEY=${FLASK_SECRET_KEY_ENV}
     depends_on:
       - db
+
+volumes:
+  postgres_data:
