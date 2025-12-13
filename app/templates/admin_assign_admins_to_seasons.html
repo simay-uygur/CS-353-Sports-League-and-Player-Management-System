@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SuperAdmin | Assign Admins to Seasons</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="dashboard-body">
+    {% include "_banner.html" %}
+    <main class="dashboard-container">
+        <header class="admin-header">
+            <div>
+                <p class="eyebrow">SuperAdmin Console</p>
+                <h1>Assign Admins to "{{ league_name }}"</h1>
+            </div>
+        </header>
+
+        <section class="create-layout">
+            <form class="create-card" method="POST" novalidate>
+                <div class="create-card-inner">
+                    {% if error_message %}
+                    <div class="form-message error">{{ error_message }}</div>
+                    {% else %}
+                    <p class="form-note">Assign admins to manage each season. You can assign the same admins to all seasons or choose different admins for each.</p>
+                    {% endif %}
+
+                    <div class="admin-assignment-card">
+                        <label class="admin-assignment-label">Admin Assignment Mode</label>
+                        <div class="admin-mode-options" role="group" aria-label="Admin assignment mode">
+                            <label class="admin-mode-option">
+                                <input type="radio" 
+                                       name="assignment_type" 
+                                       value="all" 
+                                       id="mode-all"
+                                       checked
+                                       onchange="updateAssignmentUI()">
+                                <span class="admin-mode-text">Same Admins for All Seasons</span>
+                            </label>
+                            <label class="admin-mode-option">
+                                <input type="radio" 
+                                       name="assignment_type" 
+                                       value="per-season"
+                                       id="mode-per-season"
+                                       onchange="updateAssignmentUI()">
+                                <span class="admin-mode-text">Different Admins per Season</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- All Seasons Mode -->
+                    <div id="all-seasons-mode" class="assignment-mode-panel">
+                        <label>Select Admins (all seasons)</label>
+                        <p class="select-hint subtle">These admins will manage all seasons of this league.</p>
+                        <div class="admin-picker">
+                            <div class="search-box">
+                                <input type="search"
+                                       id="admin-search"
+                                       placeholder="Search admins by name or email"
+                                       aria-label="Search admins">
+                            </div>
+                            <div class="checkbox-list" id="admin-checkbox-list">
+                                {% for admin in admins %}
+                                <label class="checkbox-line" data-admin-search="{{ (admin.firstname ~ ' ' ~ admin.lastname ~ ' ' ~ admin.email)|lower }}">
+                                    <input type="checkbox"
+                                           name="admin_ids"
+                                           value="{{ admin.usersid }}"
+                                           {% if admin.usersid in global_admin_ids %}checked{% endif %}>
+                                    <span>{{ admin.firstname }} {{ admin.lastname }} ({{ admin.email }})</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Per-Season Mode -->
+                    <div id="per-season-mode" class="assignment-mode-panel" style="display: none;">
+                        <input type="hidden" name="season_count" value="{{ seasons|length }}">
+                        
+                        {% for season in seasons %}
+                        <div class="season-admin-card">
+                            <div class="season-admin-header">
+                                <h4>Season {{ season.season_no }} ({{ season.season_year }})</h4>
+                                <span class="season-dates">{{ season.start_date|strftime('%b %d, %Y') }} — {{ season.end_date|strftime('%b %d, %Y') }}</span>
+                            </div>
+
+                            <input type="hidden" name="season_no_{{ loop.index0 }}" value="{{ season.season_no }}">
+                            <input type="hidden" name="season_year_{{ loop.index0 }}" value="{{ season.season_year }}">
+
+                            <label>Assign Admins</label>
+                            <div class="admin-picker-small">
+                                <div class="checkbox-list" id="season-admins-list-{{ loop.index0 }}">
+                                    {% for admin in admins %}
+                                    <label class="checkbox-line">
+                                        <input type="checkbox"
+                                               name="season_admins_{{ loop.index0 }}"
+                                               value="{{ admin.usersid }}"
+                                               {% if admin.usersid in season.admin_ids %}checked{% endif %}>
+                                        <span>{{ admin.firstname }} {{ admin.lastname }} ({{ admin.email }})</span>
+                                    </label>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="form-action-buttons">
+                        <button type="button"
+                                class="btn ghost leave-link"
+                                data-target="{{ url_for(cancel_endpoint) }}"
+                                data-confirm-message="Leave without saving admin assignments?">
+                            Cancel
+                        </button>
+                        <button type="submit" class="btn solid">Save Assignments</button>
+                    </div>
+                </div>
+            </form>
+        </section>
+    </main>
+
+    <script>
+        function updateAssignmentUI() {
+            const allSeasonsModePanel = document.getElementById('all-seasons-mode');
+            const perSeasonModePanel = document.getElementById('per-season-mode');
+            const modeAll = document.getElementById('mode-all').checked;
+
+            if (modeAll) {
+                allSeasonsModePanel.style.display = 'block';
+                perSeasonModePanel.style.display = 'none';
+            } else {
+                allSeasonsModePanel.style.display = 'none';
+                perSeasonModePanel.style.display = 'block';
+            }
+        }
+
+        // Admin search functionality for all-seasons mode
+        document.getElementById('admin-search')?.addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            const checkboxLines = document.querySelectorAll('#admin-checkbox-list .checkbox-line');
+            
+            checkboxLines.forEach(line => {
+                const searchText = line.getAttribute('data-admin-search');
+                const matches = searchText.includes(searchTerm);
+                line.style.display = matches ? 'flex' : 'none';
+            });
+        });
+
+        // Leave / cancel handler
+        document.querySelectorAll('.leave-link').forEach(button => {
+            button.addEventListener('click', function (e) {
+                e.preventDefault();
+                const message = button.dataset.confirmMessage || 'Leave without saving admin assignments?';
+                if (confirm(message)) {
+                    const target = button.dataset.target;
+                    if (target) {
+                        window.location.href = target;
+                    }
+                }
+            });
+        });
+    </script>
+
+    <style>
+        .assignment-mode-panel {
+            margin: 1.5rem 0;
+        }
+
+        .season-admin-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            background-color: #f9f9f9;
+        }
+
+        .season-admin-header {
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .season-admin-header h4 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1rem;
+            color: #333;
+        }
+
+        .season-dates {
+            display: block;
+            font-size: 0.875rem;
+            color: #666;
+            margin-top: 0.25rem;
+        }
+
+        .admin-picker-small {
+            margin-top: 0.75rem;
+        }
+
+        .admin-picker-small .checkbox-list {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .checkbox-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .checkbox-line {
+            display: flex;
+            align-items: center;
+            padding: 0.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .checkbox-line:hover {
+            background-color: #e8f4f8;
+        }
+
+        .checkbox-line input[type="checkbox"] {
+            margin-right: 0.75rem;
+            cursor: pointer;
+        }
+
+        .checkbox-line span {
+            flex: 1;
+        }
+
+        /* Match create page radio styling */
+        .admin-assignment-card {
+            margin-top: 20px;
+            padding-top: 12px;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .admin-assignment-label {
+            display: block;
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 12px;
+        }
+
+        .admin-mode-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .admin-mode-option {
+            position: relative;
+            display: inline-flex;
+            align-items: stretch;
+            cursor: pointer;
+        }
+
+        .admin-mode-option input[type="radio"] {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .admin-mode-text {
+            display: inline-flex;
+            align-items: center;
+            padding: 10px 14px;
+            border: 1px solid #dbe2ef;
+            border-radius: 12px;
+            background: #f8fafc;
+            font-weight: 600;
+            color: #334155;
+            transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+            min-height: 42px;
+        }
+
+        .admin-mode-option input[type="radio"]:checked + .admin-mode-text {
+            border-color: #111827;
+            background: #111827;
+            color: #ffffff;
+            box-shadow: 0 8px 20px rgba(17, 24, 39, 0.15);
+        }
+
+        .admin-mode-option input[type="radio"]:focus-visible + .admin-mode-text {
+            outline: 3px solid rgba(79, 124, 255, 0.35);
+            outline-offset: 2px;
+        }
+    </style>
+</body>
+</html>

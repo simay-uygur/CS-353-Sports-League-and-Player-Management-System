@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin | Assign Referee to Match</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="dashboard-body">
+    {% include "_banner.html" %}
+    <main class="dashboard-container">
+        <header class="admin-header">
+            <div>
+                <p class="eyebrow">Admin Console</p>
+                <h1>Assign Referee to Match</h1>
+            </div>
+            <div class="header-actions">
+                <a href="{{ url_for('admin.view_matches_for_referees') }}" class="btn black"><- Back</a>
+            </div>
+        </header>
+
+        <section class="match-detail">
+            <div class="match-card">
+                <div class="match-header">
+                    <div class="match-info">
+                        <h2>{{ match.hometeamname }} vs {{ match.awayteamname }}</h2>
+                        <p class="match-datetime">{{ match.matchstartdatetime|strftime('%A, %B %d, %Y at %H:%M') }}</p>
+                        {% if match.hometeamscore is not none and match.awayteamscore is not none %}
+                            <p class="match-score-final">Final Score: <strong>{{ match.hometeamscore }} - {{ match.awayteamscore }}</strong></p>
+                        {% else %}
+                            <p class="match-status-pending">Match Status: <em>Not Yet Played</em></p>
+                        {% endif %}
+                    </div>
+                    <div class="match-meta">
+                        <span class="match-type-badge">{{ match.match_type|title }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="referee-section">
+                <h3>Assign Referees</h3>
+                
+                {% if match.referees %}
+                <div class="assigned-referees">
+                    <h4>Currently Assigned</h4>
+                    <div class="referee-list">
+                        {% for referee in match.referees %}
+                        <div class="referee-card assigned">
+                            <div class="referee-info">
+                                <strong>{{ referee.firstname }} {{ referee.lastname }}</strong><br>
+                                <small>{{ referee.email }}</small>
+                            </div>
+                            <form method="POST" class="inline-form" onsubmit="return confirm('Remove this referee from the match?');">
+                                <button type="submit" class="btn small danger" formaction="{{ url_for('admin.remove_match_referee', match_id=match.matchid, referee_id=referee.usersid) }}">
+                                    Remove
+                                </button>
+                            </form>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <h4>Available Referees</h4>
+                <div class="available-referees">
+                    {% if referees %}
+                        <div class="referee-picker">
+                            <div class="search-box">
+                                <input type="search"
+                                       id="referee-search"
+                                       placeholder="Search referees by name or email"
+                                       aria-label="Search referees">
+                            </div>
+                            <div class="referee-list" id="referee-list">
+                                {% for referee in referees %}
+                                    {% if referee.usersid not in assigned_referee_ids %}
+                                    <div class="referee-card available" data-referee-search="{{ (referee.firstname ~ ' ' ~ referee.lastname ~ ' ' ~ referee.email)|lower }}">
+                                        <div class="referee-info">
+                                            <strong>{{ referee.firstname }} {{ referee.lastname }}</strong><br>
+                                            <small>{{ referee.email }}</small>
+                                        </div>
+                                        <form method="POST" class="inline-form">
+                                            <button type="submit" class="btn small" formaction="{{ url_for('admin.assign_match_referee', match_id=match.matchid, referee_id=referee.usersid) }}">
+                                                Assign
+                                            </button>
+                                        </form>
+                                    </div>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% else %}
+                    <p class="subtle">No referees available in the system.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        document.getElementById('referee-search')?.addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            const refereeCards = document.querySelectorAll('#referee-list .referee-card');
+            
+            refereeCards.forEach(card => {
+                const searchText = card.getAttribute('data-referee-search');
+                const matches = searchText.includes(searchTerm);
+                card.style.display = matches ? 'flex' : 'none';
+            });
+        });
+    </script>
+
+    <style>
+        .match-detail {
+            display: grid;
+            gap: 2rem;
+        }
+
+        .match-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 2rem;
+        }
+
+        .match-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .match-header h2 {
+            margin: 0 0 0.75rem 0;
+            font-size: 1.5rem;
+        }
+
+        .match-datetime {
+            margin: 0 0 0.5rem 0;
+            color: #666;
+            font-size: 0.95rem;
+        }
+
+        .match-score-final {
+            margin: 0;
+            color: #2e7d32;
+            font-size: 1rem;
+        }
+
+        .match-status-pending {
+            margin: 0;
+            color: #f57c00;
+            font-size: 0.95rem;
+        }
+
+        .match-meta {
+            text-align: right;
+        }
+
+        .match-type-badge {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            background-color: #e3f2fd;
+            color: #1565c0;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+
+        .referee-section {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 2rem;
+        }
+
+        .referee-section h3 {
+            margin: 0 0 1.5rem 0;
+            font-size: 1.25rem;
+        }
+
+        .referee-section h4 {
+            margin: 1.5rem 0 1rem 0;
+            font-size: 1rem;
+            color: #333;
+        }
+
+        .assigned-referees {
+            margin-bottom: 2rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .referee-list {
+            display: grid;
+            gap: 0.75rem;
+        }
+
+        .referee-card {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 1.25rem;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            background-color: #fafafa;
+            transition: all 0.2s ease;
+        }
+
+        .referee-card:hover {
+            background-color: #f5f5f5;
+            border-color: #ccc;
+        }
+
+        .referee-card.assigned {
+            background-color: #e8f5e9;
+            border-color: #66bb6a;
+        }
+
+        .referee-card.assigned:hover {
+            background-color: #e0f2e1;
+            border-color: #4caf50;
+        }
+
+        .referee-info {
+            flex: 1;
+        }
+
+        .referee-info strong {
+            display: block;
+            margin-bottom: 0.25rem;
+            color: #333;
+        }
+
+        .referee-info small {
+            color: #666;
+        }
+
+        .inline-form {
+            margin: 0;
+        }
+
+        .btn.small {
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+        }
+
+        .btn.small.danger {
+            background-color: #f44336;
+            color: white;
+        }
+
+        .btn.small.danger:hover {
+            background-color: #d32f2f;
+        }
+
+        .btn.black {
+            background-color: #111;
+            color: #fff;
+            border: 1px solid #111;
+        }
+
+        .btn.black:hover {
+            background-color: #000;
+            border-color: #000;
+        }
+
+        .referee-picker {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .search-box {
+            margin-bottom: 1rem;
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 10;
+            padding-bottom: 0.5rem;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: border-color 0.2s ease;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: #1565c0;
+            box-shadow: 0 0 0 3px rgba(21, 101, 192, 0.1);
+        }
+
+        .subtle {
+            color: #999;
+            font-style: italic;
+            margin: 1rem 0;
+        }
+    </style>
+</body>
+</html>

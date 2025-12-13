@@ -3,8 +3,8 @@ CREATE TABLE Users (
   FirstName VARCHAR(30) NOT NULL,
   LastName VARCHAR(30) NOT NULL,
   Email VARCHAR(255) NOT NULL UNIQUE,
-  HashedPassword CHAR(255) NOT NULL,
-  Salt CHAR(255) NOT NULL,
+  HashedPassword TEXT NOT NULL,
+  Salt TEXT NOT NULL,
   PasswordDate TIMESTAMP,
   PhoneNumber VARCHAR(25),
   BirthDate TIMESTAMP NOT NULL,
@@ -197,6 +197,14 @@ CREATE TABLE League (
   PRIMARY KEY (LeagueID)
 );
 
+CREATE TABLE LeagueTeam (
+  LeagueID INT,
+  TeamID INT,
+  PRIMARY KEY (LeagueID, TeamID),
+  FOREIGN KEY (LeagueID) REFERENCES League(LeagueID) ON DELETE CASCADE,
+  FOREIGN KEY (TeamID) REFERENCES Team(TeamID) ON DELETE CASCADE
+);
+
 CREATE TABLE Season (
   LeagueID INT,
   SeasonNo INT,
@@ -250,14 +258,13 @@ CREATE TABLE Offer (
   OfferID SERIAL,
   RequestingCoach INT NOT NULL,
   RequestedPlayer INT NOT NULL,
-  ResponsibleCoach INT,
-  OfferDate TIMESTAMP NOT NULL,
+  OfferedEndDate TIMESTAMP NOT NULL,
   AvailableUntil TIMESTAMP NOT NULL,
-  OfferStatus INT NOT NULL,
+  OfferAmount INT NOT NULL,
+  OfferStatus BOOLEAN,
   PRIMARY KEY (OfferID),
   FOREIGN KEY (RequestingCoach) REFERENCES Coach(UsersID) ON DELETE CASCADE,
-  FOREIGN KEY (RequestedPlayer) REFERENCES Player(UsersID) ON DELETE CASCADE,
-  FOREIGN KEY (ResponsibleCoach) REFERENCES Coach(UsersID) ON DELETE CASCADE
+  FOREIGN KEY (RequestedPlayer) REFERENCES Player(UsersID) ON DELETE CASCADE
 );
 
 CREATE TABLE Employed (
@@ -488,6 +495,14 @@ JOIN Round R1 ON R1.T_MatchID = TM1.MatchID
 JOIN Tournament T1 USING (TournamentID)
 GROUP BY U1.UsersID, U1.FirstName, U1.LastName, T1.TournamentID, T1.Name;
 
+CREATE OR REPLACE VIEW CurrentEmployment AS (
+  SELECT DISTINCT ON (UsersID) 
+   *
+  FROM AllEmploymentInfo
+  WHERE EndDate > NOW()
+  ORDER BY UsersID, StartDate DESC
+);
+
 -- functions 
 
 -- triggers
@@ -638,6 +653,58 @@ FOR EACH ROW
 EXECUTE FUNCTION fill_parent_match();
 
 
+-- ===== TRIGGER: Auto-create Play rows when a Match is inserted =====
+-- Purpose: Whenever a Match is created (league or tournament), automatically 
+--          populate Play rows for all current active players on both teams.
+-- Logic:
+--   1. Get the HomeTeamID and AwayTeamID from the new Match
+--   2. Find all players actively employed by both teams at the match time
+--   3. Insert Play rows for each player (without eligibility check for now)
+-- Note: This runs for BOTH seasonal matches and tournament matches
+-- Note: IsEligible filtering is currently bypassed
+CREATE OR REPLACE FUNCTION auto_create_plays_on_match_insert()
+RETURNS TRIGGER AS $$
+DECLARE
+    home_team_id INT;
+    away_team_id INT;
+    match_time TIMESTAMP;
+BEGIN
+    home_team_id := NEW.HomeTeamID;
+    away_team_id := NEW.AwayTeamID;
+    match_time := NEW.MatchStartDatetime;
+
+    -- Insert Play rows for all active players from both teams
+    WITH active_players AS (
+        SELECT em.UsersID AS player_id
+        FROM Employed em
+        JOIN Employment e ON e.EmploymentID = em.EmploymentID
+        JOIN Player p ON p.UsersID = em.UsersID
+        WHERE em.TeamID IN (home_team_id, away_team_id)
+          AND e.StartDate <= match_time
+          AND e.EndDate >= match_time
+          -- NOTE: Skipping IsEligible check for now (see TODO in create_tournament_with_bracket)
+    ),
+    to_insert AS (
+        SELECT NEW.MatchID AS match_id, ap.player_id
+        FROM active_players ap
+        WHERE NOT EXISTS (
+            SELECT 1 FROM Play pl
+            WHERE pl.MatchID = NEW.MatchID AND pl.PlayerID = ap.player_id
+        )
+    )
+    INSERT INTO Play (MatchID, PlayerID)
+    SELECT match_id, player_id FROM to_insert;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_auto_create_plays_on_match_insert
+AFTER INSERT ON Match
+FOR EACH ROW
+EXECUTE FUNCTION auto_create_plays_on_match_insert();
+
+
 
 
 
@@ -778,6 +845,68 @@ AFTER UPDATE ON Match
 FOR EACH ROW
 EXECUTE FUNCTION update_match_winner();
 
+-- trigger to update a player's employment after accepting an offer ----------
+CREATE OR REPLACE FUNCTION handle_accepted_transfer_offer()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_requesting_coach_team INT;
+  v_current_employment_id INT;
+  v_current_employment_salary INT;
+  v_new_employment_id INT;
+BEGIN
+  -- Only process when OfferStatus changes to 1 (accepted)
+  IF NEW.OfferStatus = TRUE AND (OLD.OfferStatus IS NULL OR OLD.OfferStatus != TRUE) THEN
+    
+    -- Get the requesting coach's team
+    SELECT TeamID INTO v_requesting_coach_team
+    FROM Employee
+    WHERE UsersID = NEW.RequestingCoach;
+    
+    -- Only proceed if the coach has a team
+    IF v_requesting_coach_team IS NOT NULL THEN
+      
+      -- Get the player's most recent employment
+      SELECT em.EmploymentID, emp.Salary
+      INTO v_current_employment_id, v_current_employment_salary
+      FROM Employed em
+      JOIN Employment emp ON em.EmploymentID = emp.EmploymentID
+      WHERE em.UsersID = NEW.RequestedPlayer
+      AND emp.EndDate > NOW()
+      ORDER BY emp.StartDate DESC
+      LIMIT 1;
+      
+      -- If player has active employment, end it
+      IF v_current_employment_id IS NOT NULL THEN
+        UPDATE Employment
+        SET EndDate = NOW()
+        WHERE EmploymentID = v_current_employment_id;
+      END IF;
+      
+      -- Update the player's team in Employee table
+      UPDATE Employee
+      SET TeamID = v_requesting_coach_team
+      WHERE UsersID = NEW.RequestedPlayer;
+      
+      -- Create new employment record with OfferedEndDate
+      INSERT INTO Employment (StartDate, EndDate, Salary)
+      VALUES (NOW(), NEW.OfferedEndDate, COALESCE(v_current_employment_salary, 60000))
+      RETURNING EmploymentID INTO v_new_employment_id;
+      
+      -- Create new employed record
+      INSERT INTO Employed (EmploymentID, UsersID, TeamID)
+      VALUES (v_new_employment_id, NEW.RequestedPlayer, v_requesting_coach_team);
+    END IF;
+  END IF;
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER tr_accepted_transfer_offer
+AFTER UPDATE ON Offer
+FOR EACH ROW
+EXECUTE FUNCTION handle_accepted_transfer_offer();
+
 -- sample data ---------------------------------------------------------------
 INSERT INTO Users (
   FirstName,
@@ -791,53 +920,67 @@ INSERT INTO Users (
   Role,
   Nationality
 ) VALUES
-  ('Ada', 'Admin', 'admin@example.com', REPEAT('a', 64), REPEAT('s', 32), NOW(), '555-0001', TO_DATE('1988-05-10','YYYY-MM-DD'), 'admin', 'USA'),
-  ('Olivia', 'Owner', 'owner1@example.com', REPEAT('b', 64), REPEAT('t', 32), NOW(), '555-0011', TO_DATE('1990-03-22','YYYY-MM-DD'), 'team_owner', 'Spain'),
-  ('Noah', 'Owner', 'owner2@example.com', REPEAT('c', 64), REPEAT('u', 32), NOW(), '555-0022', TO_DATE('1989-11-05','YYYY-MM-DD'), 'team_owner', 'Turkey'),
-  ('Mia', 'Owner', 'owner3@example.com', REPEAT('d', 64), REPEAT('v', 32), NOW(), '555-0033', TO_DATE('1992-07-14','YYYY-MM-DD'), 'team_owner', 'Italy'),
-  ('Elena', 'Owner', 'owner4@example.com', REPEAT('aa', 32), REPEAT('ww', 16), NOW(), '555-0044', TO_DATE('1987-02-19','YYYY-MM-DD'), 'team_owner', 'Germany'),
-  ('Kenan', 'Owner', 'owner5@example.com', REPEAT('bb', 32), REPEAT('xx', 16), NOW(), '555-0055', TO_DATE('1991-09-07','YYYY-MM-DD'), 'team_owner', 'France'),
-  ('Sara', 'Owner', 'owner6@example.com', REPEAT('cc', 32), REPEAT('yy', 16), NOW(), '555-0066', TO_DATE('1988-12-11','YYYY-MM-DD'), 'team_owner', 'Netherlands'),
-  ('Omar', 'Owner', 'owner7@example.com', REPEAT('dd', 32), REPEAT('zz', 16), NOW(), '555-0077', TO_DATE('1993-04-03','YYYY-MM-DD'), 'team_owner', 'Morocco'),
-  ('Priya', 'Owner', 'owner8@example.com', REPEAT('ee', 32), REPEAT('qq', 16), NOW(), '555-0088', TO_DATE('1986-08-29','YYYY-MM-DD'), 'team_owner', 'India'),
+  ('Alice', 'Smith', 'a1@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'admin', 'USA'),
+  ('Aaron', 'Lee', 'a2@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'admin', 'Canada'),
+  ('Sam', 'Super', 'sa@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'superadmin', 'USA'),
+  -- Owners
+  ('Olivia', 'Ortiz', 'o1@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'team_owner', 'Spain'),
+  ('Noah', 'Novak', 'o2@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'team_owner', 'Turkey'),
+  ('Mia', 'Marino', 'o3@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'team_owner', 'Italy'),
+  ('Elena', 'Evans', 'o4@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'team_owner', 'Germany'),
+  ('Kenan', 'Kaya', 'o5@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'team_owner', 'France'),
+  ('Sara', 'Sato', 'o6@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'team_owner', 'Netherlands'),
+  ('Omar', 'Ochoa', 'o7@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'team_owner', 'Morocco'),
+  ('Priya', 'Patel', 'o8@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'team_owner', 'India'),
+  -- Additional team owners without teams
+  ('David', 'Thompson', 'o9@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'team_owner', 'UK'),
+  ('Emma', 'Wilson', 'o10@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'team_owner', 'Australia'),
+  ('James', 'Anderson', 'o11@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'team_owner', 'New Zealand'),
+  ('Sophie', 'Martin', 'o12@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'team_owner', 'Belgium'),
   -- Coaches
-  ('John', 'Coach', 'coach1@example.com', REPEAT('e', 64), REPEAT('w', 32), NOW(), '555-0101', TO_DATE('1980-01-15','YYYY-MM-DD'), 'coach', 'USA'),
-  ('Maria', 'Coach', 'coach2@example.com', REPEAT('f', 64), REPEAT('x', 32), NOW(), '555-0102', TO_DATE('1985-04-20','YYYY-MM-DD'), 'coach', 'Spain'),
-  ('Carlos', 'Coach', 'coach3@example.com', REPEAT('g', 64), REPEAT('y', 32), NOW(), '555-0103', TO_DATE('1982-06-10','YYYY-MM-DD'), 'coach', 'Italy'),
-  ('Sofia', 'Coach', 'coach4@example.com', REPEAT('h', 64), REPEAT('z', 32), NOW(), '555-0104', TO_DATE('1987-09-05','YYYY-MM-DD'), 'coach', 'Turkey'),
-  -- Players
-  ('Liam', 'Player', 'player1@example.com', REPEAT('i', 64), REPEAT('a', 32), NOW(), '555-0201', TO_DATE('2002-02-14','YYYY-MM-DD'), 'player', 'USA'),
-  ('Emma', 'Player', 'player2@example.com', REPEAT('j', 64), REPEAT('b', 32), NOW(), '555-0202', TO_DATE('2003-03-22','YYYY-MM-DD'), 'player', 'Spain'),
-  ('Lucas', 'Player', 'player3@example.com', REPEAT('k', 64), REPEAT('c', 32), NOW(), '555-0203', TO_DATE('2001-05-11','YYYY-MM-DD'), 'player', 'Italy'),
-  ('Sophia', 'Player', 'player4@example.com', REPEAT('l', 64), REPEAT('d', 32), NOW(), '555-0204', TO_DATE('2002-07-19','YYYY-MM-DD'), 'player', 'Turkey'),
-  ('James', 'Player', 'player5@example.com', REPEAT('m', 64), REPEAT('e', 32), NOW(), '555-0205', TO_DATE('2003-08-25','YYYY-MM-DD'), 'player', 'USA'),
-  ('Olivia', 'Player', 'player6@example.com', REPEAT('n', 64), REPEAT('f', 32), NOW(), '555-0206', TO_DATE('2002-01-03','YYYY-MM-DD'), 'player', 'Spain'),
-  ('Michael', 'Player', 'player7@example.com', REPEAT('o', 64), REPEAT('g', 32), NOW(), '555-0207', TO_DATE('2001-10-30','YYYY-MM-DD'), 'player', 'Italy'),
-  ('Isabella', 'Player', 'player8@example.com', REPEAT('p', 64), REPEAT('h', 32), NOW(), '555-0208', TO_DATE('2003-12-12','YYYY-MM-DD'), 'player', 'Turkey'),
-  -- real test users (can log in with password '123')
-  ('Test', 'Player', 'p@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963', '555-1001', TO_DATE('2000-01-01','YYYY-MM-DD'), 'player', 'Local'),
-  ('tl', 'Admin', 'a@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'admin', 'Local'),
-  ('super', 'super', 'sa@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'superadmin', 'Local');
+  ('John', 'Carter', 'c1@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'coach', 'USA'),
+  ('Maria', 'Lopez', 'c2@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'coach', 'Spain'),
+  ('Carlos', 'Silva', 'c3@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'coach', 'Italy'),
+  ('Sofia', 'Rossi', 'c4@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'coach', 'Turkey'),
+  ('Ivy', 'Chen', 'c5@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'coach', 'Canada'),
+  ('Mateo', 'Diaz', 'c6@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'coach', 'Argentina'),
+  ('Keiko', 'Tanaka', 'c7@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'coach', 'Japan'),
+  ('Jonas', 'Berg', 'c8@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'coach', 'Norway'),
+  -- Referees
+  ('Ryan', 'Cole', 'r1@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'referee', 'USA'),
+  ('Elena', 'Ruiz', 'r2@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'referee', 'Spain'),
+  ('Marco', 'Conte', 'r3@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'referee', 'Italy'),
+  ('Deniz', 'Arslan', 'r4@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'referee', 'Turkey'),
+  ('Pierre', 'Dupont', 'r5@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'referee', 'France'),
+  ('Hans', 'Weber', 'r6@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'referee', 'Germany'),
+  ('Bruno', 'Costa', 'r7@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'referee', 'Brazil'),
+  ('Javier', 'Mendez', 'r8@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'referee', 'Argentina'),
+  ('Kenji', 'Sato', 'r9@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'referee', 'Japan'),
+  ('Liam', 'OBrien', 'r10@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'), 'referee', 'Ireland');
 
 INSERT INTO SuperAdmin (UsersID)
 SELECT UsersID FROM Users WHERE Email = 'sa@gmail.com';
 
 
 INSERT INTO Admin (UsersID)
-SELECT UsersID FROM Users WHERE Email IN ('admin@example.com', 'a@gmail.com');
+SELECT UsersID FROM Users WHERE Email IN ('a1@gmail.com', 'a2@gmail.com');
 
 INSERT INTO TeamOwner (UsersID, NetWorth)
 SELECT u.UsersID, data.net_worth
 FROM (
   VALUES
-    ('owner1@example.com', 750000.000),
-    ('owner2@example.com', 680000.000),
-    ('owner3@example.com', 720000.000),
-    ('owner4@example.com', 650000.000),
-    ('owner5@example.com', 700000.000),
-    ('owner6@example.com', 670000.000),
-    ('owner7@example.com', 640000.000),
-    ('owner8@example.com', 710000.000)
+    ('o1@gmail.com', 750000.000),
+    ('o2@gmail.com', 680000.000),
+    ('o3@gmail.com', 720000.000),
+    ('o4@gmail.com', 650000.000),
+    ('o5@gmail.com', 700000.000),
+    ('o6@gmail.com', 670000.000),
+    ('o7@gmail.com', 640000.000),
+    ('o8@gmail.com', 710000.000),
+    ('o9@gmail.com', 690000.000),
+    ('o10@gmail.com', 660000.000),
+    ('o11@gmail.com', 680000.000),
+    ('o12@gmail.com', 700000.000)
 ) AS data(email, net_worth)
 JOIN Users u ON u.Email = data.email;
 
@@ -853,14 +996,14 @@ SELECT u.UsersID,
        data.venue
 FROM (
   VALUES
-    ('owner1@example.com', 'Lions FC', '2015-03-12', 'Sunrise Stadium'),
-    ('owner2@example.com', 'Falcons United', '2012-07-04', 'Riverfront Arena'),
-    ('owner3@example.com', 'Harbor City Waves', '2018-09-18', 'Bayfront Dome'),
-    ('owner4@example.com', 'Alpine Strikers', '2014-05-21', 'Summit Park'),
-    ('owner5@example.com', 'Riviera Royals', '2016-11-02', 'Coastal Arena'),
-    ('owner6@example.com', 'Canal City Crew', '2013-08-14', 'Harborfront Field'),
-    ('owner7@example.com', 'Atlas Eagles', '2011-02-02', 'Mountain Crest'),
-    ('owner8@example.com', 'Silk Route FC', '2017-06-09', 'Bazaar Stadium')
+    ('o1@gmail.com', 'Lions FC', '2015-03-12', 'Sunrise Stadium'),
+    ('o2@gmail.com', 'Falcons United', '2012-07-04', 'Riverfront Arena'),
+    ('o3@gmail.com', 'Harbor City Waves', '2018-09-18', 'Bayfront Dome'),
+    ('o4@gmail.com', 'Alpine Strikers', '2014-05-21', 'Summit Park'),
+    ('o5@gmail.com', 'Riviera Royals', '2016-11-02', 'Coastal Arena'),
+    ('o6@gmail.com', 'Canal City Crew', '2013-08-14', 'Harborfront Field'),
+    ('o7@gmail.com', 'Atlas Eagles', '2011-02-02', 'Mountain Crest'),
+    ('o8@gmail.com', 'Silk Route FC', '2017-06-09', 'Bazaar Stadium')
 ) AS data(email, team_name, established, venue)
 JOIN Users u ON u.Email = data.email;
 
@@ -868,48 +1011,266 @@ INSERT INTO Employee (UsersID, TeamID)
 SELECT u.UsersID, t.TeamID
 FROM Users u
 JOIN Team t ON t.OwnerID = (SELECT UsersID FROM Users WHERE Email = CASE 
-  WHEN u.Email = 'coach1@example.com' THEN 'owner1@example.com'
-  WHEN u.Email = 'coach2@example.com' THEN 'owner2@example.com'
-  WHEN u.Email = 'coach3@example.com' THEN 'owner3@example.com'
-  WHEN u.Email = 'coach4@example.com' THEN 'owner1@example.com'
+  WHEN u.Email = 'c1@gmail.com' THEN 'o1@gmail.com'
+  WHEN u.Email = 'c2@gmail.com' THEN 'o2@gmail.com'
+  WHEN u.Email = 'c3@gmail.com' THEN 'o3@gmail.com'
+  WHEN u.Email = 'c4@gmail.com' THEN 'o1@gmail.com'
 END)
-WHERE u.Email IN ('coach1@example.com', 'coach2@example.com', 'coach3@example.com', 'coach4@example.com');
+WHERE u.Email IN ('c1@gmail.com', 'c2@gmail.com', 'c3@gmail.com', 'c4@gmail.com');
 
 INSERT INTO Coach (UsersID, Certification)
 SELECT u.UsersID, 'UEFA A License'
 FROM Users u
-WHERE u.Email IN ('coach1@example.com', 'coach2@example.com', 'coach3@example.com', 'coach4@example.com');
+WHERE u.Email IN ('c1@gmail.com', 'c2@gmail.com', 'c3@gmail.com', 'c4@gmail.com');
 
-
+-- Additional coaches (unassigned to teams)
 INSERT INTO Employee (UsersID, TeamID)
-SELECT u.UsersID, t.TeamID
+SELECT u.UsersID, NULL
 FROM Users u
-JOIN Team t ON t.OwnerID = (SELECT UsersID FROM Users WHERE Email = CASE 
-  WHEN u.Email IN ('player1@example.com', 'player2@example.com') THEN 'owner1@example.com'
-  WHEN u.Email IN ('player3@example.com', 'player4@example.com') THEN 'owner2@example.com'
-  WHEN u.Email IN ('player5@example.com', 'player6@example.com') THEN 'owner3@example.com'
-  ELSE 'owner1@example.com'
-END)
-WHERE u.Email IN ('player1@example.com', 'player2@example.com', 'player3@example.com', 'player4@example.com',
-                   'player5@example.com', 'player6@example.com', 'player7@example.com', 'player8@example.com');
+WHERE u.Email IN ('c5@gmail.com', 'c6@gmail.com', 'c7@gmail.com', 'c8@gmail.com');
 
+INSERT INTO Coach (UsersID, Certification)
+SELECT u.UsersID, 'UEFA B License'
+FROM Users u
+WHERE u.Email IN ('c5@gmail.com', 'c6@gmail.com', 'c7@gmail.com', 'c8@gmail.com');
+
+-- Referees
+INSERT INTO Referee (UsersID, Certification)
+SELECT u.UsersID, 'FIFA Elite'
+FROM Users u
+WHERE u.Email LIKE 'r%@gmail.com';
+
+-- 112 players (14 per team) with ongoing employment
+WITH player_data AS (
+  SELECT * FROM (VALUES
+    ('Lions FC','Noah','Keller','p1@gmail.com','Forward',183,77),
+    ('Lions FC','Liam','Brooks','p2@gmail.com','Midfielder',180,74),
+    ('Lions FC','Ethan','Miles','p3@gmail.com','Defender',185,79),
+    ('Lions FC','Mason','Carter','p4@gmail.com','Goalkeeper',191,84),
+    ('Lions FC','Henry','Doyle','p5@gmail.com','Forward',182,76),
+    ('Lions FC','Owen','Blake','p6@gmail.com','Midfielder',179,73),
+    ('Lions FC','Isaac','Turner','p7@gmail.com','Defender',186,81),
+    ('Lions FC','Julian','Hayes','p8@gmail.com','Forward',181,75),
+    ('Lions FC','Caleb','Foster','p9@gmail.com','Midfielder',178,72),
+    ('Lions FC','Adrian','Pierce','p10@gmail.com','Defender',187,82),
+    ('Lions FC','Miles','Barrett','p11@gmail.com','Forward',184,78),
+    ('Lions FC','Felix','Rowe','p12@gmail.com','Midfielder',180,74),
+    ('Lions FC','Leo','Harmon','p13@gmail.com','Defender',188,83),
+    ('Lions FC','Nolan','Pratt','p14@gmail.com','Goalkeeper',192,86),
+    ('Falcons United','Aiden','Walsh','p15@gmail.com','Forward',182,76),
+    ('Falcons United','Logan','Hart','p16@gmail.com','Midfielder',179,72),
+    ('Falcons United','Gavin','Rhodes','p17@gmail.com','Defender',187,81),
+    ('Falcons United','Connor','Tate','p18@gmail.com','Goalkeeper',190,85),
+    ('Falcons United','Parker','Vance','p19@gmail.com','Forward',183,77),
+    ('Falcons United','Cole','Mercer','p20@gmail.com','Midfielder',181,74),
+    ('Falcons United','Dylan','Briggs','p21@gmail.com','Defender',186,80),
+    ('Falcons United','Ryder','Flynn','p22@gmail.com','Forward',182,75),
+    ('Falcons United','Chase','Dalton','p23@gmail.com','Midfielder',180,73),
+    ('Falcons United','Tyler','McKee','p24@gmail.com','Defender',188,82),
+    ('Falcons United','Max','Holden','p25@gmail.com','Forward',184,78),
+    ('Falcons United','Evan','Draper','p26@gmail.com','Midfielder',179,72),
+    ('Falcons United','Blake','Sutton','p27@gmail.com','Defender',186,81),
+    ('Falcons United','Reid','Lowry','p28@gmail.com','Goalkeeper',191,85),
+    ('Harbor City Waves','Luca','Marino','p29@gmail.com','Forward',181,75),
+    ('Harbor City Waves','Mateo','Costa','p30@gmail.com','Midfielder',178,72),
+    ('Harbor City Waves','Diego','Alvarez','p31@gmail.com','Defender',185,79),
+    ('Harbor City Waves','Marco','Russo','p32@gmail.com','Goalkeeper',190,84),
+    ('Harbor City Waves','Rafael','Silva','p33@gmail.com','Forward',183,77),
+    ('Harbor City Waves','Bruno','Santos','p34@gmail.com','Midfielder',180,74),
+    ('Harbor City Waves','Thiago','Ramos','p35@gmail.com','Defender',187,81),
+    ('Harbor City Waves','Enzo','Ferreira','p36@gmail.com','Forward',182,76),
+    ('Harbor City Waves','Gabriel','Mendes','p37@gmail.com','Midfielder',179,73),
+    ('Harbor City Waves','Santiago','Rios','p38@gmail.com','Defender',186,80),
+    ('Harbor City Waves','Julian','Herrera','p39@gmail.com','Forward',184,78),
+    ('Harbor City Waves','Adrian','Vargas','p40@gmail.com','Midfielder',180,74),
+    ('Harbor City Waves','Nicolas','Duarte','p41@gmail.com','Defender',188,82),
+    ('Harbor City Waves','Martin','Paredes','p42@gmail.com','Goalkeeper',192,86),
+    ('Alpine Strikers','Lukas','Steiner','p43@gmail.com','Forward',183,77),
+    ('Alpine Strikers','Leon','Schneider','p44@gmail.com','Midfielder',179,72),
+    ('Alpine Strikers','Jonas','Keller','p45@gmail.com','Defender',186,81),
+    ('Alpine Strikers','Fabian','Vogel','p46@gmail.com','Goalkeeper',191,85),
+    ('Alpine Strikers','Simon','Weber','p47@gmail.com','Forward',182,76),
+    ('Alpine Strikers','Moritz','Brandt','p48@gmail.com','Midfielder',180,74),
+    ('Alpine Strikers','Felix','Kruger','p49@gmail.com','Defender',187,82),
+    ('Alpine Strikers','Emil','Hofmann','p50@gmail.com','Forward',183,77),
+    ('Alpine Strikers','Niklas','Berger','p51@gmail.com','Midfielder',179,73),
+    ('Alpine Strikers','Tobias','Frank','p52@gmail.com','Defender',186,80),
+    ('Alpine Strikers','Marcel','Winkler','p53@gmail.com','Forward',184,78),
+    ('Alpine Strikers','Pascal','Neumann','p54@gmail.com','Midfielder',180,74),
+    ('Alpine Strikers','Dennis','Koch','p55@gmail.com','Defender',188,82),
+    ('Alpine Strikers','Oliver','Busch','p56@gmail.com','Goalkeeper',192,86),
+    ('Riviera Royals','Antoine','Laurent','p57@gmail.com','Forward',182,76),
+    ('Riviera Royals','Lucas','Bernard','p58@gmail.com','Midfielder',179,72),
+    ('Riviera Royals','Hugo','Moreau','p59@gmail.com','Defender',186,81),
+    ('Riviera Royals','Maxime','Girard','p60@gmail.com','Goalkeeper',190,85),
+    ('Riviera Royals','Julien','Lefevre','p61@gmail.com','Forward',183,77),
+    ('Riviera Royals','Theo','Dubois','p62@gmail.com','Midfielder',180,74),
+    ('Riviera Royals','Pierre','Lambert','p63@gmail.com','Defender',187,82),
+    ('Riviera Royals','Adrien','Roche','p64@gmail.com','Forward',182,76),
+    ('Riviera Royals','Clement','Faure','p65@gmail.com','Midfielder',179,73),
+    ('Riviera Royals','Leo','Marchand','p66@gmail.com','Defender',186,80),
+    ('Riviera Royals','Baptiste','Noel','p67@gmail.com','Forward',184,78),
+    ('Riviera Royals','Arthur','Perrot','p68@gmail.com','Midfielder',180,74),
+    ('Riviera Royals','Remy','Colin','p69@gmail.com','Defender',188,83),
+    ('Riviera Royals','Paul','Garnier','p70@gmail.com','Goalkeeper',192,86),
+    ('Canal City Crew','Mehmet','Arslan','p71@gmail.com','Forward',183,77),
+    ('Canal City Crew','Emir','Demir','p72@gmail.com','Midfielder',179,72),
+    ('Canal City Crew','Kerem','Yilmaz','p73@gmail.com','Defender',186,81),
+    ('Canal City Crew','Can','Kaya','p74@gmail.com','Goalkeeper',190,85),
+    ('Canal City Crew','Deniz','Aydin','p75@gmail.com','Forward',182,76),
+    ('Canal City Crew','Burak','Sahin','p76@gmail.com','Midfielder',180,74),
+    ('Canal City Crew','Alp','Yildiz','p77@gmail.com','Defender',187,82),
+    ('Canal City Crew','Eren','Kaplan','p78@gmail.com','Forward',182,76),
+    ('Canal City Crew','Serkan','Kurt','p79@gmail.com','Midfielder',179,73),
+    ('Canal City Crew','Mert','Ozdemir','p80@gmail.com','Defender',186,80),
+    ('Canal City Crew','Onur','Tekin','p81@gmail.com','Forward',184,78),
+    ('Canal City Crew','Baran','Aksoy','p82@gmail.com','Midfielder',180,74),
+    ('Canal City Crew','Arda','Ceylan','p83@gmail.com','Defender',188,82),
+    ('Canal City Crew','Furkan','Gunes','p84@gmail.com','Goalkeeper',192,86),
+    ('Atlas Eagles','Carlos','Navarro','p85@gmail.com','Forward',182,76),
+    ('Atlas Eagles','Miguel','Torres','p86@gmail.com','Midfielder',179,72),
+    ('Atlas Eagles','Javier','Castillo','p87@gmail.com','Defender',186,81),
+    ('Atlas Eagles','Luis','Herrera','p88@gmail.com','Goalkeeper',190,85),
+    ('Atlas Eagles','Sergio','Molina','p89@gmail.com','Forward',183,77),
+    ('Atlas Eagles','Andres','Cabrera','p90@gmail.com','Midfielder',180,74),
+    ('Atlas Eagles','Pedro','Salas','p91@gmail.com','Defender',187,82),
+    ('Atlas Eagles','Diego','Campos','p92@gmail.com','Forward',182,76),
+    ('Atlas Eagles','Raul','Dominguez','p93@gmail.com','Midfielder',179,73),
+    ('Atlas Eagles','Ignacio','Ponce','p94@gmail.com','Defender',186,80),
+    ('Atlas Eagles','Esteban','Flores','p95@gmail.com','Forward',184,78),
+    ('Atlas Eagles','Mateo','Serrano','p96@gmail.com','Midfielder',180,74),
+    ('Atlas Eagles','Bruno','Aguilar','p97@gmail.com','Defender',188,83),
+    ('Atlas Eagles','Tomas','Rojas','p98@gmail.com','Goalkeeper',192,86),
+    ('Silk Route FC','Aarav','Patel','p99@gmail.com','Forward',182,76),
+    ('Silk Route FC','Rohan','Sharma','p100@gmail.com','Midfielder',179,72),
+    ('Silk Route FC','Vihaan','Kapoor','p101@gmail.com','Defender',186,81),
+    ('Silk Route FC','Arjun','Mehta','p102@gmail.com','Goalkeeper',190,85),
+    ('Silk Route FC','Ishaan','Nair','p103@gmail.com','Forward',183,77),
+    ('Silk Route FC','Reyansh','Gupta','p104@gmail.com','Midfielder',180,74),
+    ('Silk Route FC','Advait','Khanna','p105@gmail.com','Defender',187,82),
+    ('Silk Route FC','Kabir','Bose','p106@gmail.com','Forward',182,76),
+    ('Silk Route FC','Arnav','Malhotra','p107@gmail.com','Midfielder',179,73),
+    ('Silk Route FC','Dhruv','Verma','p108@gmail.com','Defender',186,80),
+    ('Silk Route FC','Vivaan','Iyer','p109@gmail.com','Forward',184,78),
+    ('Silk Route FC','Kian','Desai','p110@gmail.com','Midfielder',180,74),
+    ('Silk Route FC','Shaan','Batra','p111@gmail.com','Defender',188,82),
+    ('Silk Route FC','Ayaan','Sethi','p112@gmail.com','Goalkeeper',192,86)
+  ) AS v(team_name, first_name, last_name, email, position, height_cm, weight_kg)
+),
+numbered_players AS (
+  SELECT pd.*, ROW_NUMBER() OVER () AS rn
+  FROM player_data pd
+),
+insert_users AS (
+  INSERT INTO Users (
+    FirstName, LastName, Email, HashedPassword, Salt, PasswordDate,
+    PhoneNumber, BirthDate, Role, Nationality
+  )
+  SELECT
+    first_name,
+    last_name,
+    email,
+    'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'),
+    'player',
+    'Local'
+  FROM numbered_players
+  RETURNING UsersID, Email
+),
+players_with_ids AS (
+  SELECT np.*, iu.UsersID
+  FROM numbered_players np
+  JOIN insert_users iu ON iu.Email = np.email
+),
+player_employees AS (
+  INSERT INTO Employee (UsersID, TeamID)
+  SELECT pwi.UsersID, t.TeamID
+  FROM players_with_ids pwi
+  JOIN Team t ON t.TeamName = pwi.team_name
+  RETURNING UsersID, TeamID
+),
+numbered_employee AS (
+  SELECT pe.*, ROW_NUMBER() OVER (ORDER BY pe.UsersID) AS rn
+  FROM player_employees pe
+),
+insert_employment AS (
+  INSERT INTO Employment (StartDate, EndDate, Salary)
+  SELECT DATE '2024-01-01', TIMESTAMP '2026-12-30 00:00:00', 60000 + ((rn - 1) % 5) * 2000
+  FROM numbered_employee
+  ORDER BY rn
+  RETURNING EmploymentID
+),
+employment_with_rn AS (
+  SELECT ie.EmploymentID, ROW_NUMBER() OVER (ORDER BY ie.EmploymentID) AS rn
+  FROM insert_employment ie
+),
+insert_employed AS (
+  INSERT INTO Employed (EmploymentID, UsersID, TeamID)
+  SELECT ewr.EmploymentID, ne.UsersID, ne.TeamID
+  FROM employment_with_rn ewr
+  JOIN numbered_employee ne USING (rn)
+)
 INSERT INTO Player (UsersID, Height, Weight, Overall, Position, IsEligible)
-SELECT u.UsersID, 
-       180 + (ROW_NUMBER() OVER () % 20),
-       75 + (ROW_NUMBER() OVER () % 10),
-       '85',
-       CASE (ROW_NUMBER() OVER () % 5)
-         WHEN 0 THEN 'Forward'
-         WHEN 1 THEN 'Midfielder'
-         WHEN 2 THEN 'Defender'
-         WHEN 3 THEN 'Goalkeeper'
-         ELSE 'Forward'
-       END,
-       'Yes'
-FROM Users u
-WHERE u.Email IN ('player1@example.com', 'player2@example.com', 'player3@example.com', 'player4@example.com',
-                   'player5@example.com', 'player6@example.com', 'player7@example.com', 'player8@example.com');
+SELECT pwi.UsersID, pwi.height_cm, pwi.weight_kg, '85', pwi.position, 'eligible'
+FROM players_with_ids pwi;
 
+-- Trigger to auto-mark training attendance as skipped when training time arrives
+CREATE OR REPLACE FUNCTION auto_mark_training_skipped()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- For each player on the coach's team who doesn't have a TrainingAttendance record
+    INSERT INTO TrainingAttendance (SessionID, PlayerID, Status)
+    SELECT 
+        NEW.SessionID,
+        e_player.UsersID,
+        0  -- Status 0 = Skipped
+    FROM Employee e_coach
+    JOIN Employee e_player ON e_coach.TeamID = e_player.TeamID
+    JOIN Player p ON e_player.UsersID = p.UsersID
+    WHERE e_coach.UsersID = NEW.CoachID
+      AND e_player.UsersID != e_coach.UsersID  -- Don't include the coach
+      AND NOT EXISTS (
+          SELECT 1 
+          FROM TrainingAttendance ta 
+          WHERE ta.SessionID = NEW.SessionID 
+          AND ta.PlayerID = e_player.UsersID
+      )
+    ON CONFLICT (SessionID, PlayerID) DO NOTHING;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_auto_mark_training_skipped
+AFTER INSERT OR UPDATE OF SessionDate ON TrainingSession
+FOR EACH ROW
+WHEN (NEW.SessionDate <= NOW())
+EXECUTE FUNCTION auto_mark_training_skipped();
+
+-- Function to process existing trainings that have passed
+CREATE OR REPLACE FUNCTION process_past_trainings()
+RETURNS void AS $$
+BEGIN
+    -- Mark all players as skipped for trainings that have passed and don't have attendance records
+    INSERT INTO TrainingAttendance (SessionID, PlayerID, Status)
+    SELECT DISTINCT
+        ts.SessionID,
+        e_player.UsersID,
+        0  -- Status 0 = Skipped
+    FROM TrainingSession ts
+    JOIN Employee e_coach ON ts.CoachID = e_coach.UsersID
+    JOIN Employee e_player ON e_coach.TeamID = e_player.TeamID
+    JOIN Player p ON e_player.UsersID = p.UsersID
+    WHERE ts.SessionDate <= NOW()
+      AND e_player.UsersID != e_coach.UsersID
+      AND NOT EXISTS (
+          SELECT 1 
+          FROM TrainingAttendance ta 
+          WHERE ta.SessionID = ts.SessionID 
+          AND ta.PlayerID = e_player.UsersID
+      )
+    ON CONFLICT (SessionID, PlayerID) DO NOTHING;
+END;
+$$ LANGUAGE plpgsql;
 
 -- Migrate password storage away from CHAR padding
 ALTER TABLE Users ALTER COLUMN HashedPassword TYPE TEXT;

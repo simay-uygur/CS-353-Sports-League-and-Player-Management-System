@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Team Owner | Employ Coach</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="dashboard-body">
+    {% include "_banner.html" %}
+    <main class="dashboard-container">
+        <header class="admin-header">
+            <div>
+                <p class="eyebrow">Team Owner Console</p>
+                <h1>Employ Coach</h1>
+                {% if error_message %}
+                <p class="form-message error">{{ error_message }}</p>
+                {% endif %}
+            </div>
+        </header>
+
+        <section class="team-card-list">
+            {% if teams %}
+            {% for team in teams %}
+            <div class="team-card">
+                <div class="team-card-header">
+                    <div>
+                        <h2>{{ team.teamname }}</h2>
+                        <p class="subtle">Venue: {{ team.homevenue or 'N/A' }}</p>
+                        {% if team.current_coach %}
+                        <p class="subtle" style="margin-top: 0.5rem;">
+                            Current Coach: <strong>{{ team.current_coach.firstname }} {{ team.current_coach.lastname }}</strong>
+                            {% if team.current_coach.email %}({{ team.current_coach.email }}){% endif %}
+                        </p>
+                        {% else %}
+                        <p class="subtle" style="margin-top: 0.5rem; color: #dc2626;">
+                            No coach assigned
+                        </p>
+                        {% endif %}
+                    </div>
+                    {% if available_coaches %}
+                    <form method="POST" action="{{ url_for('owner.assign_coach', team_id=team.teamid) }}" class="transfer-form">
+                        <label for="coach_id_{{ team.teamid }}">Assign Coach:</label>
+                        <select id="coach_id_{{ team.teamid }}" name="coach_id" required class="form-select">
+                            <option value="">Select coach</option>
+                            {% for coach in available_coaches %}
+                            <option value="{{ coach.usersid }}">{{ coach.firstname }} {{ coach.lastname }} ({{ coach.email }}) - {{ coach.certification }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit" class="btn solid">Assign</button>
+                    </form>
+                    {% else %}
+                    <p class="subtle">No available coaches.</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="empty-state">
+                <p>You currently do not own any teams.</p>
+            </div>
+            {% endif %}
+        </section>
+
+        {% if available_coaches %}
+        <section style="margin-top: 2rem;">
+            <div class="card">
+                <h3>Available Coaches</h3>
+                <div class="table-card">
+                    <table class="simple-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Certification</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for coach in available_coaches %}
+                            <tr>
+                                <td>{{ coach.firstname }} {{ coach.lastname }}</td>
+                                <td>{{ coach.email }}</td>
+                                <td>{{ coach.certification }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+        {% endif %}
+    </main>
+</body>
+</html>
+

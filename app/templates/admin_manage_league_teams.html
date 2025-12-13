@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin | Manage League Teams</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="dashboard-body">
+    {% include "_banner.html" %}
+    <main class="dashboard-container">
+        <header class="admin-header">
+            <div>
+                <p class="eyebrow">Admin Console</p>
+                <h1>Manage League Teams</h1>
+                <p class="subtitle">{{ league_name }}</p>
+            </div>
+            <div>
+                <a href="{{ url_for('admin.view_leagues') }}" class="btn solid">&larr; Back to Leagues</a>
+            </div>
+        </header>
+
+        {% if error_message %}
+        <div class="form-message error">{{ error_message }}</div>
+        {% endif %}
+
+        <section class="manage-teams-container">
+            <div class="teams-section">
+                <h2>Teams in League</h2>
+                <p class="section-hint">Teams currently participating in this league</p>
+                
+                {% if league_teams %}
+                <div class="teams-list">
+                    {% for team in league_teams %}
+                    <div class="team-card">
+                        <div class="team-info">
+                            <h3>{{ team.teamname }}</h3>
+                        </div>
+                        <form method="POST" action="{{ url_for('admin.remove_team_from_league', league_id=league_id, team_id=team.teamid) }}" onsubmit="return confirm('Remove this team from the league?');" style="display: inline;">
+                            <button type="submit" class="btn danger btn-small">Remove</button>
+                        </form>
+                    </div>
+                    {% endfor %}
+                </div>
+                <p class="teams-count">{{ league_teams|length }} team(s) in league</p>
+                {% else %}
+                <p class="subtle">No teams in this league yet.</p>
+                {% endif %}
+            </div>
+
+            <div class="teams-section">
+                <h2>Available Teams</h2>
+                <p class="section-hint">Teams you can add to this league</p>
+                
+                {% if available_teams %}
+                <div class="search-box" style="margin-bottom: 1.5rem;">
+                    <input type="search"
+                           id="team-search"
+                           placeholder="Search teams..."
+                           aria-label="Search teams">
+                </div>
+
+                <div class="teams-list" id="available-teams-list">
+                    {% for team in available_teams %}
+                    <div class="team-card team-available" data-team-search="{{ team.teamname|lower }}">
+                        <div class="team-info">
+                            <h3>{{ team.teamname }}</h3>
+                        </div>
+                        <form method="POST" action="{{ url_for('admin.add_team_to_league', league_id=league_id, team_id=team.teamid) }}" style="display: inline;">
+                            <button type="submit" class="btn solid btn-small">Add</button>
+                        </form>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="subtle">All teams are already in this league.</p>
+                {% endif %}
+            </div>
+        </section>
+    </main>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const teamSearch = document.getElementById("team-search");
+            const availableTeamsList = document.getElementById("available-teams-list");
+            
+            if (teamSearch && availableTeamsList) {
+                const teamRows = Array.from(availableTeamsList.querySelectorAll(".team-card"));
+                
+                teamSearch.addEventListener("input", function (event) {
+                    const query = (event.target.value || "").toLowerCase().trim();
+                    teamRows.forEach(row => {
+                        const haystack = (row.dataset.teamSearch || "").toLowerCase();
+                        const match = !query || haystack.includes(query);
+                        row.classList.toggle("is-hidden", !match);
+                    });
+                });
+            }
+        });
+    </script>
+
+    <style>
+        .manage-teams-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .teams-section {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 2rem;
+        }
+
+        .teams-section h2 {
+            margin-top: 0;
+            font-size: 1.3rem;
+            color: #333;
+            margin-bottom: 0.5rem;
+        }
+
+        .section-hint {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .teams-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .team-card {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            background: #f9f9f9;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+
+        .team-card:hover {
+            background: #f0f0f0;
+        }
+
+        .team-card.is-hidden {
+            display: none;
+        }
+
+        .team-info {
+            flex: 1;
+        }
+
+        .team-info h3 {
+            margin: 0;
+            font-size: 1rem;
+            color: #333;
+        }
+
+        .teams-count {
+            color: #666;
+            font-size: 0.85rem;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .search-box {
+            display: flex;
+            align-items: center;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 0.95rem;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 4px rgba(0, 123, 255, 0.25);
+        }
+
+        .btn.danger {
+            background-color: #ff4444;
+            color: white;
+        }
+
+        .btn.danger:hover {
+            background-color: #cc0000;
+        }
+
+        .subtitle {
+            font-size: 0.9rem;
+            color: #666;
+            margin: 0.5rem 0 0 0;
+        }
+
+        @media (max-width: 900px) {
+            .manage-teams-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .form-message {
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 4px;
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .form-message.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border-color: #f5c6cb;
+        }
+    </style>
+</body>
+</html>

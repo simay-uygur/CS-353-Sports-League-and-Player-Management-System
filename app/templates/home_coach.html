@@ -6,10 +6,16 @@
     <title>Sports League | Coach Home</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
-<body class="auth-body">
-    <main class="auth-card">
+<body class="dashboard-body">
+    {% include "_banner.html" %}
+    <main class="dashboard-container">
+        <header class="admin-header">
+            <div>
+                <p class="eyebrow">Coach Console</p>
+                <h1>Coach Home</h1>
+            </div>
+        </header>
         <section>
-            <h1>Coach Home</h1>
             <p class="subtitle">Welcome, coach. Your dashboard will appear here.</p>
         </section>
     </main>
