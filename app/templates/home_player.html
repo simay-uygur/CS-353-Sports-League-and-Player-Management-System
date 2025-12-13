@@ -16,10 +16,6 @@
                     Status: {{ 'Eligible' if player_info.iseligible else 'Ineligible' }}
                 </span>
             </div>
-            <div class="player-header__right">
-                <span class="icon-bell">🔔</span>
-                <span class="icon-profile">👤</span>
-            </div>
         </header>
 
         <div class="player-dashboard-grid">
@@ -29,7 +25,7 @@
                 <section class="dashboard-card">
                     <div class="card-header-with-link">
                         <h2>Upcoming Trainings</h2>
-                        <a href="{{ url_for('view_trainings') }}" class="view-all-link">See All →</a>
+                        <a href="{{ url_for('player.view_trainings') }}" class="view-all-link">See All →</a>
                     </div>
                     <div class="training-list">
                         <p class="subtle">No upcoming trainings scheduled.</p>
@@ -40,9 +36,18 @@
                 <section class="dashboard-card">
                     <div class="card-header-with-link">
                         <h2>Offers and Invites</h2>
-                        <a href="{{ url_for('view_offers') }}" class="view-all-link">See All →</a>
+                        <a href="{{ url_for('player.view_offers') }}" class="view-all-link">See All →</a>
                     </div>
                     <p class="subtle">See your pending offers and invites.</p>
+                </section>
+
+                <!-- My Team -->
+                <section class="dashboard-card">
+                    <div class="card-header-with-link">
+                        <h2>My Team</h2>
+                        <a href="{{ url_for('player.view_team') }}" class="view-all-link">View Team →</a>
+                    </div>
+                    <p class="subtle">View your team information and teammates.</p>
                 </section>
             </div>
 
@@ -83,7 +88,7 @@
                     <!-- Filter Form -->
                     <div class="stats-filter-form">
                         <h3>View Season Statistics</h3>
-                        <form method="GET" action="{{ url_for('home_player') }}" class="filter-form">
+                        <form method="GET" action="{{ url_for('player.home') }}" class="filter-form">
                             <div class="form-row">
                                 <label for="league_id">League</label>
                                 <select name="league_id" id="league_id">
@@ -106,7 +111,7 @@
                             <div class="form-row">
                                 <button type="submit" class="btn solid">View Statistics</button>
                                 {% if selected_league_id or selected_season_no or selected_season_year %}
-                                <a href="{{ url_for('home_player') }}" class="btn ghost">Clear Filters</a>
+                                <a href="{{ url_for('player.home') }}" class="btn ghost">Clear Filters</a>
                                 {% endif %}
                             </div>
                         </form>
@@ -194,12 +199,6 @@
                     </div>
                     {% endif %}
                 </section>
-
-                <!-- Calendar Section -->
-                <section class="dashboard-card">
-                    <h2>Calendar</h2>
-                    <p class="subtle">Calendar functionality coming soon.</p>
-        </section>
             </div>
         </div>
     </main>

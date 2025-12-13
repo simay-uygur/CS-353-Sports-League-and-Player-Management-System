@@ -37,6 +37,38 @@
                     </div>
                 </div>
                 
+                {% if coaches %}
+                <div style="margin-top: 1.5rem;">
+                    <h3 style="font-size: 1.1rem; margin-bottom: 0.75rem;">Coaches ({{ coaches|length }})</h3>
+                    <div class="table-card">
+                        <table class="simple-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Certification</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for coach in coaches %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ coach.firstname }} {{ coach.lastname }}</strong>
+                                    </td>
+                                    <td>{{ coach.email or 'N/A' }}</td>
+                                    <td>{{ coach.certification or 'N/A' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% else %}
+                <div style="margin-top: 1.5rem;">
+                    <p class="subtle">No coaches currently assigned to this team.</p>
+                </div>
+                {% endif %}
+                
                 {% if players %}
                 <div style="margin-top: 1.5rem;">
                     <h3 style="font-size: 1.1rem; margin-bottom: 0.75rem;">Players ({{ players|length }})</h3>

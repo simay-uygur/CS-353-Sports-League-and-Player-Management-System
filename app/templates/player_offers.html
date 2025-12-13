@@ -14,7 +14,7 @@
                 <p class="eyebrow">Player Dashboard</p>
                 <h1>My Offers & Invites</h1>
             </div>
-            <a href="{{ url_for('home_player') }}" class="back-link" style="background: #0f172a; color: white; border-color: #0f172a;">← Back to Dashboard</a>
+            <a href="{{ url_for('player.home') }}" class="back-link" style="background: #0f172a; color: white; border-color: #0f172a;">← Back to Dashboard</a>
         </header>
 
         {% if offers %}
@@ -22,45 +22,56 @@
             <table class="simple-table">
                 <thead>
                     <tr>
-                        <th>Offer Date</th>
                         <th>From Team</th>
                         <th>Requesting Coach</th>
                         <th>Responsible Coach</th>
                         <th>Available Until</th>
+                        <th>Contract End Date</th>
                         <th>Status</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for offer in offers %}
                     <tr>
-                        <td>
-                            <strong>{{ offer.offerdate|strftime('%Y-%m-%d') }}</strong><br>
-                            <span class="subtle">{{ offer.offerdate|strftime('%H:%M') }}</span>
-                        </td>
                         <td>{{ offer.teamname }}</td>
                         <td>{{ offer.requestingcoachfirstname }} {{ offer.requestingcoachlastname }}</td>
                         <td>
-                            {% if offer.responsiblecoachfirstname %}
-                                {{ offer.responsiblecoachfirstname }} {{ offer.responsiblecoachlastname }}
-                            {% else %}
-                                <span class="subtle">N/A</span>
-                            {% endif %}
+                            <span class="subtle">N/A</span>
                         </td>
                         <td>
                             <strong>{{ offer.availableuntil|strftime('%Y-%m-%d') }}</strong><br>
                             <span class="subtle">{{ offer.availableuntil|strftime('%H:%M') }}</span>
                         </td>
                         <td>
-                            {% if offer.offerstatus == 0 %}
+                            {% if offer.offeredenddate %}
+                                <strong>{{ offer.offeredenddate|strftime('%Y-%m-%d') }}</strong><br>
+                                <span class="subtle">{{ offer.offeredenddate|strftime('%H:%M') }}</span>
+                            {% else %}
+                                <span class="subtle">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if offer.availableuntil < now %}
+                                <span class="status-badge" style="background: #fee2e2; color: #991b1b;">Expired</span>
+                            {% elif offer.offerstatus == 0 or offer.offerstatus is none %}
                                 <span class="status-badge" style="background: #fef3c7; color: #92400e;">Pending</span>
                             {% elif offer.offerstatus == 1 %}
                                 <span class="status-badge eligible">Accepted</span>
                             {% elif offer.offerstatus == 2 %}
                                 <span class="status-badge ineligible">Rejected</span>
-                            {% elif offer.offerstatus == 3 %}
-                                <span class="status-badge" style="background: #fee2e2; color: #991b1b;">Expired</span>
                             {% else %}
                                 <span class="status-badge" style="background: #f3f4f6; color: #6b7280;">Unknown</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if offer.availableuntil > now and (offer.offerstatus is none or offer.offerstatus == 0) %}
+                                <form method="POST" action="{{ url_for('player.evaluate_offer', offer_id=offer.offerid) }}" style="display: inline-flex; gap: 0.5rem;">
+                                    <button type="submit" name="decision" value="accept" class="btn solid" style="padding: 0.5rem 1rem;">Accept</button>
+                                    <button type="submit" name="decision" value="reject" class="btn solid" style="padding: 0.5rem 1rem; background: #ef4444;">Reject</button>
+                                </form>
+                            {% else %}
+                                <span class="subtle">-</span>
                             {% endif %}
                         </td>
                     </tr>

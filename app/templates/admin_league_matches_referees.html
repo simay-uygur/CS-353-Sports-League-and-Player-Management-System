@@ -57,7 +57,7 @@
                         </td>
                         <td class="match-date">{{ match.matchstartdatetime|strftime('%b %d, %Y %H:%M') }}</td>
                         <td class="action-cell">
-                            <a href="{{ url_for('admin.match_referee_assignment', match_id=match.matchid) }}" class="btn small solid">
+                            <a href="{{ url_for('admin.match_referee_assignment', match_id=match.matchid, league_id=league_id) }}" class="btn small solid">
                                 Manage Referees
                             </a>
                         </td>

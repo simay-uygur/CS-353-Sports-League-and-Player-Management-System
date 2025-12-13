@@ -15,7 +15,11 @@
                 <h1>Assign Referee to Match</h1>
             </div>
             <div class="header-actions">
-                <a href="{{ url_for('admin.view_matches_for_referees') }}" class="btn black"><- Back</a>
+                {% if league_id %}
+                <a href="{{ url_for('admin.league_matches_referees', league_id=league_id) }}" class="btn solid">← Back</a>
+                {% else %}
+                <a href="{{ url_for('admin.view_matches_for_referees') }}" class="btn solid">← Back</a>
+                {% endif %}
             </div>
         </header>
 

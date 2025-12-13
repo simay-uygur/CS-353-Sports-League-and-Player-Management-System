@@ -14,7 +14,7 @@
                 <p class="eyebrow">Player Dashboard</p>
                 <h1>My Trainings</h1>
             </div>
-            <a href="{{ url_for('home_player') }}" class="back-link" style="background: #0f172a; color: white; border-color: #0f172a;">← Back to Dashboard</a>
+            <a href="{{ url_for('player.home') }}" class="back-link" style="background: #0f172a; color: white; border-color: #0f172a;">← Back to Dashboard</a>
         </header>
 
         {% if trainings %}
@@ -57,11 +57,11 @@
                         </td>
                         <td>
                             {% if training.sessiondate > now and training.attendancestatus is none %}
-                                <form method="POST" action="{{ url_for('update_training_attendance', session_id=training.sessionid) }}" style="display: inline-block; margin: 0;">
+                                <form method="POST" action="{{ url_for('player.update_training_attendance', session_id=training.sessionid) }}" style="display: inline-block; margin: 0;">
                                     <input type="hidden" name="status" value="1">
                                     <button type="submit" class="btn small solid" style="margin-right: 0.5rem;">Join</button>
                                 </form>
-                                <form method="POST" action="{{ url_for('update_training_attendance', session_id=training.sessionid) }}" style="display: inline-block; margin: 0;">
+                                <form method="POST" action="{{ url_for('player.update_training_attendance', session_id=training.sessionid) }}" style="display: inline-block; margin: 0;">
                                     <input type="hidden" name="status" value="0">
                                     <button type="submit" class="btn small ghost">Skip</button>
                                 </form>

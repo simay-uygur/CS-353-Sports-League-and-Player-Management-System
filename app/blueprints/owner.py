@@ -7,7 +7,9 @@ from db_helper import (
     fetch_available_coaches,
     fetch_all_coaches,
     employ_coach_to_team,
+    remove_coach_from_team,
     fetch_team_players,
+    fetch_team_coaches,
 )
 
 owner_bp = Blueprint("owner", __name__, url_prefix="/owner")
@@ -24,15 +26,13 @@ def view_teams():
     owner_id = session.get("user_id")
     teams = fetch_teams_by_owner(owner_id)
     other_owners = fetch_other_team_owners(owner_id)
-    all_coaches = fetch_all_coaches()
     
-    # Get current coach and players for each team
+    # Get coaches and players for each team
     teams_with_details = []
     for team in teams:
         team_dict = dict(team)
-        # Find coach assigned to this team
-        current_coach = next((c for c in all_coaches if c.get("teamid") == team["teamid"]), None)
-        team_dict["current_coach"] = current_coach
+        # Fetch all coaches for this team using the view
+        team_dict["coaches"] = fetch_team_coaches(team["teamid"])
         # Fetch players for this team
         team_dict["players"] = fetch_team_players(team["teamid"])
         teams_with_details.append(team_dict)
@@ -79,15 +79,13 @@ def employ_coach():
     
     teams = fetch_teams_by_owner(owner_id)
     available_coaches = fetch_available_coaches()
-    all_coaches = fetch_all_coaches()
     
-    # Get current coach for each team
+    # Get all coaches for each team using the view
     teams_with_coaches = []
     for team in teams:
         team_dict = dict(team)
-        # Find coach assigned to this team
-        current_coach = next((c for c in all_coaches if c.get("teamid") == team["teamid"]), None)
-        team_dict["current_coach"] = current_coach
+        # Fetch all coaches for this team using the view
+        team_dict["coaches"] = fetch_team_coaches(team["teamid"])
         teams_with_coaches.append(team_dict)
     
     return render_template(
@@ -108,8 +106,22 @@ def assign_coach(team_id):
     
     try:
         employ_coach_to_team(int(coach_id), team_id, owner_id)
-    except ValueError:
-        abort(400)
+        flash("Coach assigned successfully.", "success")
+    except ValueError as exc:
+        flash(str(exc), "error")
+    
+    return redirect(url_for("owner.employ_coach"))
+
+
+@owner_bp.route("/teams/<int:team_id>/remove-coach/<int:coach_id>", methods=["POST"])
+def remove_coach(team_id, coach_id):
+    owner_id = session.get("user_id")
+    
+    try:
+        remove_coach_from_team(coach_id, team_id, owner_id)
+        flash("Coach removed from team successfully.", "success")
+    except ValueError as exc:
+        flash(str(exc), "error")
     
     return redirect(url_for("owner.employ_coach"))
 

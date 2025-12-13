@@ -1,4 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session
+from datetime import datetime
 
 from db_helper import (
     fetch_transferable_players,
@@ -8,9 +9,11 @@ from db_helper import (
     fetch_player_by_id,
     make_transfer_offer,
     fetch_team_transfer_offers,
+    fetch_sent_transfer_offers,
     finalize_transfer_offer,
     fetch_team_by_coach,
     fetch_team_players,
+    fetch_team_coaches,
 )
 
 coach_bp = Blueprint("coach", __name__, url_prefix="/coach")
@@ -97,13 +100,45 @@ def view_team():
     
     if not team:
         # Coach doesn't have a team assigned
-        return render_template("coach_team.html", team=None, players=[])
+        return render_template("coach_team.html", team=None, players=[], coaches=[])
     
-    # Fetch players for this team
+    # Fetch players and coaches for this team
     players = fetch_team_players(team["teamid"])
+    coaches = fetch_team_coaches(team["teamid"])
     
     return render_template(
         "coach_team.html",
         team=team,
         players=players,
+        coaches=coaches,
     )
+
+@coach_bp.route("/offers")
+def view_team_offers():
+    coach_id = session.get("user_id")
+    pending_offers, past_offers = fetch_team_transfer_offers(coach_id)
+    sent_offers = fetch_sent_transfer_offers(coach_id)
+    now = datetime.now()
+    return render_template("coach_view_team_offers.html", pending_offers=pending_offers, past_offers=past_offers, sent_offers=sent_offers, now=now)
+
+@coach_bp.route("/offers/<int:offer_id>/evaluate", methods=["POST"])
+def evaluate_team_offer(offer_id):
+    coach_id = session.get("user_id")
+    
+    # Verify the offer is for a player on this coach's team
+    pending_offers, past_offers = fetch_team_transfer_offers(coach_id)
+    all_offers = pending_offers + past_offers
+    if not any(offer["offerid"] == offer_id for offer in all_offers):
+        return redirect(url_for("coach.view_team_offers"))
+    
+    decision = request.form.get("decision")
+    if decision in ("accept", "reject"):
+        final_decision = decision == 'accept'
+        finalize_transfer_offer(offer_id, final_decision)
+    
+    return redirect(url_for("coach.view_team_offers"))
+
+@coach_bp.route("/trainings/assign")
+def assign_training():
+    """Placeholder page for training assignment functionality."""
+    return render_template("coach_assign_training.html")

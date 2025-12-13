@@ -13,6 +13,13 @@
             <div>
                 <p class="eyebrow">Team Owner Console</p>
                 <h1>Employ Coach</h1>
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <p class="form-message {% if category == 'error' %}error{% else %}success{% endif %}">{{ message }}</p>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
                 {% if error_message %}
                 <p class="form-message error">{{ error_message }}</p>
                 {% endif %}
@@ -27,16 +34,6 @@
                     <div>
                         <h2>{{ team.teamname }}</h2>
                         <p class="subtle">Venue: {{ team.homevenue or 'N/A' }}</p>
-                        {% if team.current_coach %}
-                        <p class="subtle" style="margin-top: 0.5rem;">
-                            Current Coach: <strong>{{ team.current_coach.firstname }} {{ team.current_coach.lastname }}</strong>
-                            {% if team.current_coach.email %}({{ team.current_coach.email }}){% endif %}
-                        </p>
-                        {% else %}
-                        <p class="subtle" style="margin-top: 0.5rem; color: #dc2626;">
-                            No coach assigned
-                        </p>
-                        {% endif %}
                     </div>
                     {% if available_coaches %}
                     <form method="POST" action="{{ url_for('owner.assign_coach', team_id=team.teamid) }}" class="transfer-form">
@@ -53,6 +50,44 @@
                     <p class="subtle">No available coaches.</p>
                     {% endif %}
                 </div>
+                
+                {% if team.coaches %}
+                <div style="margin-top: 1.5rem;">
+                    <h3 style="font-size: 1.1rem; margin-bottom: 0.75rem;">Current Coaches ({{ team.coaches|length }})</h3>
+                    <div class="table-card">
+                        <table class="simple-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Certification</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for coach in team.coaches %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ coach.firstname }} {{ coach.lastname }}</strong>
+                                    </td>
+                                    <td>{{ coach.email or 'N/A' }}</td>
+                                    <td>{{ coach.certification or 'N/A' }}</td>
+                                    <td>
+                                        <form method="POST" action="{{ url_for('owner.remove_coach', team_id=team.teamid, coach_id=coach.usersid) }}" style="display: inline;" onsubmit="return confirm('Are you sure you want to remove this coach from the team?');">
+                                            <button type="submit" class="btn solid" style="padding: 0.5rem 1rem; background: #dc2626;">Remove</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% else %}
+                <div style="margin-top: 1.5rem;">
+                    <p class="subtle" style="color: #dc2626;">No coaches currently assigned to this team.</p>
+                </div>
+                {% endif %}
             </div>
             {% endfor %}
             {% else %}

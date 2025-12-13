@@ -275,11 +275,15 @@ def match_referee_assignment(match_id):
     referees = fetch_all_referees()
     assigned_referee_ids = {ref["usersid"] for ref in match.get("referees", [])}
     
+    # Get league_id from query parameter if coming from league view
+    league_id = request.args.get("league_id", type=int)
+    
     return render_template(
         "admin_match_referee_detail.html",
         match=match,
         referees=referees,
         assigned_referee_ids=assigned_referee_ids,
+        league_id=league_id,
     )
 
 

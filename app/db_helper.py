@@ -581,44 +581,188 @@ def fetch_player_transfer_offers(playerid):
         conn.close()
 
 def fetch_team_transfer_offers(coachid):
+    """
+    Fetch transfer offers for players on the coach's team.
+    Returns a tuple: (pending_offers, past_offers)
+    - pending_offers: offers with status NULL and AvailableUntil > NOW()
+    - past_offers: accepted, rejected, or expired offers
+    
+    Uses PlayerTeamAtOfferTime to show offers based on which team the player was on
+    when the offer was created. This ensures offers stay with the original team
+    even if the player transfers to another team.
+    """
     conn = get_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Get the coach's team ID
             cur.execute(
                 """
-                SELECT *
-                FROM Offer o 
-                JOIN Player p ON p.usersid = o.requestedplayer
-                JOIN Users u ON u.usersid = p.usersid
-                JOIN Employee e ON e.usersid = p.usersid
-                JOIN Team t ON e.teamid = t.teamid
-                WHERE
-                    AvailableUntil > NOW()
-                    AND OfferStatus IS NULL
-                    AND t.teamid = (
-                        SELECT teamid
-                        FROM Employee e
-                        WHERE e.usersid = %s
-                    )
-                ORDER BY AvailableUntil DESC
+                SELECT TeamID FROM Employee WHERE UsersID = %s
                 """,
                 (coachid,),
             )
-            rows = cur.fetchall()
-            return rows
+            coach_team_result = cur.fetchone()
+            if not coach_team_result or not coach_team_result.get('teamid'):
+                return ([], [])
+            coach_team_id = coach_team_result['teamid']
+            
+            # Fetch all offers for this team (using PlayerTeamAtOfferTime)
+            cur.execute(
+                """
+                SELECT 
+                    o.OfferID,
+                    o.OfferAmount,
+                    o.AvailableUntil,
+                    o.OfferedEndDate,
+                    o.OfferStatus,
+                    o.RequestingCoach,
+                    o.RequestedPlayer,
+                    u.FirstName AS PlayerFirstName,
+                    u.LastName AS PlayerLastName,
+                    u.Email AS PlayerEmail,
+                    p.Position AS PlayerPosition,
+                    COALESCE(t.TeamID, o.PlayerTeamAtOfferTime) AS PlayerTeamID,
+                    COALESCE(t.TeamName, hist_team.TeamName) AS PlayerTeamName,
+                    RC.FirstName AS RequestingCoachFirstName,
+                    RC.LastName AS RequestingCoachLastName,
+                    RC.Email AS RequestingCoachEmail,
+                    RT.TeamID AS RequestingTeamID,
+                    RT.TeamName AS RequestingTeamName
+                FROM Offer o 
+                JOIN Player p ON p.UsersID = o.RequestedPlayer
+                JOIN Users u ON u.UsersID = p.UsersID
+                JOIN Coach c ON o.RequestingCoach = c.UsersID
+                JOIN Employee ec ON c.UsersID = ec.UsersID
+                JOIN Team RT ON ec.TeamID = RT.TeamID
+                JOIN Users RC ON o.RequestingCoach = RC.UsersID
+                LEFT JOIN Employee e ON e.UsersID = p.UsersID
+                LEFT JOIN Team t ON e.TeamID = t.TeamID
+                LEFT JOIN Team hist_team ON o.PlayerTeamAtOfferTime = hist_team.TeamID
+                WHERE
+                    o.PlayerTeamAtOfferTime = %s
+                ORDER BY o.AvailableUntil DESC
+                """,
+                (coach_team_id,),
+            )
+            all_offers = cur.fetchall()
+            
+            # Split into pending and past
+            now = datetime.now()
+            pending = []
+            past = []
+            
+            for offer in all_offers:
+                is_expired = offer['availableuntil'] < now
+                is_pending = offer['offerstatus'] is None and not is_expired
+                
+                if is_pending:
+                    pending.append(offer)
+                else:
+                    past.append(offer)
+            
+            return (pending, past)
+    finally:
+        conn.close()
+
+def fetch_sent_transfer_offers(coachid):
+    """
+    Fetch transfer offers sent by coaches from the given coach's team.
+    Returns all offers (pending, accepted, rejected, expired) sent by the team.
+    Uses RequestingTeamAtOfferTime to show offers based on which team the coach was on
+    when the offer was sent, not their current team.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Get the coach's team ID
+            cur.execute(
+                """
+                SELECT TeamID FROM Employee WHERE UsersID = %s
+                """,
+                (coachid,),
+            )
+            coach_team_result = cur.fetchone()
+            if not coach_team_result or not coach_team_result.get('teamid'):
+                return []
+            coach_team_id = coach_team_result['teamid']
+            
+            # Fetch all offers sent by coaches from this team (using RequestingTeamAtOfferTime)
+            cur.execute(
+                """
+                SELECT 
+                    o.OfferID,
+                    o.OfferAmount,
+                    o.AvailableUntil,
+                    o.OfferedEndDate,
+                    o.OfferStatus,
+                    o.RequestingCoach,
+                    o.RequestedPlayer,
+                    u.FirstName AS PlayerFirstName,
+                    u.LastName AS PlayerLastName,
+                    u.Email AS PlayerEmail,
+                    p.Position AS PlayerPosition,
+                    COALESCE(t.TeamID, o.PlayerTeamAtOfferTime) AS PlayerTeamID,
+                    COALESCE(t.TeamName, hist_team.TeamName) AS PlayerTeamName,
+                    RC.FirstName AS RequestingCoachFirstName,
+                    RC.LastName AS RequestingCoachLastName,
+                    RC.Email AS RequestingCoachEmail,
+                    COALESCE(RT.TeamID, o.RequestingTeamAtOfferTime) AS RequestingTeamID,
+                    COALESCE(RT.TeamName, req_hist_team.TeamName) AS RequestingTeamName
+                FROM Offer o 
+                JOIN Player p ON p.UsersID = o.RequestedPlayer
+                JOIN Users u ON u.UsersID = p.UsersID
+                JOIN Coach c ON o.RequestingCoach = c.UsersID
+                JOIN Users RC ON o.RequestingCoach = RC.UsersID
+                LEFT JOIN Employee ec ON c.UsersID = ec.UsersID
+                LEFT JOIN Team RT ON ec.TeamID = RT.TeamID
+                LEFT JOIN Employee e ON e.UsersID = p.UsersID
+                LEFT JOIN Team t ON e.TeamID = t.TeamID
+                LEFT JOIN Team hist_team ON o.PlayerTeamAtOfferTime = hist_team.TeamID
+                LEFT JOIN Team req_hist_team ON o.RequestingTeamAtOfferTime = req_hist_team.TeamID
+                WHERE
+                    o.RequestingTeamAtOfferTime = %s
+                ORDER BY o.AvailableUntil DESC
+                """,
+                (coach_team_id,),
+            )
+            return cur.fetchall()
     finally:
         conn.close()
 
 def make_transfer_offer(playerid, coachid, amount, available_until, contract_end_date):
+    """
+    Create a transfer offer for a player.
+    Stores both the player's team and the coach's team when the offer was created for historical tracking.
+    """
     conn = get_connection()
     try:
         with conn.cursor() as cur:
+            # Get the player's current team
             cur.execute(
                 """
-                INSERT INTO Offer (RequestedPlayer, RequestingCoach, OfferAmount, AvailableUntil, OfferedEndDate)
-                VALUES (%s, %s, %s, %s, %s)
+                SELECT TeamID FROM Employee WHERE UsersID = %s
                 """,
-                (playerid, coachid, amount, available_until, contract_end_date),
+                (playerid,),
+            )
+            team_result = cur.fetchone()
+            player_team_id = team_result[0] if team_result else None
+            
+            # Get the coach's current team
+            cur.execute(
+                """
+                SELECT TeamID FROM Employee WHERE UsersID = %s
+                """,
+                (coachid,),
+            )
+            coach_team_result = cur.fetchone()
+            coach_team_id = coach_team_result[0] if coach_team_result else None
+            
+            cur.execute(
+                """
+                INSERT INTO Offer (RequestedPlayer, RequestingCoach, OfferAmount, AvailableUntil, OfferedEndDate, PlayerTeamAtOfferTime, RequestingTeamAtOfferTime)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (playerid, coachid, amount, available_until, contract_end_date, player_team_id, coach_team_id),
             )
             conn.commit()
     finally:
@@ -1625,8 +1769,10 @@ def employ_coach_to_team(coach_id, team_id, owner_id):
     Assign a coach to a team. Validates that:
     - Coach exists
     - Team belongs to the owner
-    - Ends previous coach's employment (sets their TeamID to NULL)
-    - Updates new coach's Employee.TeamID
+    - Ends new coach's previous employment if switching teams
+    - Creates new employment record for the new coach
+    - Updates Employee.TeamID for backward compatibility
+    - Does NOT terminate existing coaches on the team (allows multiple coaches)
     """
     conn = get_connection()
     try:
@@ -1656,29 +1802,57 @@ def employ_coach_to_team(coach_id, team_id, owner_id):
                 if not coach_row:
                     raise ValueError("Coach not found.")
                 
-                # Find current coach for this team and end their employment
+                # End new coach's current active employment if they have one (switching teams)
                 cur.execute(
                     """
-                    SELECT e.UsersID
-                    FROM Employee e
-                    JOIN Coach c ON e.UsersID = c.UsersID
-                    WHERE e.TeamID = %s;
+                    SELECT em.EmploymentID, emp.Salary
+                    FROM Employed em
+                    JOIN Employment emp ON em.EmploymentID = emp.EmploymentID
+                    WHERE em.UsersID = %s
+                    AND emp.EndDate > NOW()
+                    ORDER BY emp.StartDate DESC
+                    LIMIT 1;
                     """,
-                    (team_id,),
+                    (coach_id,),
                 )
-                current_coach_row = cur.fetchone()
-                if current_coach_row and current_coach_row[0] != coach_id:
-                    # End previous coach's employment
+                current_employment = cur.fetchone()
+                current_salary = current_employment[1] if current_employment else 80000  # Default coach salary
+                
+                if current_employment:
                     cur.execute(
                         """
-                        UPDATE Employee
-                        SET TeamID = NULL
-                        WHERE UsersID = %s;
+                        UPDATE Employment
+                        SET EndDate = NOW()
+                        WHERE EmploymentID = %s;
                         """,
-                        (current_coach_row[0],),
+                        (current_employment[0],),
                     )
                 
-                # Assign new coach to team
+                # Create new employment record (1 year contract)
+                start_date = datetime.now()
+                end_date = start_date + timedelta(days=365)
+                
+                cur.execute(
+                    """
+                    INSERT INTO Employment (StartDate, EndDate, Salary)
+                    VALUES (%s, %s, %s)
+                    RETURNING EmploymentID;
+                    """,
+                    (start_date, end_date, current_salary),
+                )
+                new_employment_id = cur.fetchone()[0]
+                
+                # Create new employed record
+                cur.execute(
+                    """
+                    INSERT INTO Employed (EmploymentID, UsersID, TeamID)
+                    VALUES (%s, %s, %s);
+                    """,
+                    (new_employment_id, coach_id, team_id),
+                )
+                
+                # Update Employee table for backward compatibility (shows latest team)
+                # Note: Multiple coaches per team are supported via the teamCoaches view
                 cur.execute(
                     """
                     UPDATE Employee
@@ -1690,6 +1864,86 @@ def employ_coach_to_team(coach_id, team_id, owner_id):
                 
                 if cur.rowcount == 0:
                     raise ValueError("Failed to assign coach to team.")
+    finally:
+        conn.close()
+
+
+def remove_coach_from_team(coach_id, team_id, owner_id):
+    """
+    Remove a coach from a team by terminating their employment.
+    Validates that:
+    - Coach exists and is on the team
+    - Team belongs to the owner
+    - Ends the coach's active employment
+    - Sets Employee.TeamID to NULL
+    """
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                # Verify team belongs to owner
+                cur.execute(
+                    """
+                    SELECT TeamID FROM Team WHERE TeamID = %s AND OwnerID = %s;
+                    """,
+                    (team_id, owner_id),
+                )
+                if not cur.fetchone():
+                    raise ValueError("Team does not belong to you.")
+                
+                # Verify coach exists and is on this team
+                cur.execute(
+                    """
+                    SELECT e.UsersID, e.TeamID
+                    FROM Employee e
+                    JOIN Coach c ON e.UsersID = c.UsersID
+                    WHERE e.UsersID = %s;
+                    """,
+                    (coach_id,),
+                )
+                coach_row = cur.fetchone()
+                if not coach_row:
+                    raise ValueError("Coach not found.")
+                
+                # Find and end the coach's active employment for this team
+                cur.execute(
+                    """
+                    SELECT em.EmploymentID
+                    FROM Employed em
+                    JOIN Employment emp ON em.EmploymentID = emp.EmploymentID
+                    WHERE em.UsersID = %s
+                    AND em.TeamID = %s
+                    AND emp.EndDate > NOW()
+                    ORDER BY emp.StartDate DESC
+                    LIMIT 1;
+                    """,
+                    (coach_id, team_id),
+                )
+                active_employment = cur.fetchone()
+                
+                if active_employment:
+                    cur.execute(
+                        """
+                        UPDATE Employment
+                        SET EndDate = NOW()
+                        WHERE EmploymentID = %s;
+                        """,
+                        (active_employment[0],),
+                    )
+                
+                # Update Employee table to remove team assignment
+                # Only set to NULL if they're currently on this team
+                cur.execute(
+                    """
+                    UPDATE Employee
+                    SET TeamID = NULL
+                    WHERE UsersID = %s AND TeamID = %s;
+                    """,
+                    (coach_id, team_id),
+                )
+                
+                if cur.rowcount == 0:
+                    raise ValueError("Coach is not currently assigned to this team.")
     finally:
         conn.close()
 
@@ -1716,7 +1970,7 @@ def fetch_all_referees():
 
 
 def fetch_team_players(team_id):
-    """Fetch all players currently on a team."""
+    """Fetch all players currently on a team using TeamPlayers view."""
     conn = get_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -1731,10 +1985,36 @@ def fetch_team_players(team_id):
                     p.Height,
                     p.Weight,
                     p.Overall
-                FROM Employee e
-                JOIN Player p ON e.UsersID = p.UsersID
-                JOIN Users u ON e.UsersID = u.UsersID
-                WHERE e.TeamID = %s
+                FROM TeamPlayers tp
+                JOIN Player p ON tp.PlayerID = p.UsersID
+                JOIN Users u ON tp.PlayerID = u.UsersID
+                WHERE tp.TeamID = %s
+                ORDER BY u.LastName, u.FirstName;
+                """,
+                (team_id,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_team_coaches(team_id):
+    """Fetch all coaches currently on a team using teamCoaches view."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT 
+                    c.UsersID,
+                    u.FirstName,
+                    u.LastName,
+                    u.Email,
+                    c.Certification
+                FROM teamCoaches tc
+                JOIN Coach c ON tc.CoachID = c.UsersID
+                JOIN Users u ON tc.CoachID = u.UsersID
+                WHERE tc.TeamID = %s
                 ORDER BY u.LastName, u.FirstName;
                 """,
                 (team_id,),
@@ -1760,6 +2040,35 @@ def fetch_team_by_coach(coach_id):
                 WHERE e.UsersID = %s AND e.TeamID IS NOT NULL;
                 """,
                 (coach_id,),
+            )
+            return cur.fetchone()
+    finally:
+        conn.close()
+
+
+def fetch_team_by_player(player_id):
+    """Return the team assigned to the given player."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT ON (t.TeamID)
+                       t.TeamID, t.TeamName, t.EstablishedDate, t.HomeVenue, t.OwnerID,
+                       u.FirstName as OwnerFirstName, u.LastName as OwnerLastName, u.Email as OwnerEmail,
+                       c.UsersID as CoachID,
+                       uc.FirstName as CoachFirstName, uc.LastName as CoachLastName, uc.Email as CoachEmail
+                FROM Employee e
+                JOIN Team t ON e.TeamID = t.TeamID
+                JOIN TeamOwner to_owner ON t.OwnerID = to_owner.UsersID
+                JOIN Users u ON to_owner.UsersID = u.UsersID
+                LEFT JOIN Employee ec ON ec.TeamID = t.TeamID
+                LEFT JOIN Coach c ON ec.UsersID = c.UsersID
+                LEFT JOIN Users uc ON c.UsersID = uc.UsersID
+                WHERE e.UsersID = %s AND e.TeamID IS NOT NULL
+                ORDER BY t.TeamID, c.UsersID NULLS LAST;
+                """,
+                (player_id,),
             )
             return cur.fetchone()
     finally:
@@ -2492,6 +2801,7 @@ def fetch_player_offers(player_id):
     """
     Fetch all offers and invites for a player.
     Returns offers ordered by date (newest first).
+    Only returns offers when the player has no responsible coach (no team or team has no coach).
     """
     conn = get_connection()
     try:
@@ -2500,15 +2810,12 @@ def fetch_player_offers(player_id):
                 """
                 SELECT 
                     O.OfferID,
-                    O.OfferDate,
                     O.AvailableUntil,
+                    O.OfferedEndDate,
                     O.OfferStatus,
                     O.RequestingCoach,
                     RC.FirstName AS RequestingCoachFirstName,
                     RC.LastName AS RequestingCoachLastName,
-                    O.ResponsibleCoach,
-                    RSC.FirstName AS ResponsibleCoachFirstName,
-                    RSC.LastName AS ResponsibleCoachLastName,
                     E.TeamID,
                     T.TeamName
                 FROM Offer O
@@ -2516,9 +2823,17 @@ def fetch_player_offers(player_id):
                 JOIN Employee E ON C.UsersID = E.UsersID
                 JOIN Team T ON E.TeamID = T.TeamID
                 JOIN Users RC ON O.RequestingCoach = RC.UsersID
-                LEFT JOIN Users RSC ON O.ResponsibleCoach = RSC.UsersID
                 WHERE O.RequestedPlayer = %s
-                ORDER BY O.OfferDate DESC;
+                  AND NOT EXISTS (
+                      -- Check if player has a team with a coach
+                      SELECT 1
+                      FROM Employee PE
+                      JOIN Employee CE ON CE.TeamID = PE.TeamID
+                      JOIN Coach C2 ON CE.UsersID = C2.UsersID
+                      WHERE PE.UsersID = O.RequestedPlayer
+                        AND PE.TeamID IS NOT NULL
+                  )
+                ORDER BY O.AvailableUntil DESC;
                 """,
                 (player_id,),
             )

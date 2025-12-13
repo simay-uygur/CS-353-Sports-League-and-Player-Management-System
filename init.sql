@@ -262,9 +262,13 @@ CREATE TABLE Offer (
   AvailableUntil TIMESTAMP NOT NULL,
   OfferAmount INT NOT NULL,
   OfferStatus BOOLEAN,
+  PlayerTeamAtOfferTime INT,
+  RequestingTeamAtOfferTime INT,
   PRIMARY KEY (OfferID),
   FOREIGN KEY (RequestingCoach) REFERENCES Coach(UsersID) ON DELETE CASCADE,
-  FOREIGN KEY (RequestedPlayer) REFERENCES Player(UsersID) ON DELETE CASCADE
+  FOREIGN KEY (RequestedPlayer) REFERENCES Player(UsersID) ON DELETE CASCADE,
+  FOREIGN KEY (PlayerTeamAtOfferTime) REFERENCES Team(TeamID) ON DELETE SET NULL,
+  FOREIGN KEY (RequestingTeamAtOfferTime) REFERENCES Team(TeamID) ON DELETE SET NULL
 );
 
 CREATE TABLE Employed (
@@ -502,6 +506,22 @@ CREATE OR REPLACE VIEW CurrentEmployment AS (
   WHERE EndDate > NOW()
   ORDER BY UsersID, StartDate DESC
 );
+
+CREATE OR REPLACE VIEW teamCoaches AS
+SELECT
+  e.TeamID,
+  c.UsersID AS CoachID
+FROM Coach c
+JOIN Employee e ON c.UsersID = e.UsersID
+WHERE e.TeamID IS NOT NULL;
+
+CREATE OR REPLACE VIEW TeamPlayers AS
+SELECT
+  e.TeamID,
+  p.UsersID AS PlayerID
+FROM Player p
+JOIN Employee e ON p.UsersID = e.UsersID
+WHERE e.TeamID IS NOT NULL;
 
 -- functions 
 
@@ -1016,7 +1036,7 @@ JOIN Team t ON t.OwnerID = (SELECT UsersID FROM Users WHERE Email = CASE
   WHEN u.Email = 'c3@gmail.com' THEN 'o3@gmail.com'
   WHEN u.Email = 'c4@gmail.com' THEN 'o1@gmail.com'
 END)
-WHERE u.Email IN ('c1@gmail.com', 'c2@gmail.com', 'c3@gmail.com', 'c4@gmail.com');
+WHERE u.Email IN ('c1@gmail.com', 'c2@gmail.com', 'c3@gmail.com' , 'c4@gmail.com' );
 
 INSERT INTO Coach (UsersID, Certification)
 SELECT u.UsersID, 'UEFA A License'
@@ -1027,7 +1047,7 @@ WHERE u.Email IN ('c1@gmail.com', 'c2@gmail.com', 'c3@gmail.com', 'c4@gmail.com'
 INSERT INTO Employee (UsersID, TeamID)
 SELECT u.UsersID, NULL
 FROM Users u
-WHERE u.Email IN ('c5@gmail.com', 'c6@gmail.com', 'c7@gmail.com', 'c8@gmail.com');
+WHERE u.Email IN ( 'c5@gmail.com', 'c6@gmail.com', 'c7@gmail.com', 'c8@gmail.com');
 
 INSERT INTO Coach (UsersID, Certification)
 SELECT u.UsersID, 'UEFA B License'
