@@ -1099,6 +1099,13 @@ button:hover {
     background: rgba(248, 113, 113, 0.25);
 }
 
+.user-name {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #fff;
+    margin-right: 0.25rem;
+}
+
 .role-pill {
     display: inline-flex;
     align-items: center;

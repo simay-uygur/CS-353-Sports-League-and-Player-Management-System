@@ -46,6 +46,27 @@ def inject_now():
     return {'now': datetime.now()}
 @app.before_request
 def _set_default_banner():
+    # Fetch user name if logged in
+    user_id = session.get("user_id")
+    g.user_first_name = None
+    g.user_last_name = None
+    if user_id:
+        conn = get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT FirstName, LastName FROM Users WHERE UsersID = %s;",
+                    (user_id,),
+                )
+                row = cur.fetchone()
+                if row:
+                    g.user_first_name = row[0]
+                    g.user_last_name = row[1]
+        except Exception:
+            pass  # Silently fail if DB query fails
+        finally:
+            conn.close()
+    
     role = session.get("role")
     if role == "superadmin":
         g.banner_view_endpoint = "superadmin.view_tournaments"
