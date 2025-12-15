@@ -111,7 +111,7 @@ def _set_default_banner():
         g.banner_create_league_endpoint = None
         g.banner_owner_endpoint = "player.view_team"
         g.banner_reports_endpoint = None
-        g.banner_statistics_endpoint = "player.home"
+        g.banner_statistics_endpoint = None
         g.banner_trainings_endpoint = "player.view_trainings"
         g.banner_offers_endpoint = "player.view_offers"
     else:
