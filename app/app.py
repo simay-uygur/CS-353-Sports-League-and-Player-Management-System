@@ -121,6 +121,7 @@ def _set_default_banner():
         g.banner_league_endpoint = None
         g.banner_all_matches_endpoint = None
         g.banner_create_league_endpoint = None
+        g.banner_home_endpoint = "home_team_owner"
         g.banner_owner_endpoint = "owner.view_teams"
         g.banner_reports_endpoint = None
         g.banner_statistics_endpoint = None
@@ -146,6 +147,17 @@ def _set_default_banner():
         g.banner_statistics_endpoint = None
         g.banner_trainings_endpoint = "player.view_trainings"
         g.banner_offers_endpoint = "player.view_offers"
+    elif role == "referee":
+        g.banner_view_endpoint = None
+        g.banner_league_endpoint = None
+        g.banner_all_matches_endpoint = None
+        g.banner_create_league_endpoint = None
+        g.banner_owner_endpoint = None
+        g.banner_reports_endpoint = None
+        g.banner_statistics_endpoint = None
+        g.banner_home_endpoint = "home_referee"
+        g.banner_edit_plays_endpoint = "artunsPart.view_referee_dashboard"
+        g.banner_edit_injuries_endpoint = "artunsPart.manage_injury"
     else:
         g.banner_view_endpoint = None
         g.banner_league_endpoint = None
