@@ -18,6 +18,15 @@
         <section>
             <p class="subtitle">Welcome, referee. Your dashboard will appear here.</p>
         </section>
+        <form method="GET" action="{{url_for('artunsPart.view_referee_dashboard')}}">
+          <button type="submit">Edit-Plays</button>
+        </form>
+        <form method="GET" action="{{url_for('artunsPart.manage_injury')}}">
+          <button type="submit">Edit-Injuries</button>
+        </form>
+        <form method="GET" action="{{url_for('artunsPart.view_referee_dashboard')}}">
+          <button type="submit">Edit-Plays</button>
+        </form>
     </main>
 </body>
 </html>

@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Assigned Matches</h2>
+
+<div class="card">
+  <div class="filters">
+    <select id="tournamentFilter">
+      <option>Select Tournament</option>
+    </select>
+    <select id="leagueFilter">
+      <option>Select League</option>
+    </select>
+    <select id="teamFilter">
+      <option>Select Team</option>
+    </select>
+    <button class="btn btn-dark" onclick="fetchMatches()">Filter</button>
+  </div>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Date</th>
+      <th>Time</th>
+      <th>Teams</th>
+      <th>Winner</th>
+      <th>Scores</th>
+      <th>Event Name</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody id="matchesBody">
+  </tbody>
+</table>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Hardcoded Referee ID for demo purposes (using session from Flask)
+  const REF_ID = {{ session["user_id"] }};
+
+  // 1. Function to Populate Dropdowns on Page Load
+  async function loadFilters() {
+    try {
+      // Fetch options from the backend (matches Source 992-1000)
+      const res = await fetch(`${API_BASE}/referee/filters`);
+      const data = await res.json();
+
+      // Populate teams
+      const teamSelect = document.getElementById('teamFilter');
+      [...data.teams].forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t.teamid;
+        opt.textContent = t.teamname;
+        teamSelect.appendChild(opt);
+      });
+
+      // Populate leagues
+      const leagueSelect = document.getElementById('leagueFilter');
+      [...data.leagues].forEach(l => {
+        const opt = document.createElement('option');
+        opt.value = l.leagueid;
+        opt.textContent = l.leaguename;
+        leagueSelect.appendChild(opt);
+      });
+
+      // Populate tournaments
+      const tournamentSelect = document.getElementById('leagueFilter');
+      [...data.tournaments].forEach(l => {
+        const opt = document.createElement('option');
+        opt.value = l.tournamentid;
+        opt.textContent = l.tournamentname;
+        tournamentSelect.appendChild(opt);
+      });
+
+    } catch (err) {
+      console.error("Failed to load filters:", err);
+    }
+  }
+
+  async function fetchMatches() {
+    // Get chosen values for filters
+    const teamId = document.getElementById('teamFilter').value;
+    const leagueId = document.getElementById('leagueFilter').value;
+    const tournamentId = document.getElementById('tournamentFilter').value; // Using this as Tournament filter
+
+    // Create query and its parameters
+    let url = `${API_BASE}/referee/matches?referee_id=${REF_ID}`;
+    
+    if (teamId && teamId !== "Select Team") {
+        url += `&team_id=${teamId}`;
+    }
+    if (leagueId && leagueId !== "Select League") {
+        url += `&league_id=${leagueId}`;
+    }
+    if (tournamentId && tournamentId !== "Select Tournament") {
+        url += `&tournament_id=${tournamentId}`;
+    }
+
+    try {
+      // Send the api request
+      const response = await fetch(url);
+      const matches = await response.json();
+
+      const tbody = document.getElementById('matchesBody');
+      tbody.innerHTML = '';
+
+      if (matches.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">No matches found.</td></tr>';
+        return;
+      }
+
+      else{
+        // Set row values
+        matches.forEach(match => {
+          const dateObj = new Date(match.matchstartdatetime);
+          row = `
+              <tr>
+                  <td>${dateObj.toLocaleDateString()}</td>
+                  <td>${dateObj.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</td>
+                  <td>${match.hometeamname} vs. ${match.awayteamname}</td>`;
+          
+          if (match.winnerteam == undefined || match.winnerteam == null){
+            row += `<td>Tied</td>`;
+          }
+          else{
+            row += `<td>${match.winnerteam}</td>`;
+          }
+
+          if (match.hometeamscore == undefined || match.awayteamscore == undefined){
+            row += `<td>TBD</td>`;
+          }
+          else{
+            row += `<td>${match.hometeamscore}-${match.awayteamscore}</td>`;
+          }
+
+          row += `
+                                    <td>${match.competitionname || match.leaguename || 'Tournament'}</td>
+                  <td>
+                      <a href="/referee/match/${match.matchid}" class="btn btn-dark">Enter Match Info</a>
+                  </td>
+              </tr>
+          `;
+          tbody.innerHTML += row;
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching matches:", error);
+    }
+  }
+
+  // Initialize page
+  document.addEventListener('DOMContentLoaded', () => {
+      loadFilters();   // Load dropdown options
+      fetchMatches();  // Load initial matches
+  });
+</script>
+{% endblock %}

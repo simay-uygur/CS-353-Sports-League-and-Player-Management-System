@@ -1,15 +1,16 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div style="display: flex; justify-content: space-between; align-items: center;">
-  <h2 id="matchTitle">Loading Match...</h2>
-  <div>
-    <button class="btn btn-dark" id="tabRoster" onclick="switchTab('roster')">Roster</button>
-    <button class="btn btn-outline" id="tabInjuries" onclick="switchTab('injuries')">Injuries</button>
-  </div>
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h2 id="matchTitle" style="font-weight: bold;">Loading Match...</h2>
+    <div>
+        <button class="btn btn-dark" id="tabStat" onclick="switchTab('stats')">Stats</button>
+        <button class="btn btn-outline" id="tabInjuries" onclick="switchTab('injuries')">Injuries</button>
+        <button class="btn btn-outline" id="tabBan" onclick="switchTab('bans')">Disciplinary Punishments</button>
+    </div>
 </div>
 
-<div id="rosterView" class="roster-container card" style="margin-top: 20px;">
+<div id="entireView" class="roster-container card" style="margin-top: 20px, display: grid;">
 
   <div>
     <h3>Home Roster</h3>
@@ -21,150 +22,591 @@
     <ul id="awayRoster" class="roster-list"></ul>
   </div>
 
-  <div id="inputPanel" style="background: #fdfdfd; padding: 15px; border-left: 1px solid #eee;">
-    <h3 id="selectedPlayerName">Select a Player</h3>
-    <form id="playForm" onsubmit="event.preventDefault(); savePlay();">
-      <input type="hidden" id="selectedPlayerId">
+  <div id="sideView">
+    <div id="statView" style="background: #fdfdfd; padding: 15px; border-left: 1px solid #eee; display: grid;">
+      <h3 id="selectedPlayerName">Selected Player Stats</h3>
+      <form id="playForm" onsubmit="event.preventDefault(); savePlay();">
+        <input type="hidden" id="selectedPlayID">
 
-      <div class="form-grid">
-        <div>
-          <label>Start Time</label>
-          <input type="number" id="startTime" name="starttime" placeholder="Min">
+        <div class="form-grid" id="nonSubstitutionInputs">
+          <div>
+            <label>Start Time</label>
+            <input type="number" id="startTime" name="starttime" placeholder="Enter Value">
+          </div>
+          <div>
+            <label>Stop Time</label>
+            <input type="number" id="stopTime" name="stoptime" placeholder="Enter Value">
+          </div>
+          <div>
+            <label>Goals</label>
+            <input type="number" id="goals" name="goalsscored" placeholder="Enter Value">
+          </div>
+          <div>
+            <label>Assists</label>
+            <input type="number" id="assists" name="assistsmade" placeholder="Enter Value">
+          </div>
+          <div>
+            <label>Penalties Scored</label>
+            <input type="number" id="penalties" name="penaltiesscored" placeholder="Enter Value">
+          </div>
+          <div>
+            <label>Saves</label>
+            <input type="number" id="saves" name="saves" placeholder="Enter Value">
+          </div>
+          <div>
+            <label>Passes</label>
+            <input type="number" id="passes" name="totalpasses" placeholder="Enter Value">
+          </div>
+          <div>
+            <label>Yellow Cards</label>
+            <input type="number" id="yellow" name="yellowcards" placeholder="Enter Value">
+          </div>
+          <div>
+            <label>Red Cards</label>
+            <input type="number" id="red" name="redcards" placeholder="Enter Value">
+          </div>
         </div>
-        <div>
-          <label>End Time</label>
-          <input type="number" id="endTime" name="stoptime" placeholder="Min">
-        </div>
-        <div>
-          <label>Goals</label>
-          <input type="number" id="goals" value="0">
-        </div>
-        <div>
-          <label>Assists</label>
-          <input type="number" id="assists" value="0">
-        </div>
-        <div>
-          <label>Yellow Cards</label>
-          <input type="number" id="yellow" value="0">
-        </div>
-        <div>
-          <label>Red Cards</label>
-          <input type="number" id="red" value="0">
-        </div>
-      </div>
 
-      <div style="margin: 20px 0;">
-        <label>
-          <input type="checkbox" id="isSubstituted" onchange="toggleSubDropdown()">
-          Substituted
-        </label>
+        <div style="margin: 20px 0;">
+          <label>
+            <input type="checkbox" id="isSubstituted" onchange="toggleSubDropdown()">
+            Substituted
+          </label>
 
-        <div id="subDropdownContainer" style="display:none; margin-top: 10px;">
-          <label>Subbed In Player ID:</label>
-          <input type="number" id="subId" placeholder="ID">
+          <div id="subDropdownContainer" style="display:none; margin-top: 10px;">
+            <select id="substituteDropdown" name="substitutionid">
+              <option>None</option>
+            </select>
+          </div>
         </div>
-      </div>
 
-      <button type="submit" class="btn btn-dark" style="width: 100%">Save Player Stats</button>
-    </form>
+        <button type="submit" class="btn btn-dark" style="width: 100%">Save Player Stats</button>
+      </form>
+    </div>
+    <div id="injuryView" style="background: #fdfdfd; padding: 15px; border-left: 1px solid #eee; display: none;">
+      <form id="injuryForm">
+        <h3>Selected Player Injury Info</h3>
+        <input type="hidden" id="injuryid" name="injuryid">
+        <div id="injuryInputs" class="form-grid">
+
+          <input type="hidden" id="injuryplayerid" name="playerid">
+          <input type="hidden" id="injurydate" name="injurydate">
+
+          <label>Injury Type
+            <select id="injurytype" name="injurytype" required>
+              <option value="">Choose Type</option>
+              <option>Hamstring Strain</option>
+              <option>Quadriceps Strain</option>
+              <option>Groin Strain</option>
+              <option>Anterior Cruciate Ligament Sprain/Tear</option>
+              <option>Medial Collateral Ligament Sprain/Tear</option>
+              <option>Meniscus Tear</option>
+              <option>Patellar Tendinitis</option>
+              <option>Ankle Sprains</option>
+              <option>Achilles Tendinitis</option>
+              <option>Metatarsal Stress Fractures</option>
+              <option>Upper Body Fracture</option>
+              <option>Shoulder Dislocation</option>
+              <option>Concussion</option>
+            </select>
+          </label>
+
+          <label>Predicted Recovery Date
+          <!--FIX DATE IS IN AMERICAN FORMAT(ngl I dont think there is an easy fix)--!>
+            <input type="date" id="recoverydate" name="recoverydate">
+          </label>
+          
+          <label class="grid-item" style="grid-column: 1 / -1;">Detailed description
+            <textarea id="description" name="description" placeholder="Description of injury"
+            style="grid-column: span 2; width: 100%; padding: 10px;"></textarea>
+          </label>
+          
+          <button id="saveInjury" class="btn btn-dark" onclick="event.preventDefault(); submitInjury();" style="display: none;">Save Injury</button>
+          <button id="removeInjury" class="btn btn-red" onclick="event.preventDefault(); deleteInjury();" style="display: none;">Remove Injury</button>
+        </div>
+      </form>
+    </div>
+    <div id="banView" style="background: #fdfdfd; padding: 15px; border-left: 1px solid #eee; display: block;">
+      <form id="banForm">
+        <h3>Selected Player Disciplinary Info</h3>
+        <input type="hidden" id="banid" name="banid">
+        <div id="banInputs" class="form-grid">
+          <input type="hidden" id="banplayerid" name="playerid">
+          <input type="hidden" id="banstartdate" name="banstartdate">
+
+          <label>Days banned
+            <input type="date" id="banenddate" name="banenddate">
+          </label>
+
+          <button id="saveBan" class="btn btn-dark" onclick="event.preventDefault(); submitBan();" style="display: block;">Submit Disciplinary Punishment</button>
+          <button id="removeBan" class="btn btn-dark" onclick="event.preventDefault(); deleteBan();" style="display: none;">Remove Disciplinary Punishment</button>
+        </div>
+      </form>
+    </div>
   </div>
 </div>
 
-<div id="injuryView" class="card" style="display: none; margin-top: 20px;">
-  <h3>Record Injury</h3>
-  <div class="form-grid">
-    <input type="text" id="injType" placeholder="Injury Type">
-    <input type="date" id="injDate">
-    <textarea id="injDesc" placeholder="Description"
-      style="grid-column: span 2; width: 100%; padding: 10px;"></textarea>
-  </div>
-  <button class="btn btn-dark" onclick="saveInjury()">Save Injury</button>
-</div>
 
 {% endblock %}
 
 {% block scripts %}
 <script>
-  const MATCH_ID = {{match_id}};
-  let currentTab = 'roster';
+    const MATCH_ID = {{match_id}};
+    let currentTab = 'stats';
 
-  function switchTab(tab) {
-    currentTab = tab;
-    document.getElementById('rosterView').style.display = tab === 'roster' ? 'grid' : 'none';
-    document.getElementById('injuryView').style.display = tab === 'injuries' ? 'block' : 'none';
-  }
+    function switchTab(tab) {
+        currentTab = tab;
+        document.getElementById('statView').style.display = tab === 'stats' ? 'grid' : 'none';
+        document.getElementById('injuryView').style.display = tab === 'injuries' ? 'block' : 'none';
+        document.getElementById('banView').style.display = tab === 'bans' ? 'block' : 'none';
 
-  function toggleSubDropdown() {
-    const isChecked = document.getElementById('isSubstituted').checked;
-    document.getElementById('subDropdownContainer').style.display = isChecked ? 'block' : 'none';
-  }
-
-  async function loadRosters() {
-    // Fetch Home Roster [cite: 1054]
-    const homeRes = await fetch(`${API_BASE}/match/${MATCH_ID}/roster/home`);
-    const homeData = await homeRes.json();
-    renderRosterList(homeData, 'homeRoster');
-
-    // Fetch Away Roster [cite: 1096]
-    const awayRes = await fetch(`${API_BASE}/match/${MATCH_ID}/roster/away`);
-    const awayData = await awayRes.json();
-    renderRosterList(awayData, 'awayRoster');
-
-    // Set Title based on data
-    if (homeData.length > 0) {
-      document.getElementById('matchTitle').innerText = `Match Details`;
+        // Update button styles
+        document.getElementById('tabStat').className = tab === 'stats' ? 'btn btn-dark' : 'btn btn-outline';
+        document.getElementById('tabInjuries').className = tab === 'injuries' ? 'btn btn-dark' : 'btn btn-outline';
+        document.getElementById('tabBan').className = tab === 'bans' ? 'btn btn-dark' : 'btn btn-outline';
     }
-  }
 
-  function renderRosterList(players, elementId) {
-    const ul = document.getElementById(elementId);
-    ul.innerHTML = '';
-    players.forEach(p => {
-      const li = document.createElement('li');
-      li.className = 'roster-item';
-      // Visual indicator for eligibility/injury [cite: 1149]
-      const status = p.disciplinarilypunished ? '<span style="color:red; font-size:10px; margin-left:5px">(Banned)</span>' : '';
+    function toggleSubDropdown() {
+        const isChecked = document.getElementById('isSubstituted').checked;
+        document.getElementById('subDropdownContainer').style.display = isChecked ? 'block' : 'none';
+    }
 
-      li.innerHTML = `<div class="avatar">${p.firstname[0]}</div> ${p.firstname} ${p.lastname} ${status}`;
-      li.onclick = () => selectPlayer(p);
-      ul.appendChild(li);
-    });
-  }
+    async function loadRosters() {
+      //clearForms();
+      // Fetch roster of away team
+      const homeRes = await fetch(`${API_BASE}/match/${MATCH_ID}/roster/home`);
+      const homeData = await homeRes.json();
+      renderRosterList(homeData, 'homeRoster');
 
-  function selectPlayer(player) {
-    // Clear highlights
-    document.querySelectorAll('.roster-item').forEach(el => el.classList.remove('active'));
+      // Fetch roster of away team
+      const awayRes = await fetch(`${API_BASE}/match/${MATCH_ID}/roster/away`);
+      const awayData = await awayRes.json();
+      renderRosterList(awayData, 'awayRoster');
 
-    document.getElementById('selectedPlayerName').innerText = `${player.firstname} ${player.lastname}`;
-    document.getElementById('selectedPlayerId').value = player.usersid;
+      if (homeData){
+          // Update header with Match Info if available, or just generic
+          // FIX (find something better to do )
+        document.getElementById('matchTitle').innerText = `${homeData[0].hometeamname}-${homeData[0].awayteamname}`; 
+      }
+    }
 
-    // Reset form or fill with existing data (Source 1187 logic)
-    document.getElementById('goals').value = player.goalsscored || 0;
-    // ... (fill other fields similarly)
-  }
+    function renderRosterList(plays, elementId) {
+        const ul = document.getElementById(elementId);
+        ul.innerHTML = '';
 
-  async function savePlay() {
-    const pid = document.getElementById('selectedPlayerId').value;
-    if (!pid) return alert("Select a player first");
 
-    const payload = {
-      matchid: MATCH_ID,
-      playerid: pid,
-      goalsscored: document.getElementById('goals').value,
-      // ... collect other fields
-      substitutionid: document.getElementById('isSubstituted').checked ? document.getElementById('subId').value : null
-    };
+        plays.forEach(p => {
 
-    // Call API Source [1187-1234]
-    const res = await fetch(`${API_BASE}/match/play/save`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(payload)
-    });
+            const li = document.createElement('li');
+            li.className = 'roster-item';
 
-    if (res.ok) alert("Saved successfully");
-  }
+            // Visual indicator for injury and disciplinary status
+            status = p.wasinjured ? '<span style="color:red; font-size:10px; margin-left:5px">(Injured)</span>': '';
+            status = p.disciplinarilypunished ? '<span style="color:red; font-size:10px; margin-left:5px">(Banned)</span>' : '';
 
-  loadRosters();
+            // Determine side based on list ID for avatar style
+            const sideChar = elementId === 'homeRoster' ? 'H' : 'A';
+            const avatarBg = elementId === 'homeRoster' ? '#e0e0ff' : '#ffe0e0';
+
+            li.innerHTML = `<div class="avatar" style="background:${avatarBg}">${sideChar}</div> ${p.firstname} ${p.lastname} ${status}`;
+            li.addEventListener('click', () => selectPlayer(p, li));
+            li.addEventListener('click', () => populateSubstituteCandidates(p));
+            li.addEventListener('click', () => fillInjuryData(p, li));
+            li.addEventListener('click', () => fillBanData(p, li));
+            ul.appendChild(li);
+        });
+    }
+
+    function selectPlayer(play, element) {
+      // Highlight logic
+      document.querySelectorAll('.roster-item').forEach(el => el.classList.remove('active'));
+      if(element) element.classList.add('active');
+
+      // Update selected play
+      document.getElementById('selectedPlayID').value = play.playid;
+
+      // Populate fields (Source 1187 logic + New Fields)
+      document.getElementById('goals').value = play.goalsscored || '';
+      document.getElementById('assists').value = play.assistsmade || '';
+      document.getElementById('saves').value = play.saves ||  '';
+      document.getElementById('passes').value = play.totalpasses ||  '';
+      document.getElementById('startTime').value = play.starttime || '';
+      document.getElementById('stopTime').value = play.stoptime || '';
+      document.getElementById('yellow').value = play.yellowcards || '';
+      document.getElementById('red').value = play.redcards || '';
+      document.getElementById('penalties').value = play.penaltiesscored || '';
+
+      if (play.substitutionid) document.getElementById('substituteDropdown').value = play.substitutionid;
+
+      // Substitution logic
+      const isSub = !!play.substitutionid;
+      document.getElementById('isSubstituted').checked = isSub;
+      toggleSubDropdown();
+
+      if (play.disciplinarilypunished == true || play.wasinjured == true){
+        document.getElementById('goals').method = "readonly";
+        document.getElementById('assists').method = "readonly";
+        document.getElementById('saves').method = "readonly";
+        document.getElementById('passes').method = "readonly";
+        document.getElementById('passes').method = "readonly";
+        document.getElementById('stopTime').method = "readonly";
+        document.getElementById('yellow').method = "readonly";
+        document.getElementById('red').method = "readonly";
+        document.getElementById('passes').method = "readonly";
+        document.getElementById('isSubstituted').method = "readonly";
+        document.getElementById('substituteDropdown').method = "readonly";
+      }
+    }
+
+    // Populate substitution menu of corresponding play
+    async function populateSubstituteCandidates(play){
+
+      const request = await fetch(`${API_BASE}/match/substitute_roster?matchid=${play.matchid}&usersid=${play.usersid}&teamid=${play.teamid}`);
+      const data = await request.json();
+
+      subDropdown = document.getElementById('substituteDropdown');
+      // Remove previous entries
+      subDropdown.innerHTML = ``;
+      // Add a select option
+      const tempOpt = document.createElement('option');
+      tempOpt.value = ''
+      tempOpt.textContent = 'None'
+      subDropdown.appendChild(tempOpt);
+      data.forEach(user => {
+          const opt = document.createElement('option');
+          opt.value = user.usersid;
+          opt.textContent = `${user.firstname} ${user.lastname}`;
+          subDropdown.appendChild(opt);
+          if (play.substitutionid == user.usersid){
+            subDropdown.value = user.usersid;
+          }
+      });
+      if (play.substitutionid == ''){
+        subDropdown.value = '';
+      }
+    }
+
+    async function fillInjuryData(player, element){
+      // Highlight the newly chosen player
+      document.querySelectorAll('.roster-item').forEach(el => el.classList.remove('active'));
+      if(element) element.classList.add('active');
+
+      // Request the injury of player
+      const request = await fetch(`${API_BASE}/injury?playerid=${player.playerid}&matchid=${MATCH_ID}`);
+      const data = await request.json();
+
+      document.getElementById('injuryplayerid').value = player.usersid || '';
+      document.getElementById('injurydate').value = dateFormatter(player.matchstartdatetime);
+      document.getElementById('saveInjury').style.display = 'block';
+      if(!data){
+        document.getElementById('removeInjury').style.display = 'none';
+        document.getElementById('injuryid').value = '';
+        document.getElementById('injurytype').value = '';
+        document.getElementById('recoverydate').value = '';
+        document.getElementById('description').value = '';
+        return;
+      };
+
+      document.getElementById('removeInjury').style.display = 'block';
+
+      document.getElementById('injuryid').value = data.injuryid;
+      document.getElementById('injurytype').value = data.injurytype;
+      document.getElementById('recoverydate').value = dateFormatter(data.recoverydate);
+      document.getElementById('description').value = data.description;
+    }
+
+    async function fillBanData(player, element){
+      // Highlight the newly chosen player
+      document.querySelectorAll('.roster-item').forEach(el => el.classList.remove('active'));
+      if(element) element.classList.add('active');
+
+      // Request the ban info of player
+      const startDate = dateFormatter(player.matchstartdatetime);
+      const request = await fetch(`${API_BASE}/ban?playerid=${player.playerid}&matchdatetime=${startDate}`);
+      const data = await request.json();
+
+      document.getElementById('banplayerid').value = player.usersid || '';
+      document.getElementById('banstartdate').value = startDate;
+      document.getElementById('saveBan').style.display = 'block';
+      if (!data){
+        document.getElementById('removeBan').style.display = 'none';
+        document.getElementById('banid').value = '';
+        document.getElementById('banenddate').value = '';
+        return;
+      }
+
+      document.getElementById('removeBan').style.display = 'block';
+
+      document.getElementById('banid').value = data.banid || '';
+      document.getElementById('banenddate').value = dateFormatter(data.banenddate);
+    }
+
+    async function savePlay() {
+      const pid = document.getElementById('selectedPlayID').value;
+      if (!pid) return alert("Select a player first");
+
+      const form = document.getElementById('nonSubstitutionInputs');
+      const children = form.querySelectorAll("input")
+      hasEmpty = false;
+      hasNegative = false;
+      children.forEach(child => {
+        if ( !(child.value) ) hasEmpty = true;
+        else if ( child.value < 0 ) hasNegative = true;
+      });
+      if (hasNegative) return alert("Negative values are not allowed");
+
+      if (document.getElementById("isSubstituted").checked == true && 
+        document.getElementById("substituteDropdown").value == "None"
+      ) hasEmpty = true;
+
+      if (hasEmpty) return alert("Everything must be filled/chosen");
+
+      if (document.getElementById('startTime').value < 0 || document.getElementById('startTime').value > 90 ) return alert("Start time should be larger than -1 and less than 91");
+      if (document.getElementById('stopTime').value < 0 || document.getElementById('stopTime').value > 90 ) return alert("Stop time should be larger than -1 and less than 91");
+      if (document.getElementById('startTime').value > document.getElementById('stopTime').value ) return alert("Stop time needs to come after start time");
+
+
+      const payload = {
+          playid: pid,
+          substitutionid: (document.getElementById('isSubstituted').checked && document.getElementById('substituteDropdown').value != 'None') ? document.getElementById('substituteDropdown').value : null,
+          starttime: document.getElementById('startTime').value,
+          stoptime: document.getElementById('stopTime').value,
+          goalsscored: document.getElementById('goals').value,
+          assistsmade: document.getElementById('assists').value,
+          saves: document.getElementById('saves').value,
+          totalpasses: document.getElementById('passes').value,
+          yellowcards: document.getElementById('yellow').value,
+          redcards: document.getElementById('red').value,
+          penaltiesscored: document.getElementById('penalties').value,
+      };
+
+      // Call save_play_info()
+      try {
+          const res = await fetch(`${API_BASE}/match/play/save`, {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify(payload)
+          });
+
+          if (res.ok) {
+              alert("Saved successfully");
+              loadRosters(); // Reload to update any status changes
+          } else {
+              alert("Error saving data");
+          }
+      } catch (e) {
+          console.error(e);
+          alert("Network error");
+      }
+    }
+
+    async function submitInjury(){
+      const pid = document.getElementById('injuryplayerid').value;
+      if (!pid) return alert("Select a player first");
+
+      const form = document.getElementById('injuryInputs');
+      const children = form.querySelectorAll("input")
+      hasEmpty = false;
+      children.forEach(child => {
+          if ( !(child.value) ) hasEmpty = true;
+      });
+      if (hasEmpty || document.getElementById('injurytype').value == ''){
+
+        return alert("Everything must be filled/chosen");
+      }
+
+      if (document.getElementById('recoverydate').value <= document.getElementById('injurydate').value) return alert("The recovery date must be at a later date");
+
+      const payload = {
+        injuryid: document.getElementById('injuryid').value,
+        playerid: pid,
+        matchid: MATCH_ID,
+        injurydate: document.getElementById('injurydate').value,
+        injurytype: document.getElementById('injurytype').value,
+        description: document.getElementById('description').value,
+        recoverydate: document.getElementById('recoverydate').value,
+      };
+
+      // Call save_play_info()
+      try {
+          const res = await fetch(`${API_BASE}/injury`, {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify(payload)
+          });
+
+          if (res.ok) {
+              alert("Saved successfully");
+              loadRosters(); // Reload to update any status changes
+              document.getElementById('removeInjury').style.display = 'block';
+          } else {
+              alert("Error saving data");
+          }
+      } catch (e) {
+          console.error(e);
+          alert("Network error");
+      }
+    }
+
+    async function submitBan(){
+      const pid = document.getElementById('banplayerid').value;
+      if (!pid) return alert("Select a player first");
+
+      const form = document.getElementById('banInputs');
+      const children = form.querySelectorAll("input")
+      hasEmpty = false;
+      children.forEach(child => {
+          if ( !(child.value) ) hasEmpty = true;
+      });
+      if (hasEmpty) return alert("Everything must be filled/chosen");
+      
+      if (document.getElementById('banenddate').value <= document.getElementById('banstartdate').value) return alert("The end date must be at a later date");
+
+      const payload = {
+        banid: document.getElementById('banid').value,
+        playerid: pid,
+        banstartdate: document.getElementById('banstartdate'),
+        banenddate: document.getElementById('banenddate'),
+      };
+
+      try {
+          const res = await fetch(`${API_BASE}/ban`, {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify(payload)
+          });
+
+          if (res.ok) {
+              alert("Saved successfully");
+              loadRosters(); // Reload to update any status changes
+              document.getElementById('removeBan').style.display = 'block';
+          } else {
+              alert("Error saving data");
+          }
+      } catch (e) {
+          console.error(e);
+          alert("Network error");
+      }
+    }
+
+    async function deleteInjury(){
+      const pid = document.getElementById('injuryplayerid').value;
+      if (!pid) return alert("Select a player first");
+
+      const iid = document.getElementById('injuryid').value;
+      if (!iid) return alert("This player doesnt have an injury to delete");
+
+      console.log(iid);
+      try {
+        const res = await fetch(`${API_BASE}/injury?injuryid=${iid}`, {
+              method: 'DELETE',
+          });
+
+          if (res.ok) {
+              alert("Saved successfully");
+              loadRosters(); // Reload to update any status changes
+              document.getElementById('removeInjury').style.display = 'none';
+          } else {
+              alert("Error saving data");
+          }
+      } catch (e) {
+          console.error(e);
+          alert("Network error");
+      }
+    }
+
+    async function deleteBan(){
+      const pid = document.getElementById('banplayerid').value;
+      if (!pid) return alert("Select a player first");
+
+      const bid = document.getElementById('banid').value;
+      if (!bid) return alert("There is no punishment to reverse");
+
+      const payload = {ban: bid};
+
+      try {
+          const res = await fetch(`${API_BASE}/ban`, {
+              method: 'DELETE',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify(payload)
+          });
+
+          if (res.ok) {
+              alert("Saved successfully");
+              loadRosters(); // Reload to update any status changes
+              document.getElementById('removeBan').style.display = 'none';
+              selec
+          } else {
+              alert("Error saving data");
+          }
+      } catch (e) {
+          console.error(e);
+          alert("Network error");
+      }
+    }
+
+
+    function dateFormatter(inputDate){
+      //return (new Date(inputDate)).toISOString();
+      const dateObject = new Date(inputDate);
+      const year = dateObject.getUTCFullYear();
+      const month = dateObject.getUTCMonth() + 1; 
+      const day = dateObject.getUTCDate();
+      const formattedMonth = String(month).padStart(2, '0');
+      const formattedDay = String(day).padStart(2, '0');
+      const yyyyMmDdFormat = `${year}-${formattedMonth}-${formattedDay}`;
+      return yyyyMmDdFormat;
+    }
+
+    //function clearForms() {
+    //    // 1. Reset standard HTML form inputs
+    //    document.getElementById('playForm').reset();
+    //    document.getElementById('injuryForm').reset();
+    //    document.getElementById('banForm').reset();
+
+    //    // 2. Hide context-specific buttons (Remove Injury/Ban)
+    //    document.getElementById('removeInjury').style.display = 'none';
+    //    document.getElementById('removeBan').style.display = 'none';
+
+    //    // 3. Clear hidden IDs to prevent accidental edits to the wrong player
+    //    document.getElementById('selectedPlayID').value = '';
+    //    document.getElementById('injuryplayerid').value = '';
+    //    document.getElementById('banplayerid').value = '';
+    //    document.getElementById('injuryid').value = '';
+    //    document.getElementById('banid').value = '';
+
+    //    // 4. Reset specific UI logic (hide the substitution dropdown)
+    //    toggleSubDropdown();
+    //}
+
+    switchTab(currentTab);
+    loadRosters();
 </script>
 {% endblock %}
+
+<style>
+    .form-control {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #eee;
+        background-color: #fcfcfc;
+        border-radius: 4px;
+        box-sizing: border-box; 
+    }
+    .roster-item {
+        padding: 10px;
+        border-bottom: 1px solid #f0f0f0;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+    }
+    .roster-item:hover { background-color: #f9f9f9; }
+    .roster-item.active { background-color: #eef; font-weight: bold; }
+    .avatar {
+        width: 24px; height: 24px; 
+        background: #e0e0e0; color: #555;
+        border-radius: 50%; 
+        display: flex; justify-content: center; align-items: center;
+        margin-right: 10px; font-size: 12px;
+    }
+</style>

@@ -4,11 +4,14 @@ from flask import Flask, request, jsonify, Blueprint, render_template
 
 artunsPart = Blueprint("artunsPart", __name__, url_prefix="/")
 
+# Check or add if these exists:
+#
 
-@artunsPart.route('/ui/referee')
+
+@artunsPart.route('/referee/edit_matches', methods=["GET"])
 def view_referee_dashboard():
     # Corresponds to Figure 8
-    return render_template('referee.html')
+    return render_template('referee_matches.html')
 
 
 def execute_query(query, params=None, fetch_one=False, fetch_all=False, commit=False):
@@ -26,6 +29,8 @@ def execute_query(query, params=None, fetch_one=False, fetch_all=False, commit=F
             conn.commit()
             if 'RETURNING' in query.upper():
                 result = cursor.fetchone()
+            else:
+                result = "success"
 
         if fetch_one:
             result = cursor.fetchone()
@@ -36,7 +41,7 @@ def execute_query(query, params=None, fetch_one=False, fetch_all=False, commit=F
         if commit:
             conn.rollback()
         print(f"Query Error: {e}")
-        result = {'error': str(e)}
+        # result = {'error': str(e)}
     finally:
         cursor.close()
         conn.close()
@@ -59,6 +64,10 @@ def get_referee_matches():
     Retrieves assigned matches for the referee for the current day.
     """
     ref_id = request.args.get('referee_id')
+    ref_id = request.args.get('referee_id')
+    team_id = request.args.get('team_id')
+    league_id = request.args.get('league_id')
+    tourn_id = request.args.get('tournament_id')
 
     if not ref_id:
         return jsonify({'error': 'Referee ID is required'}), 400
@@ -67,10 +76,28 @@ def get_referee_matches():
         SELECT *
         FROM RefereeMatchView
         WHERE matchstartdatetime::date = CURRENT_DATE
-        AND refereeid = %s;
+        AND refereeid = %s
     """
-    matches = execute_query(query, (ref_id,), fetch_all=True)
-    return jsonify(matches)
+
+    params = [ref_id]
+
+    # [cite_start]Dynamic Filtering [cite: 991, 1002]
+    if team_id:
+        query += " AND (hometeamid = %s OR awayteamid = %s)"
+        params.extend([team_id, team_id])
+
+    if league_id:
+        query += " AND competitionname = (SELECT Name FROM League WHERE LeagueID = %s)"
+        params.append(league_id)
+
+    if tourn_id:
+        query += " AND competitionname = (SELECT Name FROM Tournament WHERE TournamentID = %s)"
+        params.append(tourn_id)
+
+    query += ";"
+
+    matches = execute_query(query, tuple(params), fetch_all=True)
+    return jsonify(matches if matches else [])
 
 
 @artunsPart.route('/referee/filters', methods=['GET'])
@@ -120,12 +147,14 @@ def get_home_roster(match_id):
             END AS disciplinarilyPunished,
             U1.usersid, U1.firstname, U1.lastname,
             U2.usersid as sub_usersid, U2.firstname as sub_firstname, U2.lastname as sub_lastname,
-            M1.winnerteam, M1.hometeamscore, M1.awayteamscore
-        FROM ((((Match M1
-            JOIN AllEmploymentInfo A1 ON (M1.hometeamid = A1.teamid))
-            JOIN Users U1 USING (usersid))
-            JOIN Player Per1 ON (Per1.usersid = U1.usersid))
-            LEFT JOIN Play P1 USING (matchid))
+            M1.winnerteam, M1.hometeamscore, M1.awayteamscore,
+            M1.hometeamname, M1.awayteamname, M1.matchstartdatetime,
+            A1.teamid
+        FROM Match M1
+            JOIN AllEmploymentInfo A1 ON (M1.hometeamid = A1.teamid)
+            JOIN Users U1 USING (usersid)
+            JOIN Player Per1 ON (Per1.usersid = U1.usersid)
+            LEFT JOIN Play P1 ON P1.matchid = M1.matchid AND P1.playerid = U1.usersid
             LEFT JOIN Users U2 ON (P1.substitutionid = U2.usersid)
         WHERE M1.matchid = %s
         AND (M1.matchstartdatetime BETWEEN A1.startdate AND COALESCE(A1.enddate, NOW() + INTERVAL '1 year'))
@@ -158,19 +187,56 @@ def get_away_roster(match_id):
             END AS disciplinarilyPunished,
             U1.usersid, U1.firstname, U1.lastname,
             U2.usersid as sub_usersid, U2.firstname as sub_firstname, U2.lastname as sub_lastname,
-            M1.winnerteam, M1.hometeamscore, M1.awayteamscore
-        FROM ((((Match M1
-            JOIN AllEmploymentInfo A1 ON (M1.awayteamid = A1.teamid))
-            JOIN Users U1 USING (usersid))
-            JOIN Player Per1 ON (Per1.usersid = U1.usersid))
-            LEFT JOIN Play P1 USING (matchid))
+            M1.winnerteam, M1.hometeamscore, M1.awayteamscore,
+            M1.hometeamname, M1.awayteamname, M1.matchstartdatetime,
+            A1.teamid
+        FROM Match M1
+            JOIN AllEmploymentInfo A1 ON (M1.awayteamid = A1.teamid)
+            JOIN Users U1 USING (usersid)
+            JOIN Player Per1 ON (Per1.usersid = U1.usersid)
+            LEFT JOIN Play P1 ON (P1.matchid = M1.matchid AND P1.playerid = U1.usersid)
             LEFT JOIN Users U2 ON (P1.substitutionid = U2.usersid)
         WHERE M1.matchid = %s
-        AND (M1.matchstartdatetime BETWEEN A1.startdate AND COALESCE(A1.enddate, NOW() + INTERVAL '200 year'))
+        AND (M1.matchstartdatetime BETWEEN A1.startdate AND COALESCE(A1.enddate, NOW() + INTERVAL '1 year'))
         ORDER BY U1.firstname, U1.lastname;
     """
     roster = execute_query(query, (match_id,), fetch_all=True)
     return jsonify(roster)
+
+
+@artunsPart.route('/match/substitute_roster', methods=['GET'])
+def get_substitute_roster():
+
+    matchid = request.args.get('matchid')
+    teamid = request.args.get('teamid')
+    usersid = request.args.get('usersid')
+
+    query = """
+        WITH playdate AS (SELECT matchstartdatetime AS value FROM Match WHERE matchid = %s )
+        SELECT U.usersid, U.firstname, U.lastname
+        FROM AllEmploymentInfo AE
+        JOIN Users U USING (usersid)
+        CROSS JOIN playdate PD
+        WHERE AE.teamid = %s AND AE.usersid <> %s
+        AND ( PD.value BETWEEN AE.startdate AND AE.enddate )
+        AND NOT EXISTS (SELECT injuryid FROM Injury
+                WHERE playerid = U.usersid
+                AND (PD.value BETWEEN injurydate AND recoverydate))
+        AND NOT EXISTS (SELECT banid FROM Ban
+                WHERE playerid = U.usersid
+                AND (PD.value BETWEEN banstartdate AND banenddate));
+    """
+
+    params = (
+        matchid,
+        teamid,
+        usersid,
+    )
+
+    result = execute_query(query=query, params=params,
+                           fetch_all=True, commit=False)
+
+    return jsonify(result)
 
 # ------------------------------------------------------------------------------
 # [cite_start]2.3 Referee Pages (Saving Match Play Data) [cite: 1181, 1187, 1204]
@@ -185,52 +251,64 @@ def save_play_info():
     """
     data = request.json
 
-    # 1. Try UPDATE first (Source 1187)
+    # 1. Try UPDATE first
     update_query = """
         UPDATE Play
         SET SubstitutionID = %s, StartTime = %s, StopTime = %s,
             SuccessfulPasses = %s, GoalsScored = %s, AssistsMade = %s,
-            TotalPasses = %s, YellowCards = %s, RedCards = %s, Saves = %s
-        WHERE MatchID = %s AND PlayerID = %s
-        RETURNING PlayID;
+            TotalPasses = %s, YellowCards = %s, RedCards = %s,
+            Saves = %s, PenaltiesScored = %s
+        WHERE playid = %s
     """
+
+    substitutionId = data.get('substitutionid')
+    if substitutionId == '':
+        substitutionId = None
+
     update_params = (
-        data.get('substitutionid'), data.get(
-            'starttime'), data.get('stoptime'),
-        data.get('successfulpasses'), data.get(
-            'goalsscored'), data.get('assistsmade'),
-        data.get('totalpasses'), data.get('yellowcards'), data.get('redcards'),
-        data.get('saves'), data.get('matchid'), data.get('playerid')
+        substitutionId,
+        data.get('starttime'),
+        data.get('stoptime'),
+        data.get('successfulpasses'),
+        data.get('goalsscored'),
+        data.get('assistsmade'),
+        data.get('totalpasses'),
+        data.get('yellowcards'),
+        data.get('redcards'),
+        data.get('saves'),
+        data.get('penaltiesscored'),
+        data.get('playid'),
     )
+
     result = execute_query(update_query, update_params, commit=True)
 
-    # 2. If Update returns nothing, perform INSERT (Source 1201-1204)
-    if not result:
-        insert_query = """
-            INSERT INTO Play (
-                MatchID, PlayerID, SubstitutionID, StartTime, StopTime,
-                SuccessfulPasses, GoalsScored, PenaltiesScored, AssistsMade,
-                TotalPasses, YellowCards, RedCards, Saves
-            ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-            ) RETURNING PlayID;
-        """
-        insert_params = (
-            data.get('matchid'), data.get(
-                'playerid'), data.get('substitutionid'),
-            data.get('starttime'), data.get(
-                'stoptime'), data.get('successfulpasses'),
-            data.get('goalsscored'), data.get('penaltiesscored', 0),
-            data.get('assistsmade'), data.get(
-                'totalpasses'), data.get('yellowcards'),
-            data.get('redcards'), data.get('saves')
-        )
-        result = execute_query(insert_query, insert_params, commit=True)
+    # According to the design play shouldn't be inserted manually
+    # if not result:
+    #    insert_query = """
+    #        INSERT INTO Play (
+    #            MatchID, PlayerID, SubstitutionID, StartTime, StopTime,
+    #            SuccessfulPasses, GoalsScored, PenaltiesScored, AssistsMade,
+    #            TotalPasses, YellowCards, RedCards, Saves
+    #        ) VALUES (
+    #            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+    #        ) RETURNING PlayID;
+    #    """
+    #    insert_params = (
+    #        data.get('matchid'), data.get(
+    #            'playerid'), data.get('substitutionid'),
+    #        data.get('starttime'), data.get(
+    #            'stoptime'), data.get('successfulpasses'),
+    #        data.get('goalsscored'), data.get('penaltiesscored', 0),
+    #        data.get('assistsmade'), data.get(
+    #            'totalpasses'), data.get('yellowcards'),
+    #        data.get('redcards'), data.get('saves')
+    #    )
+    #    result = execute_query(insert_query, insert_params, commit=True)
 
     return jsonify(result)
 
 # ------------------------------------------------------------------------------
-# [cite_start]2.4 Referee Pages (Injury Management) [cite: 1302, 1304, 1312, 1333]
+# [cite_start]2.4 Injury and Disciplinary Punishment Endpoints [cite: 1302, 1304, 1312, 1333]
 # ------------------------------------------------------------------------------
 
 
@@ -239,32 +317,40 @@ def manage_injury():
     """
     Handles fetching, recording, and deleting injuries for a player/match.
     """
-    # GET: Fetch existing injury (Source 1302)
+    # GET: Fetch existing injury
     if request.method == 'GET':
         pid = request.args.get('playerid')
         mid = request.args.get('matchid')
         query = "SELECT * FROM Injury WHERE playerid=%s AND matchid=%s;"
-        result = execute_query(query, (pid, mid), fetch_all=True)
+        result = execute_query(query, (pid, mid, ), fetch_one=True)
         return jsonify(result)
 
-    # POST: Update or Insert Injury (Source 1304, 1312)
+    # POST: Update or Insert Injury
     if request.method == 'POST':
         data = request.json
+
+        matchid = None
+        if (data.get('matchid')):
+            matchid = data.get('matchid')
+
+        trainingid = None
+        if (data.get('trainingid')):
+            trainingid = data.get('trainingid')
 
         # Try Update
         update_query = """
             UPDATE Injury
-            SET MatchID = %s, TrainingID = %s, InjuryDate = %s,
-                InjuryType = %s, Description = %s, RecoveryDate = %s
-            WHERE PlayerID = %s
-            RETURNING InjuryID;
+            SET MatchID = %s, TrainingID = %s,
+                InjuryDate = TO_DATE(%s, 'YYYY-MM-DD') + INTERVAL '1 DAY',
+                InjuryType = %s, Description = %s,
+                RecoveryDate = TO_DATE(%s, 'YYYY-MM-DD')
+            WHERE InjuryID = %s
         """
         params = (
-            data.get('matchid'), data.get(
-                'trainingid'), data.get('injurydate'),
+            matchid, trainingid, data.get('injurydate'),
             data.get('injurytype'), data.get(
                 'description'), data.get('recoverydate'),
-            data.get('playerid')
+            data.get('injuryid'),
         )
         result = execute_query(update_query, params, commit=True)
 
@@ -274,23 +360,67 @@ def manage_injury():
                 INSERT INTO Injury (
                     PlayerID, MatchID, TrainingID, InjuryDate,
                     InjuryType, Description, RecoveryDate
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
-                RETURNING InjuryID;
+                ) VALUES (%s, %s, %s, TO_DATE(%s, 'YYYY-MM-DD') + INTERVAL '1 DAY', %s, %s, TO_DATE(%s, 'YYYY-MM-DD'))
             """
             insert_params = (
-                data.get('playerid'), data.get(
-                    'matchid'), data.get('trainingid'),
+                data.get('playerid'), matchid, trainingid,
                 data.get('injurydate'), data.get('injurytype'),
-                data.get('description'), data.get('recoverydate')
+                data.get('description'), data.get('recoverydate'),
             )
             result = execute_query(insert_query, insert_params, commit=True)
         return jsonify(result)
 
-    # DELETE: Delete Injury (Source 1333)
+    # DELETE: Delete Injury
     if request.method == 'DELETE':
-        mid = request.args.get('matchid')
-        query = "DELETE FROM Injury WHERE MatchID = %s AND TrainingID IS NULL RETURNING InjuryID;"
-        result = execute_query(query, (mid,), commit=True)
+        iid = request.args.get('injuryid')
+        query = "DELETE FROM Injury WHERE InjuryID = %s;"
+        result = execute_query(query, (iid,), commit=True)
+        return jsonify(result)
+
+
+@artunsPart.route('/ban', methods=['GET', 'POST', 'DELETE'])
+def manage_ban():
+
+    if request.method == 'GET':
+        pid = request.args.get('playerid')
+        mdt = request.args.get('matchdatetime')
+        query = "SELECT * FROM Ban WHERE playerid=%s AND BanStartDate = TO_DATE(%s, 'YYYY-MM-DD') + INTERVAL '1 DAY';"
+        result = execute_query(query, (pid, mdt, ), fetch_one=True)
+        return jsonify(result)
+
+    # POST: Update or Insert Injury
+    if request.method == 'POST':
+        data = request.json
+
+        # Try Update
+        update_query = """
+            UPDATE Ban
+            SET BanEndDate = TO_DATE(%s, 'YYYY-MM-DD'),
+            WHERE banid = %s
+        """
+        params = (request.args.get('banenddate'), request.args.get('banid'),)
+        result = execute_query(update_query, params, commit=True)
+
+        # If no update happened, Insert
+        if not result:
+            insert_query = """
+                INSERT INTO Ban (
+                    playerid, banstartdate, banenddate
+                ) VALUES (%s, TO_DATE(%s, 'YYYY-MM-DD') + INTERVAL '1 DAY', TO_DATE(%s, 'YYYY-MM-DD'))
+            """
+            insert_params = (
+                data.get('playerid'),
+                data.get('banstartdate'),
+                data.get('banenddate'),
+            )
+            result = execute_query(insert_query, insert_params, commit=True)
+        return jsonify(result)
+
+    # DELETE: Delete Injury
+    if request.method == 'DELETE':
+        bid = data.get('banid')
+        query = "DELETE FROM Ban WHERE banid = %s;"
+        result = execute_query(query, (bid,), commit=True)
         return jsonify(result)
 
 # ------------------------------------------------------------------------------
