@@ -46,6 +46,27 @@ def inject_now():
     return {'now': datetime.now()}
 @app.before_request
 def _set_default_banner():
+    # Fetch user name if logged in
+    user_id = session.get("user_id")
+    g.user_first_name = None
+    g.user_last_name = None
+    if user_id:
+        conn = get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT FirstName, LastName FROM Users WHERE UsersID = %s;",
+                    (user_id,),
+                )
+                row = cur.fetchone()
+                if row:
+                    g.user_first_name = row[0]
+                    g.user_last_name = row[1]
+        except Exception:
+            pass  # Silently fail if DB query fails
+        finally:
+            conn.close()
+    
     role = session.get("role")
     if role == "superadmin":
         g.banner_view_endpoint = "superadmin.view_tournaments"
@@ -63,6 +84,8 @@ def _set_default_banner():
         g.banner_owner_endpoint = None
         g.banner_reports_endpoint = "admin.reports"
         g.banner_statistics_endpoint = None
+        g.banner_team_rankings_endpoint = "admin.team_rankings"
+        g.banner_player_rankings_endpoint = "admin.player_rankings"
     elif role == "team_owner":
         g.banner_view_endpoint = None
         g.banner_league_endpoint = None
@@ -90,7 +113,7 @@ def _set_default_banner():
         g.banner_create_league_endpoint = None
         g.banner_owner_endpoint = "player.view_team"
         g.banner_reports_endpoint = None
-        g.banner_statistics_endpoint = "player.home"
+        g.banner_statistics_endpoint = None
         g.banner_trainings_endpoint = "player.view_trainings"
         g.banner_offers_endpoint = "player.view_offers"
     else:

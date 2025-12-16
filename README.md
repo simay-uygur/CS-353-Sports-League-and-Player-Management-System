@@ -36,6 +36,38 @@ docker compose down -v
 ## Notes
 - All database interactions are implemented with raw SQL per project specification; no ORM is used.
 
+## Recent Updates
+
+### Match Date Validation
+- Match creation now validates that match dates fall within the season's start and end dates
+- Client-side validation via HTML5 min/max attributes on datetime inputs
+- Server-side validation with clear error messages
+
+### UI/UX Improvements
+- **Banner Navigation**: Enhanced banner with improved responsive design:
+  - Horizontal scrolling for navigation links on smaller screens
+  - Better spacing and layout for multiple navigation items
+  - Responsive breakpoints for tablet and mobile devices
+  - Improved visual hierarchy and readability
+
+### Data Display Changes
+- **Overall Field Removal**: The player "Overall" field has been removed from all frontend displays:
+  - Removed from player dashboard
+  - Removed from team roster views (player, coach, owner perspectives)
+  - Database field remains unchanged (only frontend display removed)
+
+### Ranking Features
+- **Team Rankings**: Comprehensive team ranking system with:
+  - Multi-level filtering (league, season number, season year)
+  - Complete statistics (points, wins, draws, losses, goals)
+  - Automatic sorting by standard league ranking criteria
+  
+- **Player Rankings**: Detailed player statistics and rankings with:
+  - Flexible filtering options
+  - Comprehensive stat display (goals, assists, cards, saves, etc.)
+  - Pass accuracy calculations
+  - Note: Does not include "Overall" field per design requirements
+
 ## User Roles & Functionalities
 
 ### Superadmin
@@ -48,10 +80,22 @@ docker compose down -v
 - **Tournament Management**: View assigned tournaments and their bracket structures
 - **League Management**: View assigned leagues with teams, seasons, and matches
 - **Team Management**: Add/remove teams from leagues they manage
-- **Match Creation**: Create seasonal matches for leagues with validation (team availability, date conflicts)
+- **Match Creation**: Create seasonal matches for leagues with validation:
+  - Team availability checks (prevents scheduling conflicts)
+  - Date validation (match date must be within season start/end dates)
+  - Automatic venue assignment (uses home team's venue)
 - **Referee Assignment**: Assign referees to tournament and league matches
 - **Match Locking**: Lock/unlock league matches to prevent modifications
 - **Match Filtering**: Filter all matches by season year (year only), league, or tournament
+- **Team Rankings**: View team rankings with filtering options:
+  - Filter by league, season number, and season year
+  - Displays points, wins, draws, losses, goals for/against, goal difference
+  - Rankings sorted by points, goal difference, goals for, and wins
+- **Player Rankings**: View player statistics and rankings with filtering options:
+  - Filter by league, season number, and season year
+  - Displays goals, assists, appearances, cards, saves, penalties, minutes played, and pass statistics
+  - Rankings sorted by goals, assists, and appearances
+  - Note: Player "Overall" field is not displayed in rankings or frontend views
 - **Reports**: Generate and download player reports, league standings, and attendance reports as PDFs
 
 ### Team Owner
@@ -65,6 +109,7 @@ docker compose down -v
 ### Player
 - View personal statistics and match history
 - View team and match information
+- Note: Player "Overall" field has been removed from all frontend displays
 
 ### Referee
 - View assigned matches

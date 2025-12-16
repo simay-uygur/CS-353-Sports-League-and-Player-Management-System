@@ -16,7 +16,7 @@
                 <p class="subtitle">{{ league_name }} • Season {{ season_no }} ({{ season_year }})</p>
             </div>
             <div>
-                <a href="{{ url_for('admin.view_leagues') }}" class="btn solid">&larr; Back to Leagues</a>
+                <a href="{{ url_for('admin.view_leagues') }}" class="btn solid">← Back to Leagues</a>
             </div>
         </header>
 
@@ -51,12 +51,14 @@
 
                     <div class="form-group">
                         <label for="start-datetime">Match Start Date & Time <span class="required">*</span></label>
-                        <input type="datetime-local" id="start-datetime" name="start_datetime" required value="{{ form_data.get('start_datetime', '') }}">
-                    </div>
-
-                    <div class="form-group">
-                        <label for="venue">Venue</label>
-                        <input type="text" id="venue" name="venue" placeholder="Stadium name, location, etc." value="{{ form_data.get('venue', '') }}">
+                        <input type="datetime-local" id="start-datetime" name="start_datetime" required value="{{ form_data.get('start_datetime', '') }}"
+                               {% if season_start %}min="{{ season_start.strftime('%Y-%m-%dT%H:%M') }}"{% endif %}
+                               {% if season_end %}max="{{ season_end.strftime('%Y-%m-%dT%H:%M') }}"{% endif %}>
+                        {% if season_start and season_end %}
+                        <small style="display: block; margin-top: 0.5rem; color: #666; font-size: 0.85rem;">
+                            Season runs from {{ season_start.strftime('%Y-%m-%d %H:%M') }} to {{ season_end.strftime('%Y-%m-%d %H:%M') }}
+                        </small>
+                        {% endif %}
                     </div>
 
                     <div class="form-action-buttons">

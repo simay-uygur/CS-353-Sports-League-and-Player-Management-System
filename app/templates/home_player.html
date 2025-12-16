@@ -12,15 +12,15 @@
         <header class="player-header">
             <div class="player-header__left">
                 <h1>{{ player_info.firstname }} {{ player_info.lastname }}</h1>
-                <span class="status-badge {{ 'eligible' if player_info.iseligible else 'ineligible' }}">
-                    Status: {{ 'Eligible' if player_info.iseligible else 'Ineligible' }}
-                </span>
             </div>
         </header>
 
-        <div class="player-dashboard-grid">
-            <!-- Left Column -->
-            <div class="player-dashboard__left">
+        <!-- Overview Section -->
+        <section class="dashboard-card" style="margin-bottom: 2rem;">
+            <h2 style="font-size: 1.5rem; margin-bottom: 1.5rem; color: #0f172a;">Overview</h2>
+            
+            <!-- Quick Access Cards -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem;">
                 <!-- Upcoming Trainings -->
                 <section class="dashboard-card">
                     <div class="card-header-with-link">
@@ -50,156 +50,218 @@
                     <p class="subtle">View your team information and teammates.</p>
                 </section>
             </div>
+        </section>
 
-            <!-- Right Column -->
-            <div class="player-dashboard__right">
-                <!-- Statistics Section -->
-                <section class="dashboard-card">
-                    <h2>Statistics</h2>
-                    
-                    <!-- Summary Cards -->
-                    {% if overall_stats %}
+        <!-- Statistics Section -->
+        <div>
+            <section class="dashboard-card">
+                <h2>Statistics</h2>
+                
+                <!-- Overall Statistics Summary Cards -->
+                <div style="margin-bottom: 2rem;">
+                    <h3 style="font-size: 1.1rem; margin-bottom: 1rem; color: #0f172a;">Overall Statistics</h3>
                     <div class="stats-cards-grid">
                         <div class="stat-card">
                             <div class="stat-card__icon">📊</div>
-                            <div class="stat-card__value">{{ overall_stats.total_appearances or 0 }}</div>
+                            <div class="stat-card__value">{% if overall_stats %}{{ overall_stats.total_appearances or 0 }}{% else %}0{% endif %}</div>
                             <div class="stat-card__label">Matches</div>
                         </div>
                         <div class="stat-card">
-                            <div class="stat-card__icon">🟨</div>
-                            <div class="stat-card__value">{{ overall_stats.total_yellowcards or 0 }}</div>
-                            <div class="stat-card__label">Yellow Cards</div>
+                            <div class="stat-card__icon">🎯</div>
+                            <div class="stat-card__value">{% if overall_stats %}{{ overall_stats.total_goals or 0 }}{% else %}0{% endif %}</div>
+                            <div class="stat-card__label">Goals Scored</div>
                         </div>
                         <div class="stat-card">
                             <div class="stat-card__icon">⚽</div>
-                            <div class="stat-card__value">{{ overall_stats.total_assistsmade or 0 }}</div>
+                            <div class="stat-card__value">{% if overall_stats %}{{ overall_stats.total_assistsmade or 0 }}{% else %}0{% endif %}</div>
                             <div class="stat-card__label">Assists</div>
                         </div>
                         <div class="stat-card">
-                            <div class="stat-card__icon">🎯</div>
-                            <div class="stat-card__value">{{ overall_stats.total_goals or 0 }}</div>
-                            <div class="stat-card__label">Goals</div>
+                            <div class="stat-card__icon">⏱️</div>
+                            <div class="stat-card__value">{% if overall_stats %}{{ "%.0f"|format(overall_stats.total_minutes or 0) }}{% else %}0{% endif %}</div>
+                            <div class="stat-card__label">Minutes</div>
                         </div>
+                        <div class="stat-card">
+                            <div class="stat-card__icon">🟨</div>
+                            <div class="stat-card__value">{% if overall_stats %}{{ overall_stats.total_yellowcards or 0 }}{% else %}0{% endif %}</div>
+                            <div class="stat-card__label">Yellow Cards</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-card__icon">🟥</div>
+                            <div class="stat-card__value">{% if overall_stats %}{{ overall_stats.total_redcards or 0 }}{% else %}0{% endif %}</div>
+                            <div class="stat-card__label">Red Cards</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-card__icon">🎯</div>
+                            <div class="stat-card__value">{% if overall_stats %}{{ overall_stats.total_penalties or 0 }}{% else %}0{% endif %}</div>
+                            <div class="stat-card__label">Penalties</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-card__icon">🧤</div>
+                            <div class="stat-card__value">{% if overall_stats %}{{ overall_stats.total_saves or 0 }}{% else %}0{% endif %}</div>
+                            <div class="stat-card__label">Saves</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Detailed Stats -->
+                    <div style="margin-top: 1.5rem; padding: 1rem; background: #f8f9fa; border-radius: 8px;">
+                        <h4 style="font-size: 1rem; margin-bottom: 0.75rem; color: #0f172a;">Passing Statistics</h4>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                            <div>
+                                <span style="color: #6b7280; font-size: 0.875rem;">Successful Passes</span>
+                                <div style="font-size: 1.25rem; font-weight: 600; color: #0f172a;">{% if overall_stats %}{{ overall_stats.total_successfulpasses or 0 }}{% else %}0{% endif %}</div>
+                            </div>
+                            <div>
+                                <span style="color: #6b7280; font-size: 0.875rem;">Total Passes</span>
+                                <div style="font-size: 1.25rem; font-weight: 600; color: #0f172a;">{% if overall_stats %}{{ overall_stats.total_totalpasses or 0 }}{% else %}0{% endif %}</div>
+                            </div>
+                            <div>
+                                <span style="color: #6b7280; font-size: 0.875rem;">Pass Success Rate</span>
+                                <div style="font-size: 1.25rem; font-weight: 600; color: #0f172a;">
+                                    {% if overall_stats and overall_stats.total_totalpasses and overall_stats.total_totalpasses > 0 %}
+                                        {{ "%.1f"|format((overall_stats.total_successfulpasses or 0) / overall_stats.total_totalpasses * 100) }}%
+                                    {% else %}
+                                        0%
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Season Statistics Table -->
+                <div class="stats-detail-table" style="margin-top: 2rem;">
+                    <h3 style="font-size: 1.1rem; margin-bottom: 1rem; color: #0f172a;">Season Statistics</h3>
+                    {% if season_stats and season_stats|length > 0 %}
+                    <div class="table-card">
+                        <table class="simple-table">
+                            <thead>
+                                <tr>
+                                    <th>League</th>
+                                    <th>Season</th>
+                                    <th>Appearances</th>
+                                    <th>Goals</th>
+                                    <th>Assists</th>
+                                    <th>Yellow Cards</th>
+                                    <th>Red Cards</th>
+                                    <th>Minutes</th>
+                                    <th>Penalties</th>
+                                    <th>Saves</th>
+                                    <th>Passes (Suc/Total)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for stat in season_stats %}
+                                <tr>
+                                    <td>{{ stat.name }}</td>
+                                    <td>{{ stat.seasonno }} ({{ stat.seasonyear }})</td>
+                                    <td>{{ stat.total_appearances or 0 }}</td>
+                                    <td>{{ stat.total_goals or 0 }}</td>
+                                    <td>{{ stat.total_assistsmade or 0 }}</td>
+                                    <td>{{ stat.total_yellowcards or 0 }}</td>
+                                    <td>{{ stat.total_redcards or 0 }}</td>
+                                    <td>{{ "%.0f"|format(stat.total_minutes or 0) }}</td>
+                                    <td>{{ stat.total_penalties or 0 }}</td>
+                                    <td>{{ stat.total_saves or 0 }}</td>
+                                    <td>{{ stat.total_successfulpasses or 0 }} / {{ stat.total_totalpasses or 0 }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
                     {% else %}
-                    <p class="subtle">No statistics available yet.</p>
-                    {% endif %}
-
-                    <!-- Filter Form -->
-                    <div class="stats-filter-form">
-                        <h3>View Season Statistics</h3>
-                        <form method="GET" action="{{ url_for('player.home') }}" class="filter-form">
-                            <div class="form-row">
-                                <label for="league_id">League</label>
-                                <select name="league_id" id="league_id">
-                                    <option value="">All Leagues</option>
-                                    {% for league in available_leagues %}
-                                    <option value="{{ league.leagueid }}" {% if selected_league_id == league.leagueid %}selected{% endif %}>
-                                        {{ league.leaguename }}
-                                    </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="form-row">
-                                <label for="season_no">Season No</label>
-                                <input type="number" name="season_no" id="season_no" min="1" value="{{ selected_season_no or '' }}" placeholder="e.g. 1">
-                            </div>
-                            <div class="form-row">
-                                <label for="season_year">Season Year</label>
-                                <input type="date" name="season_year" id="season_year" value="{{ selected_season_year or '' }}">
-                            </div>
-                            <div class="form-row">
-                                <button type="submit" class="btn solid">View Statistics</button>
-                                {% if selected_league_id or selected_season_no or selected_season_year %}
-                                <a href="{{ url_for('player.home') }}" class="btn ghost">Clear Filters</a>
-                                {% endif %}
-                            </div>
-                        </form>
-                    </div>
-
-                    <!-- Season-Specific Statistics Table -->
-                    {% if season_stats %}
-                    <div class="stats-detail-table">
-                        <h3>Season Statistics</h3>
-                        {% if season_stats|length > 0 %}
-                        <div class="table-card">
-                            <table class="simple-table">
-                                <thead>
-                                    <tr>
-                                        <th>League</th>
-                                        <th>Season</th>
-                                        <th>Appearances</th>
-                                        <th>Goals</th>
-                                        <th>Assists</th>
-                                        <th>Yellow Cards</th>
-                                        <th>Red Cards</th>
-                                        <th>Minutes</th>
-                                        <th>Penalties</th>
-                                        <th>Saves</th>
-                                        <th>Passes (Suc/Total)</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for stat in season_stats %}
-                                    <tr>
-                                        <td>{{ stat.name }}</td>
-                                        <td>{{ stat.seasonno }} ({{ stat.seasonyear }})</td>
-                                        <td>{{ stat.total_appearances or 0 }}</td>
-                                        <td>{{ stat.total_goals or 0 }}</td>
-                                        <td>{{ stat.total_assistsmade or 0 }}</td>
-                                        <td>{{ stat.total_yellowcards or 0 }}</td>
-                                        <td>{{ stat.total_redcards or 0 }}</td>
-                                        <td>{{ "%.0f"|format(stat.total_minutes or 0) }}</td>
-                                        <td>{{ stat.total_penalties or 0 }}</td>
-                                        <td>{{ stat.total_saves or 0 }}</td>
-                                        <td>{{ stat.total_successfulpasses or 0 }} / {{ stat.total_totalpasses or 0 }}</td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                        {% else %}
-                        <p class="subtle">No statistics found for the selected season.</p>
-                        {% endif %}
+                    <div class="table-card">
+                        <table class="simple-table">
+                            <thead>
+                                <tr>
+                                    <th>League</th>
+                                    <th>Season</th>
+                                    <th>Appearances</th>
+                                    <th>Goals</th>
+                                    <th>Assists</th>
+                                    <th>Yellow Cards</th>
+                                    <th>Red Cards</th>
+                                    <th>Minutes</th>
+                                    <th>Penalties</th>
+                                    <th>Saves</th>
+                                    <th>Passes (Suc/Total)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="11" style="text-align: center; color: #6b7280; padding: 2rem;">No season statistics available</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                     {% endif %}
+                </div>
 
-                    <!-- Tournament Statistics -->
-                    {% if tournament_stats %}
-                    <div class="stats-detail-table">
-                        <h3>Tournament Statistics</h3>
-                        <div class="table-card">
-                            <table class="simple-table">
-                                <thead>
-                                    <tr>
-                                        <th>Tournament</th>
-                                        <th>Appearances</th>
-                                        <th>Goals</th>
-                                        <th>Assists</th>
-                                        <th>Yellow Cards</th>
-                                        <th>Red Cards</th>
-                                        <th>Minutes</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for stat in tournament_stats %}
-                                    <tr>
-                                        <td>{{ stat.name }}</td>
-                                        <td>{{ stat.total_appearances or 0 }}</td>
-                                        <td>{{ stat.total_goals or 0 }}</td>
-                                        <td>{{ stat.total_assistsmade or 0 }}</td>
-                                        <td>{{ stat.total_yellowcards or 0 }}</td>
-                                        <td>{{ stat.total_redcards or 0 }}</td>
-                                        <td>{{ "%.0f"|format(stat.total_minutes or 0) }}</td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
+                <!-- Tournament Statistics -->
+                <div class="stats-detail-table" style="margin-top: 2rem;">
+                    <h3 style="font-size: 1.1rem; margin-bottom: 1rem; color: #0f172a;">Tournament Statistics</h3>
+                    {% if tournament_stats and tournament_stats|length > 0 %}
+                    <div class="table-card">
+                        <table class="simple-table">
+                            <thead>
+                                <tr>
+                                    <th>Tournament</th>
+                                    <th>Appearances</th>
+                                    <th>Goals</th>
+                                    <th>Assists</th>
+                                    <th>Yellow Cards</th>
+                                    <th>Red Cards</th>
+                                    <th>Minutes</th>
+                                    <th>Penalties</th>
+                                    <th>Saves</th>
+                                    <th>Passes (Suc/Total)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for stat in tournament_stats %}
+                                <tr>
+                                    <td>{{ stat.name }}</td>
+                                    <td>{{ stat.total_appearances or 0 }}</td>
+                                    <td>{{ stat.total_goals or 0 }}</td>
+                                    <td>{{ stat.total_assistsmade or 0 }}</td>
+                                    <td>{{ stat.total_yellowcards or 0 }}</td>
+                                    <td>{{ stat.total_redcards or 0 }}</td>
+                                    <td>{{ "%.0f"|format(stat.total_minutes or 0) }}</td>
+                                    <td>{{ stat.total_penalties or 0 }}</td>
+                                    <td>{{ stat.total_saves or 0 }}</td>
+                                    <td>{{ stat.total_successfulpasses or 0 }} / {{ stat.total_totalpasses or 0 }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="table-card">
+                        <table class="simple-table">
+                            <thead>
+                                <tr>
+                                    <th>Tournament</th>
+                                    <th>Appearances</th>
+                                    <th>Goals</th>
+                                    <th>Assists</th>
+                                    <th>Yellow Cards</th>
+                                    <th>Red Cards</th>
+                                    <th>Minutes</th>
+                                    <th>Penalties</th>
+                                    <th>Saves</th>
+                                    <th>Passes (Suc/Total)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="10" style="text-align: center; color: #6b7280; padding: 2rem;">No tournament statistics available</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                     {% endif %}
-                </section>
-            </div>
+                </div>
+            </section>
         </div>
     </main>
 </body>

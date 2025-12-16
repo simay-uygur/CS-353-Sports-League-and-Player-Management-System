@@ -28,6 +28,12 @@
         {% if g.get("banner_statistics_endpoint") %}
         <a href="{{ url_for(g.banner_statistics_endpoint) }}" class="nav-link">Statistics</a>
         {% endif %}
+        {% if g.get("banner_team_rankings_endpoint") %}
+        <a href="{{ url_for(g.banner_team_rankings_endpoint) }}" class="nav-link">Team Rankings</a>
+        {% endif %}
+        {% if g.get("banner_player_rankings_endpoint") %}
+        <a href="{{ url_for(g.banner_player_rankings_endpoint) }}" class="nav-link">Player Rankings</a>
+        {% endif %}
         {% if g.get("banner_trainings_endpoint") %}
         <a href="{{ url_for(g.banner_trainings_endpoint) }}" class="nav-link">View Trainings</a>
         {% endif %}
@@ -48,6 +54,9 @@
         {% endif %}
     </nav>
     <div class="top-banner__actions">
+        {% if g.get("user_first_name") and g.get("user_last_name") %}
+        <span class="user-name">{{ g.user_first_name }} {{ g.user_last_name }}</span>
+        {% endif %}
         <span class="role-pill">{{ session.get("role", "guest")|capitalize }}</span>
         <a class="nav-link logout" href="{{ url_for('logout') }}">Log out</a>
     </div>

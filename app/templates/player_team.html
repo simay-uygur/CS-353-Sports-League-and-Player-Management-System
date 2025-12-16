@@ -15,7 +15,7 @@
                 <h1>My Team</h1>
             </div>
             <div class="admin-actions">
-                <a href="{{ url_for('player.home') }}" class="back-link">← Back to Dashboard</a>
+                <a href="{{ url_for('player.home') }}" class="btn solid">← Back to Dashboard</a>
             </div>
         </header>
 
@@ -83,7 +83,6 @@
                                     <th>Position</th>
                                     <th>Height</th>
                                     <th>Weight</th>
-                                    <th>Overall</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -98,13 +97,6 @@
                                     <td>{{ player.position }}</td>
                                     <td>{{ player.height }} cm</td>
                                     <td>{{ player.weight }} kg</td>
-                                    <td>
-                                        {% if player.overall %}
-                                            <strong style="color: #059669;">{{ player.overall }}</strong>
-                                        {% else %}
-                                            <span class="subtle">N/A</span>
-                                        {% endif %}
-                                    </td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
