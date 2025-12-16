@@ -394,6 +394,7 @@ def create_season_match_form(league_id, season_no, season_year):
             abort(404)
         league_name = league[0]["name"] if league else "Unknown League"
         teams = fetch_league_teams(league_id)
+        season_start, season_end = fetch_season_dates(league_id, season_no, season_year)
         return render_template(
             "admin_create_season_match.html",
             league_id=league_id,
@@ -403,6 +404,8 @@ def create_season_match_form(league_id, season_no, season_year):
             teams=teams,
             error_message=error_message,
             form_data=request.form,
+            season_start=season_start,
+            season_end=season_end,
         )
 
     if request.method == "GET":
@@ -413,7 +416,6 @@ def create_season_match_form(league_id, season_no, season_year):
     home_team_id = request.form.get("home_team_id")
     away_team_id = request.form.get("away_team_id")
     start_dt_raw = request.form.get("start_datetime")
-    venue = request.form.get("venue") or None
 
     missing_bits = []
     if not home_team_id:
@@ -442,6 +444,19 @@ def create_season_match_form(league_id, season_no, season_year):
                 f"Cannot create match: the {', '.join(conflicts)} already has a match on {match_date}."
             )
 
+    # Validate match date is within season start/end dates
+    season_start, season_end = fetch_season_dates(league_id, season_no, season_year)
+    if season_start and season_end and normalized_start:
+        match_datetime = datetime.strptime(normalized_start, "%Y-%m-%d %H:%M:%S")
+        if match_datetime < season_start:
+            return _render_form(
+                f"Match date cannot be before season start date ({season_start.strftime('%Y-%m-%d %H:%M')})."
+            )
+        if match_datetime > season_end:
+            return _render_form(
+                f"Match date cannot be after season end date ({season_end.strftime('%Y-%m-%d %H:%M')})."
+            )
+
     try:
         create_season_match(
             league_id,
@@ -450,7 +465,6 @@ def create_season_match_form(league_id, season_no, season_year):
             int(home_team_id),
             int(away_team_id),
             normalized_start,
-            venue,
         )
     except ValueError as exc:
         return _render_form(str(exc))
@@ -562,6 +576,100 @@ def unlock_match(match_id):
     
     toggle_match_lock(match_id, False)
     return redirect(url_for("admin.view_seasonal_matches_lock"))
+
+
+@admin_bp.route("/rankings/teams")
+def team_rankings():
+    """Display team rankings with optional filters."""
+    admin_id = session.get("user_id")
+    if not admin_id:
+        return redirect(url_for("login"))
+    
+    # Get filter parameters
+    league_id = request.args.get("league_id")
+    league_id = int(league_id) if league_id else None
+    season_no = request.args.get("season_no")
+    season_no = int(season_no) if season_no else None
+    season_year = request.args.get("season_year")
+    season_year = datetime.strptime(season_year, "%Y-%m-%d").date() if season_year else None
+    
+    # Fetch rankings
+    rankings = fetch_team_rankings(league_id, season_no, season_year)
+    
+    # Fetch filter options
+    admin_leagues = fetch_admin_leagues(admin_id)
+    leagues = fetch_leagues_for_dropdown()
+    
+    # Get unique seasons from admin leagues
+    seasons = []
+    seen_seasons = set()
+    for league in admin_leagues:
+        key = (league["leagueid"], league["seasonno"], league["seasonyear"])
+        if key not in seen_seasons:
+            seen_seasons.add(key)
+            seasons.append({
+                "leagueid": league["leagueid"],
+                "leaguename": league["name"],
+                "seasonno": league["seasonno"],
+                "seasonyear": league["seasonyear"]
+            })
+    
+    return render_template(
+        "admin_team_rankings.html",
+        rankings=rankings,
+        leagues=leagues,
+        seasons=seasons,
+        selected_league_id=league_id,
+        selected_season_no=season_no,
+        selected_season_year=season_year,
+    )
+
+
+@admin_bp.route("/rankings/players")
+def player_rankings():
+    """Display player rankings with optional filters."""
+    admin_id = session.get("user_id")
+    if not admin_id:
+        return redirect(url_for("login"))
+    
+    # Get filter parameters
+    league_id = request.args.get("league_id")
+    league_id = int(league_id) if league_id else None
+    season_no = request.args.get("season_no")
+    season_no = int(season_no) if season_no else None
+    season_year = request.args.get("season_year")
+    season_year = datetime.strptime(season_year, "%Y-%m-%d").date() if season_year else None
+    
+    # Fetch rankings
+    rankings = fetch_player_rankings(league_id, season_no, season_year)
+    
+    # Fetch filter options
+    admin_leagues = fetch_admin_leagues(admin_id)
+    leagues = fetch_leagues_for_dropdown()
+    
+    # Get unique seasons from admin leagues
+    seasons = []
+    seen_seasons = set()
+    for league in admin_leagues:
+        key = (league["leagueid"], league["seasonno"], league["seasonyear"])
+        if key not in seen_seasons:
+            seen_seasons.add(key)
+            seasons.append({
+                "leagueid": league["leagueid"],
+                "leaguename": league["name"],
+                "seasonno": league["seasonno"],
+                "seasonyear": league["seasonyear"]
+            })
+    
+    return render_template(
+        "admin_player_rankings.html",
+        rankings=rankings,
+        leagues=leagues,
+        seasons=seasons,
+        selected_league_id=league_id,
+        selected_season_no=season_no,
+        selected_season_year=season_year,
+    )
 
 
 @admin_bp.route("/reports", methods=["GET", "POST"])

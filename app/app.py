@@ -84,6 +84,8 @@ def _set_default_banner():
         g.banner_owner_endpoint = None
         g.banner_reports_endpoint = "admin.reports"
         g.banner_statistics_endpoint = None
+        g.banner_team_rankings_endpoint = "admin.team_rankings"
+        g.banner_player_rankings_endpoint = "admin.player_rankings"
     elif role == "team_owner":
         g.banner_view_endpoint = None
         g.banner_league_endpoint = None

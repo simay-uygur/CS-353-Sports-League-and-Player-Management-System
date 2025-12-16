@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin | Team Rankings</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="dashboard-body">
+    {% include "_banner.html" %}
+    <main class="dashboard-container">
+        <header class="admin-header">
+            <div>
+                <p class="eyebrow">Admin Console</p>
+                <h1>Team Rankings</h1>
+            </div>
+        </header>
+
+        <section class="filters-section" style="margin-bottom: 2rem;">
+            <div class="card">
+                <h3 style="margin-bottom: 1rem;">Filters</h3>
+                <form method="GET" action="{{ url_for('admin.team_rankings') }}" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end;">
+                    <div style="flex: 1; min-width: 200px;">
+                        <label for="league_id">League</label>
+                        <select id="league_id" name="league_id" style="width: 100%; padding: 0.5rem;">
+                            <option value="">All Leagues</option>
+                            {% for league in leagues %}
+                            <option value="{{ league.leagueid }}" {% if selected_league_id and selected_league_id == league.leagueid %}selected{% endif %}>
+                                {{ league.leaguename }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div style="flex: 1; min-width: 200px;">
+                        <label for="season_no">Season No</label>
+                        <input type="number" id="season_no" name="season_no" value="{{ selected_season_no or '' }}" placeholder="Optional" style="width: 100%; padding: 0.5rem;">
+                    </div>
+                    <div style="flex: 1; min-width: 200px;">
+                        <label for="season_year">Season Year</label>
+                        <input type="date" id="season_year" name="season_year" value="{{ selected_season_year.strftime('%Y-%m-%d') if selected_season_year else '' }}" placeholder="Optional" style="width: 100%; padding: 0.5rem;">
+                    </div>
+                    <div>
+                        <button type="submit" class="btn solid">Filter</button>
+                        <a href="{{ url_for('admin.team_rankings') }}" class="btn" style="margin-left: 0.5rem;">Clear</a>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <section class="rankings-section">
+            {% if rankings and rankings|length > 0 %}
+            <div class="table-card">
+                <table class="simple-table">
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>Team</th>
+                            <th>Played</th>
+                            <th>Wins</th>
+                            <th>Draws</th>
+                            <th>Losses</th>
+                            <th>Goals For</th>
+                            <th>Goals Against</th>
+                            <th>Goal Difference</th>
+                            <th>Points</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for team in rankings %}
+                        <tr>
+                            <td><strong>{{ loop.index }}</strong></td>
+                            <td><strong>{{ team.teamname }}</strong></td>
+                            <td>{{ team.played }}</td>
+                            <td>{{ team.wins }}</td>
+                            <td>{{ team.draws }}</td>
+                            <td>{{ team.losses }}</td>
+                            <td>{{ team.gf }}</td>
+                            <td>{{ team.ga }}</td>
+                            <td>
+                                {% if team.gd > 0 %}
+                                    <span style="color: #059669;">+{{ team.gd }}</span>
+                                {% elif team.gd < 0 %}
+                                    <span style="color: #dc2626;">{{ team.gd }}</span>
+                                {% else %}
+                                    {{ team.gd }}
+                                {% endif %}
+                            </td>
+                            <td><strong>{{ team.points }}</strong></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="card">
+                <p class="subtle" style="text-align: center; padding: 2rem;">
+                    No team rankings found for the selected filters. Try adjusting your filters or ensure matches have been played and scored.
+                </p>
+            </div>
+            {% endif %}
+        </section>
+    </main>
+</body>
+</html>
+

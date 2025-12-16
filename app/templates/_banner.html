@@ -28,6 +28,12 @@
         {% if g.get("banner_statistics_endpoint") %}
         <a href="{{ url_for(g.banner_statistics_endpoint) }}" class="nav-link">Statistics</a>
         {% endif %}
+        {% if g.get("banner_team_rankings_endpoint") %}
+        <a href="{{ url_for(g.banner_team_rankings_endpoint) }}" class="nav-link">Team Rankings</a>
+        {% endif %}
+        {% if g.get("banner_player_rankings_endpoint") %}
+        <a href="{{ url_for(g.banner_player_rankings_endpoint) }}" class="nav-link">Player Rankings</a>
+        {% endif %}
         {% if g.get("banner_trainings_endpoint") %}
         <a href="{{ url_for(g.banner_trainings_endpoint) }}" class="nav-link">View Trainings</a>
         {% endif %}
