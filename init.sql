@@ -374,6 +374,9 @@ FROM (
     m.MatchID,
     home.TeamName AS HomeTeamName,
     away.TeamName AS AwayTeamName,
+    m.hometeamscore,
+    m.awayteamscore,
+    m.winnerteam,
     m.MatchStartDatetime,
     l.Name AS CompetitionName,
     rma.RefereeID,
@@ -391,6 +394,9 @@ FROM (
     m.MatchID,
     home.TeamName AS HomeTeamName,
     away.TeamName AS AwayTeamName,
+    m.hometeamscore,
+    m.awayteamscore,
+    m.winnerteam,
     m.MatchStartDatetime,
     t.Name AS CompetitionName,
     rma.RefereeID,
@@ -725,8 +731,73 @@ FOR EACH ROW
 EXECUTE FUNCTION auto_create_plays_on_match_insert();
 
 
+-- Function to handle the logic of switching substitutes
+CREATE OR REPLACE FUNCTION handle_substitution_change()
+RETURNS TRIGGER AS $$
+DECLARE
+    target_play_id INT;
+BEGIN
+    -- Only proceed if the SubstitutionID has actually changed
+    IF (OLD.SubstitutionID IS DISTINCT FROM NEW.SubstitutionID) THEN
 
+        -- 1. Handle Removal of the OLD substitute (if one existed)
+        IF OLD.SubstitutionID IS NOT NULL THEN
+            -- Find the specific play record to delete based on the "closest start time" rule.
+            -- We look for the play record where the PlayerID matches the OLD substitute.
+            -- We assume the substitute's StartTime should have matched the original player's StopTime.
+            SELECT PlayID INTO target_play_id
+            FROM Play
+            WHERE MatchID = OLD.MatchID
+              AND PlayerID = OLD.SubstitutionID
+            -- Calculate absolute difference to find the closest time match
+            ORDER BY ABS(StartTime - COALESCE(OLD.StopTime, 0)) ASC
+            LIMIT 1;
 
+            -- If a matching record is found, delete it
+            IF target_play_id IS NOT NULL THEN
+                DELETE FROM Play WHERE PlayID = target_play_id;
+            END IF;
+        END IF;
+
+        -- 2. Handle Insertion of the NEW substitute (if one is provided)
+        IF NEW.SubstitutionID IS NOT NULL THEN
+            -- Insert a new record for the new substitute
+            -- They enter the game at the exact moment the original player leaves (NEW.StopTime)
+            INSERT INTO Play (
+                MatchID, 
+                PlayerID, 
+                SubstitutionID, 
+                StartTime, 
+                StopTime,
+                GoalsScored, 
+                PenaltiesScored, 
+                AssistsMade, 
+                TotalPasses, 
+                YellowCards, 
+                RedCards, 
+                Saves
+            )
+            VALUES (
+                NEW.MatchID,
+                NEW.SubstitutionID,
+                NULL, -- The incoming player is not yet substituted out
+                COALESCE(NEW.StopTime, 0), -- StartTime = StopTime of player leaving
+                NULL, -- StopTime is null (they are currently playing)
+                0, 0, 0, 0, 0, 0, 0 -- Initialize stats to 0
+            );
+        END IF;
+
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger definition
+CREATE TRIGGER trg_handle_substitution_change
+AFTER UPDATE OF SubstitutionID ON Play
+FOR EACH ROW
+EXECUTE FUNCTION handle_substitution_change();
 
 
 -- trigger to update scores on play insert, excluding tournament matches
@@ -1291,3 +1362,146 @@ BEGIN
     ON CONFLICT (SessionID, PlayerID) DO NOTHING;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Migrate password storage away from CHAR padding
+ALTER TABLE Users ALTER COLUMN HashedPassword TYPE TEXT;
+ALTER TABLE Users ALTER COLUMN Salt TYPE TEXT;
+UPDATE Users SET HashedPassword = RTRIM(HashedPassword);
+UPDATE Users SET Salt = RTRIM(Salt);
+
+
+
+---------------------------------------------------------------------------------------------------------------------------
+
+-- 1. Create a Test Referee
+-- Email: ref_test@example.com, Password: (Matches your hashed sample)
+INSERT INTO Users (FirstName, LastName, Email, HashedPassword, Salt, BirthDate, Role, Nationality)
+VALUES ('Test', 'Referee', 'ref_test@example.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1985-05-20', 'referee', 'USA');
+
+INSERT INTO Referee (UsersID, Certification)
+SELECT UsersID, 'FIFA Pro' FROM Users WHERE Email = 'ref_test@example.com';
+
+-- 2. Create Team Owners
+INSERT INTO Users (FirstName, LastName, Email, HashedPassword, Salt, BirthDate, Role, Nationality)
+VALUES 
+('Owner', 'Red', 'owner_red@example.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1970-01-01', 'team_owner', 'USA'),
+('Owner', 'Blue', 'owner_blue@example.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1972-01-01', 'team_owner', 'UK');
+
+INSERT INTO TeamOwner (UsersID, NetWorth)
+SELECT UsersID, 5000000 FROM Users WHERE Email IN ('owner_red@example.com', 'owner_blue@example.com');
+
+-- 3. Create Teams
+INSERT INTO Team (OwnerID, TeamName, EstablishedDate, HomeVenue)
+VALUES 
+((SELECT UsersID FROM Users WHERE Email = 'owner_red@example.com'), 'Red Dragons', '2020-01-01', 'Dragon Pit'),
+((SELECT UsersID FROM Users WHERE Email = 'owner_blue@example.com'), 'Blue Knights', '2020-01-01', 'Castle Arena');
+
+-- 4. Create Players, Employees, and Contracts
+-- We perform a bulk insert logic here to ensure they are "Employed" BEFORE the match is created.
+
+WITH new_players AS (
+    INSERT INTO Users (FirstName, LastName, Email, HashedPassword, Salt, BirthDate, Role, Nationality)
+    VALUES 
+    -- Red Team Players
+    ('John', 'Striker', 'p_red1@example.com', 'hash', 'salt', '1998-01-01', 'player', 'USA'),
+    ('Mike', 'Mid', 'p_red2@example.com', 'hash', 'salt', '1999-01-01', 'player', 'USA'),
+    ('Steve', 'Defender', 'p_red3@example.com', 'hash', 'salt', '1997-01-01', 'player', 'USA'),
+    ('Dave', 'Goalie', 'p_red4@example.com', 'hash', 'salt', '1996-01-01', 'player', 'USA'),
+    ('Tom', 'Bench', 'p_red5@example.com', 'hash', 'salt', '2000-01-01', 'player', 'USA'),
+    -- Blue Team Players
+    ('Alex', 'Forward', 'p_blue1@example.com', 'hash', 'salt', '1998-05-01', 'player', 'UK'),
+    ('Ben', 'Winger', 'p_blue2@example.com', 'hash', 'salt', '1999-05-01', 'player', 'UK'),
+    ('Chris', 'Back', 'p_blue3@example.com', 'hash', 'salt', '1997-05-01', 'player', 'UK'),
+    ('Dan', 'Keeper', 'p_blue4@example.com', 'hash', 'salt', '1996-05-01', 'player', 'UK'),
+    ('Eric', 'Sub', 'p_blue5@example.com', 'hash', 'salt', '2000-05-01', 'player', 'UK')
+    RETURNING UsersID, Email
+),
+-- Insert into Player Subtype
+player_subtype AS (
+    INSERT INTO Player (UsersID, Height, Weight, Overall, Position, IsEligible)
+    SELECT UsersID, 180, 75, '80', 'Midfielder', 'Yes' FROM new_players
+    RETURNING UsersID
+),
+-- Insert into Employee Subtype and Assign Team
+employee_assign AS (
+    INSERT INTO Employee (UsersID, TeamID)
+    SELECT 
+        np.UsersID, 
+        CASE 
+            WHEN np.Email LIKE '%red%' THEN (SELECT TeamID FROM Team WHERE TeamName = 'Red Dragons')
+            ELSE (SELECT TeamID FROM Team WHERE TeamName = 'Blue Knights')
+        END
+    FROM new_players np
+    RETURNING UsersID, TeamID
+),
+-- Create Employment Contract (Must be active NOW for trigger to work)
+employment_contract AS (
+    INSERT INTO Employment (StartDate, EndDate, Salary)
+    SELECT '2023-01-01', '2030-12-31', 100000
+    FROM new_players
+    RETURNING EmploymentID
+),
+-- Link Employment to Employee
+employed_link AS (
+    INSERT INTO Employed (EmploymentID, UsersID, TeamID)
+    SELECT 
+        ec.EmploymentID, 
+        ea.UsersID, 
+        ea.TeamID
+    FROM 
+        (SELECT EmploymentID, ROW_NUMBER() OVER () as rn FROM employment_contract) ec
+    JOIN 
+        (SELECT UsersID, TeamID, ROW_NUMBER() OVER () as rn FROM employee_assign) ea
+    ON ec.rn = ea.rn
+)
+SELECT count(*) as players_created FROM new_players;
+
+-- 5. Create League and Season
+INSERT INTO League (Name) VALUES ('Premier Test League') ON CONFLICT DO NOTHING;
+
+INSERT INTO Season (LeagueID, SeasonNo, SeasonYear, StartDate, EndDate, PrizePool)
+VALUES (
+    (SELECT LeagueID FROM League WHERE Name = 'Premier Test League'),
+    1,
+    '2025-01-01',
+    '2025-01-01',
+    '2025-12-31',
+    1000000
+) ON CONFLICT DO NOTHING;
+
+-- 6. Create the MATCH
+-- IMPORTANT: Because the players are already inserted and have active Employment records,
+-- the trigger 'trg_auto_create_plays_on_match_insert' will fire immediately after this INSERT.
+-- It will populate the 'Play' table for the 10 players created above.
+
+INSERT INTO Match (
+    HomeTeamID, AwayTeamID, MatchStartDatetime, MatchEndDatetime, 
+    VenuePlayed, HomeTeamName, AwayTeamName, 
+    HomeTeamScore, AwayTeamScore, WinnerTeam, IsLocked
+)
+VALUES (
+    (SELECT TeamID FROM Team WHERE TeamName = 'Red Dragons'),
+    (SELECT TeamID FROM Team WHERE TeamName = 'Blue Knights'),
+    NOW(),
+    NOW() + INTERVAL '2 hours',
+    'Dragon Pit',
+    'Red Dragons',
+    'Blue Knights',
+    0, 0, NULL, FALSE
+);
+
+-- Link Match to Season
+INSERT INTO SeasonalMatch (MatchID, LeagueID, SeasonNo, SeasonYear)
+VALUES (
+    (SELECT MAX(MatchID) FROM Match),
+    (SELECT LeagueID FROM League WHERE Name = 'Premier Test League'),
+    1,
+    '2025-01-01'
+);
+
+-- 7. Assign Referee to Match
+-- This allows the UI to filter "My Matches" for the logged-in referee
+INSERT INTO RefereeMatchAttendance (MatchID, RefereeID)
+VALUES (
+    (SELECT MAX(MatchID) FROM Match),
+    (SELECT UsersID FROM Users WHERE Email = 'ref_test@example.com'));

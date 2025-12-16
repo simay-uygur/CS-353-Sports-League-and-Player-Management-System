@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sports League Management</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+  <header>
+    <div class="logo">
+      <strong>SLMS</strong> | Sports League Management System
+    </div>
+    <nav>
+      <a href="/ui/referee" class="btn btn-outline">Referee View</a>
+      <a href="/ui/admin" class="btn btn-outline">Admin View</a>
+    </nav>
+  </header>
+
+  <div class="container">
+    {% block content %}{% endblock %}
+  </div>
+
+  <script>
+    const API_BASE = ''; // Relative path since we serve from same Flask app
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+
+</html>

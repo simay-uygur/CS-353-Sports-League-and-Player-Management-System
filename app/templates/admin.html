@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Manage Matches (Admin)</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Date</th>
+      <th>Teams</th>
+      <th>Competition</th>
+      <th>Status</th>
+      <th>Action</th>
+    </tr>
+  </thead>
+  <tbody id="adminMatchesBody">
+  </tbody>
+</table>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const ADMIN_ID = 100; // Hardcoded Admin ID
+
+  // Mocking match data for display since the Python code for "get all matches" 
+  // was in the "Common Views" section (Source 414), not explicitly requested in the prompt.
+  // In production, you would fetch this from a view endpoint.
+  const mockMatches = [
+    {matchid: 101, date: '2025-07-15', teams: 'Team A vs Team B', comp: 'Premier League', isLocked: true},
+    {matchid: 102, date: '2025-07-20', teams: 'Team C vs Team D', comp: 'Champions Cup', isLocked: false}
+  ];
+
+  function renderMatches() {
+    const tbody = document.getElementById('adminMatchesBody');
+    tbody.innerHTML = '';
+    mockMatches.forEach(m => {
+      const btnClass = m.isLocked ? 'btn-dark' : 'btn-outline';
+      const btnText = m.isLocked ? 'Locked' : 'Unlocked';
+
+      tbody.innerHTML += `
+                <tr>
+                    <td>${m.date}</td>
+                    <td>${m.teams}</td>
+                    <td>${m.comp}</td>
+                    <td>${btnText}</td>
+                    <td>
+                        <button class="btn ${btnClass}" onclick="toggleLock(${m.matchid})">
+                            Toggle Lock
+                        </button>
+                    </td>
+                </tr>
+            `;
+    });
+  }
+
+  async function toggleLock(mid) {
+    // Calls API Source [1386]
+    const res = await fetch(`${API_BASE}/admin/match/lock`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({matchid: mid, adminid: ADMIN_ID})
+    });
+    const data = await res.json();
+
+    if (data.status === 'success') {
+      alert("Lock status changed!");
+      // In real app, reload data here
+    } else {
+      alert("Failed to change lock status.");
+    }
+  }
+
+  renderMatches();
+</script>
+{% endblock %}
