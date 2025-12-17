@@ -1,174 +1,246 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sports League | Match Entry</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="dashboard-body">
+    {% include "_banner.html" %}
+    <main class="dashboard-container">
+    <!-- Header Section -->
+    <header class="admin-header">
+        <div>
+            <p class="eyebrow">Match Entry Console</p>
+            <h1 id="matchTitle">Loading Match...</h1>
+            <p class="subtitle">Enter player statistics, injuries, and disciplinary actions</p>
+        </div>
+        <div class="admin-actions">
+            <a href="/referee/edit_matches" class="back-link">← Back to Matches</a>
+        </div>
+    </header>
 
-{% block content %}
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-    <h2 id="matchTitle" style="font-weight: bold;">Loading Match...</h2>
-    <div>
-        <button class="btn btn-dark" id="tabStat" onclick="switchTab('stats')">Stats</button>
-        <button class="btn btn-outline" id="tabInjuries" onclick="switchTab('injuries')">Injuries</button>
-        <button class="btn btn-outline" id="tabBan" onclick="switchTab('bans')">Disciplinary Punishments</button>
+    <!-- Tab Navigation -->
+    <div class="tab-navigation">
+        <button class="tab-button active" id="tabStat" onclick="switchTab('stats')">
+            <span class="tab-icon">📊</span> Player Statistics
+        </button>
+        <button class="tab-button" id="tabInjuries" onclick="switchTab('injuries')">
+            <span class="tab-icon">🏥</span> Injuries
+        </button>
+        <button class="tab-button" id="tabBan" onclick="switchTab('bans')">
+            <span class="tab-icon">⚠️</span> Disciplinary Actions
+        </button>
     </div>
-</div>
 
-<div id="entireView" class="roster-container card" style="margin-top: 20px, display: grid;">
-
-  <div>
-    <h3>Home Roster</h3>
-    <ul id="homeRoster" class="roster-list"></ul>
-  </div>
-
-  <div>
-    <h3>Away Roster</h3>
-    <ul id="awayRoster" class="roster-list"></ul>
-  </div>
-
-  <div id="sideView">
-    <div id="statView" style="background: #fdfdfd; padding: 15px; border-left: 1px solid #eee; display: grid;">
-      <h3 id="selectedPlayerName">Selected Player Stats</h3>
-      <form id="playForm" onsubmit="event.preventDefault(); savePlay();">
-        <input type="hidden" id="selectedPlayID">
-
-        <div class="form-grid" id="nonSubstitutionInputs">
-          <div>
-            <label>Start Time</label>
-            <input type="number" id="startTime" name="starttime" placeholder="Enter Value">
-          </div>
-          <div>
-            <label>Stop Time</label>
-            <input type="number" id="stopTime" name="stoptime" placeholder="Enter Value">
-          </div>
-          <div>
-            <label>Goals</label>
-            <input type="number" id="goals" name="goalsscored" placeholder="Enter Value">
-          </div>
-          <div>
-            <label>Assists</label>
-            <input type="number" id="assists" name="assistsmade" placeholder="Enter Value">
-          </div>
-          <div>
-            <label>Penalties Scored</label>
-            <input type="number" id="penalties" name="penaltiesscored" placeholder="Enter Value">
-          </div>
-          <div>
-            <label>Saves</label>
-            <input type="number" id="saves" name="saves" placeholder="Enter Value">
-          </div>
-          <div>
-            <label>Passes</label>
-            <input type="number" id="passes" name="totalpasses" placeholder="Enter Value">
-          </div>
-          <div>
-            <label>Yellow Cards</label>
-            <input type="number" id="yellow" name="yellowcards" placeholder="Enter Value">
-          </div>
-          <div>
-            <label>Red Cards</label>
-            <input type="number" id="red" name="redcards" placeholder="Enter Value">
-          </div>
+    <!-- Main Content Grid -->
+    <div class="match-entry-grid">
+        <!-- Home Roster -->
+        <div class="roster-card">
+            <div class="roster-card-header home-team">
+                <h3>Home Team Roster</h3>
+                <span class="team-badge home">H</span>
+            </div>
+            <ul id="homeRoster" class="player-roster-list"></ul>
         </div>
 
-        <div style="margin: 20px 0;">
-          <label>
-            <input type="checkbox" id="isSubstituted" onchange="toggleSubDropdown()">
-            Substituted
-          </label>
-
-          <div id="subDropdownContainer" style="display:none; margin-top: 10px;">
-            <select id="substituteDropdown" name="substitutionid">
-              <option>None</option>
-            </select>
-          </div>
+        <!-- Away Roster -->
+        <div class="roster-card">
+            <div class="roster-card-header away-team">
+                <h3>Away Team Roster</h3>
+                <span class="team-badge away">A</span>
+            </div>
+            <ul id="awayRoster" class="player-roster-list"></ul>
         </div>
 
-        <button type="submit" class="btn btn-dark" style="width: 100%">Save Player Stats</button>
-      </form>
-    </div>
-    <div id="injuryView" style="background: #fdfdfd; padding: 15px; border-left: 1px solid #eee; display: none;">
-      <form id="injuryForm">
-        <h3>Selected Player Injury Info</h3>
-        <input type="hidden" id="injuryid" name="injuryid">
-        <div id="injuryInputs" class="form-grid">
+        <!-- Data Entry Panel -->
+        <div class="entry-panel">
+            <!-- Stats View -->
+            <div id="statView" class="entry-view">
+                <div class="entry-view-header">
+                    <h3 id="selectedPlayerName">Player Statistics</h3>
+                    <p class="entry-hint">Select a player from the roster to enter their match statistics</p>
+                </div>
+                
+                <form id="playForm" onsubmit="event.preventDefault(); savePlay();">
+                    <input type="hidden" id="selectedPlayID">
 
-          <input type="hidden" id="injuryplayerid" name="playerid">
-          <input type="hidden" id="injurydate" name="injurydate">
+                    <div class="stats-form-grid" id="nonSubstitutionInputs">
+                        <div class="form-group">
+                            <label>Start Time (min)</label>
+                            <input type="number" id="startTime" name="starttime" placeholder="0-90" min="0" max="90">
+                        </div>
+                        <div class="form-group">
+                            <label>Stop Time (min)</label>
+                            <input type="number" id="stopTime" name="stoptime" placeholder="0-90" min="0" max="90">
+                        </div>
+                        <div class="form-group">
+                            <label>Goals Scored</label>
+                            <input type="number" id="goals" name="goalsscored" placeholder="0" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Assists Made</label>
+                            <input type="number" id="assists" name="assistsmade" placeholder="0" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Penalties Scored</label>
+                            <input type="number" id="penalties" name="penaltiesscored" placeholder="0" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Saves</label>
+                            <input type="number" id="saves" name="saves" placeholder="0" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Total Passes</label>
+                            <input type="number" id="passes" name="totalpasses" placeholder="0" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Yellow Cards</label>
+                            <input type="number" id="yellow" name="yellowcards" placeholder="0" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Red Cards</label>
+                            <input type="number" id="red" name="redcards" placeholder="0" min="0">
+                        </div>
+                    </div>
 
-          <label>Injury Type
-            <select id="injurytype" name="injurytype" required>
-              <option value="">Choose Type</option>
-              <option>Hamstring Strain</option>
-              <option>Quadriceps Strain</option>
-              <option>Groin Strain</option>
-              <option>Anterior Cruciate Ligament Sprain/Tear</option>
-              <option>Medial Collateral Ligament Sprain/Tear</option>
-              <option>Meniscus Tear</option>
-              <option>Patellar Tendinitis</option>
-              <option>Ankle Sprains</option>
-              <option>Achilles Tendinitis</option>
-              <option>Metatarsal Stress Fractures</option>
-              <option>Upper Body Fracture</option>
-              <option>Shoulder Dislocation</option>
-              <option>Concussion</option>
-            </select>
-          </label>
+                    <div class="substitution-section">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="isSubstituted" onchange="toggleSubDropdown()">
+                            <span>Player was substituted</span>
+                        </label>
 
-          <label>Predicted Recovery Date
-          <!--FIX DATE IS IN AMERICAN FORMAT(ngl I dont think there is an easy fix)--!>
-            <input type="date" id="recoverydate" name="recoverydate">
-          </label>
-          
-          <label class="grid-item" style="grid-column: 1 / -1;">Detailed description
-            <textarea id="description" name="description" placeholder="Description of injury"
-            style="grid-column: span 2; width: 100%; padding: 10px;"></textarea>
-          </label>
-          
-          <button id="saveInjury" class="btn btn-dark" onclick="event.preventDefault(); submitInjury();" style="display: none;">Save Injury</button>
-          <button id="removeInjury" class="btn btn-red" onclick="event.preventDefault(); deleteInjury();" style="display: none;">Remove Injury</button>
+                        <div id="subDropdownContainer" class="sub-dropdown-container hidden">
+                            <label>Substitute Player</label>
+                            <select id="substituteDropdown" name="substitutionid" class="form-select">
+                                <option>None</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn solid full-width-button">
+                        💾 Save Player Statistics
+                    </button>
+                </form>
+            </div>
+
+            <!-- Injury View -->
+            <div id="injuryView" class="entry-view hidden">
+                <div class="entry-view-header">
+                    <h3>Injury Information</h3>
+                    <p class="entry-hint">Record player injuries sustained during the match</p>
+                </div>
+                
+                <form id="injuryForm">
+                    <input type="hidden" id="injuryid" name="injuryid">
+                    <input type="hidden" id="injuryplayerid" name="playerid">
+                    <input type="hidden" id="injurydate" name="injurydate">
+
+                    <div class="injury-form-grid">
+                        <div class="form-group full-width">
+                            <label>Injury Type</label>
+                            <select id="injurytype" name="injurytype" class="form-select" required>
+                                <option value="">Select injury type...</option>
+                                <option>Hamstring Strain</option>
+                                <option>Quadriceps Strain</option>
+                                <option>Groin Strain</option>
+                                <option>Anterior Cruciate Ligament Sprain/Tear</option>
+                                <option>Medial Collateral Ligament Sprain/Tear</option>
+                                <option>Meniscus Tear</option>
+                                <option>Patellar Tendinitis</option>
+                                <option>Ankle Sprains</option>
+                                <option>Achilles Tendinitis</option>
+                                <option>Metatarsal Stress Fractures</option>
+                                <option>Upper Body Fracture</option>
+                                <option>Shoulder Dislocation</option>
+                                <option>Concussion</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group full-width">
+                            <label>Predicted Recovery Date</label>
+                            <input type="date" id="recoverydate" name="recoverydate">
+                        </div>
+                        
+                        <div class="form-group full-width">
+                            <label>Detailed Description</label>
+                            <textarea id="description" name="description" placeholder="Describe the injury circumstances and severity..." rows="4"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="form-actions-injury">
+                        <button id="saveInjury" class="btn solid hidden" onclick="event.preventDefault(); submitInjury();">
+                            💾 Save Injury Record
+                        </button>
+                        <button id="removeInjury" class="btn ghost hidden" onclick="event.preventDefault(); deleteInjury();">
+                            🗑️ Remove Injury Record
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Ban/Disciplinary View -->
+            <div id="banView" class="entry-view hidden">
+                <div class="entry-view-header">
+                    <h3>Disciplinary Actions</h3>
+                    <p class="entry-hint">Record disciplinary actions and bans for player misconduct</p>
+                </div>
+                
+                <form id="banForm">
+                    <input type="hidden" id="banid" name="banid">
+                    <input type="hidden" id="banplayerid" name="playerid">
+                    <input type="hidden" id="banstartdate" name="banstartdate">
+
+                    <div class="ban-form-grid">
+                        <div class="form-group full-width">
+                            <label>Ban End Date</label>
+                            <input type="date" id="banenddate" name="banenddate">
+                            <p class="form-note">Specify when the disciplinary punishment expires</p>
+                        </div>
+                    </div>
+
+                    <div class="form-actions-ban">
+                        <button id="saveBan" class="btn solid visible-block" onclick="event.preventDefault(); submitBan();">
+                            ⚠️ Submit Disciplinary Punishment
+                        </button>
+                        <button id="removeBan" class="btn ghost hidden" onclick="event.preventDefault(); deleteBan();">
+                            🗑️ Remove Disciplinary Punishment
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
-      </form>
     </div>
-    <div id="banView" style="background: #fdfdfd; padding: 15px; border-left: 1px solid #eee; display: block;">
-      <form id="banForm">
-        <h3>Selected Player Disciplinary Info</h3>
-        <input type="hidden" id="banid" name="banid">
-        <div id="banInputs" class="form-grid">
-          <input type="hidden" id="banplayerid" name="playerid">
-          <input type="hidden" id="banstartdate" name="banstartdate">
+</main>
 
-          <label>Days banned
-            <input type="date" id="banenddate" name="banenddate">
-          </label>
-
-          <button id="saveBan" class="btn btn-dark" onclick="event.preventDefault(); submitBan();" style="display: block;">Submit Disciplinary Punishment</button>
-          <button id="removeBan" class="btn btn-dark" onclick="event.preventDefault(); deleteBan();" style="display: none;">Remove Disciplinary Punishment</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-
-
-{% endblock %}
-
-{% block scripts %}
 <script>
+    const API_BASE = ''; // Relative path since we serve from same Flask app
     const MATCH_ID = {{match_id}};
     let currentTab = 'stats';
 
     function switchTab(tab) {
         currentTab = tab;
-        document.getElementById('statView').style.display = tab === 'stats' ? 'grid' : 'none';
-        document.getElementById('injuryView').style.display = tab === 'injuries' ? 'block' : 'none';
-        document.getElementById('banView').style.display = tab === 'bans' ? 'block' : 'none';
+        
+        // Toggle visibility with classes
+        const statView = document.getElementById('statView');
+        const injuryView = document.getElementById('injuryView');
+        const banView = document.getElementById('banView');
+        
+        statView.classList.toggle('hidden', tab !== 'stats');
+        injuryView.classList.toggle('hidden', tab !== 'injuries');
+        banView.classList.toggle('hidden', tab !== 'bans');
 
         // Update button styles
-        document.getElementById('tabStat').className = tab === 'stats' ? 'btn btn-dark' : 'btn btn-outline';
-        document.getElementById('tabInjuries').className = tab === 'injuries' ? 'btn btn-dark' : 'btn btn-outline';
-        document.getElementById('tabBan').className = tab === 'bans' ? 'btn btn-dark' : 'btn btn-outline';
+        document.getElementById('tabStat').className = tab === 'stats' ? 'tab-button active' : 'tab-button';
+        document.getElementById('tabInjuries').className = tab === 'injuries' ? 'tab-button active' : 'tab-button';
+        document.getElementById('tabBan').className = tab === 'bans' ? 'tab-button active' : 'tab-button';
     }
 
     function toggleSubDropdown() {
         const isChecked = document.getElementById('isSubstituted').checked;
-        document.getElementById('subDropdownContainer').style.display = isChecked ? 'block' : 'none';
+        const subDropdownContainer = document.getElementById('subDropdownContainer');
+        subDropdownContainer.classList.toggle('hidden', !isChecked);
     }
 
     async function loadRosters() {
@@ -183,10 +255,11 @@
       const awayData = await awayRes.json();
       renderRosterList(awayData, 'awayRoster');
 
-      if (homeData){
-          // Update header with Match Info if available, or just generic
-          // FIX (find something better to do )
-        document.getElementById('matchTitle').innerText = `${homeData[0].hometeamname}-${homeData[0].awayteamname}`; 
+      if (homeData && homeData.length > 0){
+          // Update header with Match Info
+        document.getElementById('matchTitle').innerText = `${homeData[0].hometeamname} vs ${homeData[0].awayteamname}`; 
+      } else {
+        document.getElementById('matchTitle').innerText = 'Match Entry';
       }
     }
 
@@ -194,21 +267,27 @@
         const ul = document.getElementById(elementId);
         ul.innerHTML = '';
 
-
         plays.forEach(p => {
-
             const li = document.createElement('li');
             li.className = 'roster-item';
 
             // Visual indicator for injury and disciplinary status
-            status = p.wasinjured ? '<span style="color:red; font-size:10px; margin-left:5px">(Injured)</span>': '';
-            status = p.disciplinarilypunished ? '<span style="color:red; font-size:10px; margin-left:5px">(Banned)</span>' : '';
+            let statusBadge = '';
+            if (p.wasinjured) {
+                statusBadge = '<span class="status-badge-injured">🏥 Injured</span>';
+            } else if (p.disciplinarilypunished) {
+                statusBadge = '<span class="status-badge-banned">⚠️ Banned</span>';
+            }
 
             // Determine side based on list ID for avatar style
             const sideChar = elementId === 'homeRoster' ? 'H' : 'A';
-            const avatarBg = elementId === 'homeRoster' ? '#e0e0ff' : '#ffe0e0';
+            const avatarClass = elementId === 'homeRoster' ? 'avatar avatar-home' : 'avatar avatar-away';
 
-            li.innerHTML = `<div class="avatar" style="background:${avatarBg}">${sideChar}</div> ${p.firstname} ${p.lastname} ${status}`;
+            li.innerHTML = `
+                <div class="${avatarClass}">${sideChar}</div>
+                <span class="player-name-span">${p.firstname} ${p.lastname}</span>
+                ${statusBadge}
+            `;
             li.addEventListener('click', () => selectPlayer(p, li));
             li.addEventListener('click', () => populateSubstituteCandidates(p));
             li.addEventListener('click', () => fillInjuryData(p, li));
@@ -297,9 +376,9 @@
 
       document.getElementById('injuryplayerid').value = player.usersid || '';
       document.getElementById('injurydate').value = dateFormatter(player.matchstartdatetime);
-      document.getElementById('saveInjury').style.display = 'block';
+      document.getElementById('saveInjury').classList.remove('hidden');
       if(!data){
-        document.getElementById('removeInjury').style.display = 'none';
+        document.getElementById('removeInjury').classList.add('hidden');
         document.getElementById('injuryid').value = '';
         document.getElementById('injurytype').value = '';
         document.getElementById('recoverydate').value = '';
@@ -307,7 +386,7 @@
         return;
       };
 
-      document.getElementById('removeInjury').style.display = 'block';
+      document.getElementById('removeInjury').classList.remove('hidden');
 
       document.getElementById('injuryid').value = data.injuryid;
       document.getElementById('injurytype').value = data.injurytype;
@@ -327,15 +406,15 @@
 
       document.getElementById('banplayerid').value = player.usersid || '';
       document.getElementById('banstartdate').value = startDate;
-      document.getElementById('saveBan').style.display = 'block';
+      document.getElementById('saveBan').classList.remove('hidden');
       if (!data){
-        document.getElementById('removeBan').style.display = 'none';
+        document.getElementById('removeBan').classList.add('hidden');
         document.getElementById('banid').value = '';
         document.getElementById('banenddate').value = '';
         return;
       }
 
-      document.getElementById('removeBan').style.display = 'block';
+      document.getElementById('removeBan').classList.remove('hidden');
 
       document.getElementById('banid').value = data.banid || '';
       document.getElementById('banenddate').value = dateFormatter(data.banenddate);
@@ -438,7 +517,7 @@
           if (res.ok) {
               alert("Saved successfully");
               loadRosters(); // Reload to update any status changes
-              document.getElementById('removeInjury').style.display = 'block';
+              document.getElementById('removeInjury').classList.remove('hidden');
           } else {
               alert("Error saving data");
           }
@@ -479,7 +558,7 @@
           if (res.ok) {
               alert("Saved successfully");
               loadRosters(); // Reload to update any status changes
-              document.getElementById('removeBan').style.display = 'block';
+              document.getElementById('removeBan').classList.remove('hidden');
           } else {
               alert("Error saving data");
           }
@@ -505,7 +584,7 @@
           if (res.ok) {
               alert("Saved successfully");
               loadRosters(); // Reload to update any status changes
-              document.getElementById('removeInjury').style.display = 'none';
+              document.getElementById('removeInjury').classList.add('hidden');
           } else {
               alert("Error saving data");
           }
@@ -534,8 +613,7 @@
           if (res.ok) {
               alert("Saved successfully");
               loadRosters(); // Reload to update any status changes
-              document.getElementById('removeBan').style.display = 'none';
-              selec
+              document.getElementById('removeBan').classList.add('hidden');
           } else {
               alert("Error saving data");
           }
@@ -582,31 +660,336 @@
     switchTab(currentTab);
     loadRosters();
 </script>
-{% endblock %}
 
 <style>
-    .form-control {
-        width: 100%;
-        padding: 8px;
-        border: 1px solid #eee;
-        background-color: #fcfcfc;
-        border-radius: 4px;
-        box-sizing: border-box; 
+    /* Tab Navigation */
+    .tab-navigation {
+        display: flex;
+        gap: 0.5rem;
+        padding: 1rem;
+        background: #f8fafc;
+        border-radius: 16px;
+        border: 1px solid #e5e7eb;
+        margin-bottom: 2rem;
     }
+
+    .tab-button {
+        flex: 1;
+        padding: 0.85rem 1.5rem;
+        border: 2px solid transparent;
+        background: #ffffff;
+        border-radius: 12px;
+        font-weight: 600;
+        font-size: 0.95rem;
+        color: #64748b;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+    }
+
+    .tab-button:hover {
+        background: #f1f5f9;
+        color: #334155;
+    }
+
+    .tab-button.active {
+        background: #111827;
+        color: #ffffff;
+        border-color: #111827;
+        box-shadow: 0 4px 12px rgba(17, 24, 39, 0.2);
+    }
+
+    .tab-icon {
+        font-size: 1.1rem;
+    }
+
+    /* Match Entry Grid */
+    .match-entry-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1.5fr;
+        gap: 1.5rem;
+        margin-top: 1rem;
+    }
+
+    @media (max-width: 1200px) {
+        .match-entry-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* Roster Cards */
+    .roster-card {
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+
+    .roster-card-header {
+        padding: 1.25rem;
+        border-bottom: 2px solid #e5e7eb;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-weight: 600;
+    }
+
+    .roster-card-header.home-team {
+        background: linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%);
+        border-bottom-color: #93c5fd;
+    }
+
+    .roster-card-header.away-team {
+        background: linear-gradient(135deg, #fee2e2 0%, #fef2f2 100%);
+        border-bottom-color: #fca5a5;
+    }
+
+    .roster-card-header h3 {
+        margin: 0;
+        font-size: 1.1rem;
+        color: #0f172a;
+    }
+
+    .team-badge {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 1.1rem;
+        color: #ffffff;
+    }
+
+    .team-badge.home {
+        background: linear-gradient(135deg, #3b82f6, #2563eb);
+    }
+
+    .team-badge.away {
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+    }
+
+    /* Player Roster List */
+    .player-roster-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        max-height: 600px;
+        overflow-y: auto;
+    }
+
     .roster-item {
-        padding: 10px;
-        border-bottom: 1px solid #f0f0f0;
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid #f1f5f9;
         cursor: pointer;
         display: flex;
         align-items: center;
+        gap: 0.75rem;
+        transition: all 0.2s ease;
+        position: relative;
     }
-    .roster-item:hover { background-color: #f9f9f9; }
-    .roster-item.active { background-color: #eef; font-weight: bold; }
+
+    .roster-item:hover {
+        background: #f8fafc;
+    }
+
+    .roster-item.active {
+        background: linear-gradient(90deg, #eef2ff 0%, #f8fafc 100%);
+        border-left: 4px solid #4f46e5;
+        font-weight: 600;
+        color: #4f46e5;
+    }
+
     .avatar {
-        width: 24px; height: 24px; 
-        background: #e0e0e0; color: #555;
-        border-radius: 50%; 
-        display: flex; justify-content: center; align-items: center;
-        margin-right: 10px; font-size: 12px;
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 0.875rem;
+        flex-shrink: 0;
+    }
+
+    /* Entry Panel */
+    .entry-panel {
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+
+    .entry-view {
+        padding: 2rem;
+    }
+
+    .entry-view-header {
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid #f1f5f9;
+    }
+
+    .entry-view-header h3 {
+        margin: 0 0 0.5rem 0;
+        font-size: 1.5rem;
+        color: #0f172a;
+        font-weight: 700;
+    }
+
+    .entry-hint {
+        margin: 0;
+        color: #64748b;
+        font-size: 0.9rem;
+    }
+
+    /* Form Grids */
+    .stats-form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .injury-form-grid,
+    .ban-form-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .form-group.full-width {
+        grid-column: 1 / -1;
+    }
+
+    .form-group label {
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: #334155;
+    }
+
+    .form-group input[type="number"],
+    .form-group input[type="date"],
+    .form-group textarea,
+    .form-select {
+        width: 100%;
+        padding: 0.75rem 1rem;
+        border: 1px solid #d1d5db;
+        border-radius: 10px;
+        font-size: 0.95rem;
+        background: #ffffff;
+        color: #0f172a;
+        transition: all 0.2s ease;
+        font-family: inherit;
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus,
+    .form-select:focus {
+        outline: none;
+        border-color: #4f46e5;
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    }
+
+    .form-group textarea {
+        resize: vertical;
+        min-height: 100px;
+    }
+
+    .form-note {
+        margin: 0.25rem 0 0 0;
+        font-size: 0.8rem;
+        color: #94a3b8;
+    }
+
+    /* Substitution Section */
+    .substitution-section {
+        margin: 1.5rem 0;
+        padding: 1.25rem;
+        background: #f8fafc;
+        border-radius: 12px;
+        border: 1px solid #e5e7eb;
+    }
+
+    .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        font-weight: 600;
+        color: #334155;
+        cursor: pointer;
+    }
+
+    .checkbox-label input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+        cursor: pointer;
+        accent-color: #4f46e5;
+    }
+
+    .sub-dropdown-container {
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid #e5e7eb;
+    }
+
+    .sub-dropdown-container label {
+        display: block;
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: #334155;
+        margin-bottom: 0.5rem;
+    }
+
+    /* Form Actions */
+    .form-actions-injury,
+    .form-actions-ban {
+        display: flex;
+        gap: 1rem;
+        margin-top: 1.5rem;
+    }
+
+    .form-actions-injury button,
+    .form-actions-ban button {
+        flex: 1;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .stats-form-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .tab-button {
+            font-size: 0.85rem;
+            padding: 0.7rem 1rem;
+        }
+
+        .tab-icon {
+            display: none;
+        }
+
+        .match-entry-grid {
+            gap: 1rem;
+        }
+
+        .entry-view {
+            padding: 1.5rem;
+        }
     }
 </style>
+</body>
+</html>

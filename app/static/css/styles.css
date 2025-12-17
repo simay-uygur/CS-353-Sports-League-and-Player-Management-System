@@ -1917,3 +1917,46 @@ button:hover {
     font-size: 0.9rem;
     color: #666;
 }
+
+/* Match Entry Page Styles */
+.status-badge-injured,
+.status-badge-banned {
+    background: #fef2f2;
+    color: #dc2626;
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-left: auto;
+}
+
+.player-name-span {
+    flex: 1;
+}
+
+.avatar-home {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: white;
+}
+
+.avatar-away {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: white;
+}
+
+.full-width-button {
+    width: 100%;
+    margin-top: 1rem;
+}
+
+.hidden {
+    display: none;
+}
+
+.visible-block {
+    display: block;
+}
+
+.visible-flex {
+    display: flex;
+}
