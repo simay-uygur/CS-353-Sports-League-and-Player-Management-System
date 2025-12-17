@@ -155,9 +155,7 @@ def _set_default_banner():
         g.banner_owner_endpoint = None
         g.banner_reports_endpoint = None
         g.banner_statistics_endpoint = None
-        g.banner_home_endpoint = "home_referee"
-        g.banner_edit_plays_endpoint = "artunsPart.view_referee_dashboard"
-        g.banner_edit_injuries_endpoint = "artunsPart.manage_injury"
+        g.banner_assigned_matches_endpoint = "artunsPart.view_referee_dashboard"
     else:
         g.banner_view_endpoint = None
         g.banner_league_endpoint = None
@@ -174,7 +172,7 @@ def _set_default_banner():
 ROLE_HOME_ENDPOINTS = {
     "player": "player.home",
     "coach": "home_coach",
-    "referee": "home_referee",
+    "referee": "artunsPart.view_referee_dashboard",
     "team_owner": "home_team_owner",
     "admin": "admin.view_tournaments",
     "tournament_admin": "admin.view_tournaments",
@@ -196,7 +194,7 @@ def home_coach():
 
 @app.route("/home/referee")
 def home_referee():
-    return render_template("home_referee.html")
+    return redirect(url_for("artunsPart.view_referee_dashboard"))
 
 
 @app.route("/home/team-owner")

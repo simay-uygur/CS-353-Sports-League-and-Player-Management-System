@@ -55,11 +55,8 @@
         {% if g.get("banner_assign_training_endpoint") %}
         <a href="{{ url_for(g.banner_assign_training_endpoint) }}" class="nav-link">Assign Training</a>
         {% endif %}
-        {% if g.get("banner_edit_plays_endpoint") %}
-        <a href="{{ url_for(g.banner_edit_plays_endpoint) }}" class="nav-link">Edit Plays</a>
-        {% endif %}
-        {% if g.get("banner_edit_injuries_endpoint") %}
-        <a href="{{ url_for(g.banner_edit_injuries_endpoint) }}" class="nav-link">Edit Injuries</a>
+        {% if g.get("banner_assigned_matches_endpoint") %}
+        <a href="{{ url_for(g.banner_assigned_matches_endpoint) }}" class="nav-link">Assigned Matches</a>
         {% endif %}
     </nav>
     <div class="top-banner__actions">
