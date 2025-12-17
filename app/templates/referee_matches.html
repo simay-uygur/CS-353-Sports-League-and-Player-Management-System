@@ -324,35 +324,42 @@
             // Get selected team IDs from checkboxes
             const selectedTeams = Array.from(document.querySelectorAll('.team-checkbox-list input[type="checkbox"]:checked:not([value=""])'))
                 .map(cb => cb.value);
-            const teamId = selectedTeams.length > 0 ? selectedTeams[0] : ''; // Take first selected, or empty if "All" is selected
             
             // Get selected league IDs from checkboxes
             const selectedLeagues = Array.from(document.querySelectorAll('.league-checkbox-list input[type="checkbox"]:checked:not([value=""])'))
                 .map(cb => cb.value);
-            const leagueId = selectedLeagues.length > 0 ? selectedLeagues[0] : ''; // Take first selected, or empty if "All" is selected
             
             // Get selected tournament IDs from checkboxes
             const selectedTournaments = Array.from(document.querySelectorAll('.tournament-checkbox-list input[type="checkbox"]:checked:not([value=""])'))
                 .map(cb => cb.value);
-            const tournamentId = selectedTournaments.length > 0 ? selectedTournaments[0] : ''; // Take first selected, or empty if "All" is selected
 
             // Create query and its parameters
             let url = `${API_BASE}/referee/matches?referee_id=${REF_ID}`;
             
-            if (teamId && teamId !== "") {
-                url += `&team_id=${teamId}`;
+            // Add all selected teams (comma-separated)
+            if (selectedTeams.length > 0) {
+                url += `&team_ids=${selectedTeams.join(',')}`;
             }
-            if (leagueId && leagueId !== "") {
-                url += `&league_id=${leagueId}`;
+            
+            // Add all selected leagues (comma-separated)
+            if (selectedLeagues.length > 0) {
+                url += `&league_ids=${selectedLeagues.join(',')}`;
             }
-            if (tournamentId && tournamentId !== "") {
-                url += `&tournament_id=${tournamentId}`;
+            
+            // Add all selected tournaments (comma-separated)
+            if (selectedTournaments.length > 0) {
+                url += `&tournament_ids=${selectedTournaments.join(',')}`;
             }
+
+            // Debug logging
+            console.log('Fetching matches with URL:', url);
+            console.log('Filters - Leagues:', selectedLeagues, 'Tournaments:', selectedTournaments, 'Teams:', selectedTeams);
 
             try {
                 // Send the api request
                 const response = await fetch(url);
                 const matches = await response.json();
+                console.log('Received matches:', matches.length, 'matches');
 
                 const tbody = document.getElementById('matchesBody');
                 tbody.innerHTML = '';
@@ -375,8 +382,8 @@
                         minute: '2-digit'
                     });
 
-                    let winnerText = 'Tied';
-                    if (match.winnerteam != undefined && match.winnerteam != null) {
+                    let winnerText = 'Not Determined';
+                    if (match.winnerteam != undefined && match.winnerteam != null && match.winnerteam !== '') {
                         winnerText = match.winnerteam;
                     }
 

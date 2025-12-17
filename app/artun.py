@@ -62,12 +62,12 @@ def get_referee_matches():
     """
     Corresponds to Figure 8 & Source [1002-1005].
     Retrieves assigned matches for the referee for the current day.
+    Supports multiple selections for teams, leagues, and tournaments.
     """
     ref_id = request.args.get('referee_id')
-    ref_id = request.args.get('referee_id')
-    team_id = request.args.get('team_id')
-    league_id = request.args.get('league_id')
-    tourn_id = request.args.get('tournament_id')
+    team_ids = request.args.get('team_ids', '')
+    league_ids = request.args.get('league_ids', '')
+    tourn_ids = request.args.get('tournament_ids', '')
 
     if not ref_id:
         return jsonify({'error': 'Referee ID is required'}), 400
@@ -82,21 +82,45 @@ def get_referee_matches():
     params = [ref_id]
 
     # [cite_start]Dynamic Filtering [cite: 991, 1002]
-    if team_id:
-        query += " AND (hometeamid = %s OR awayteamid = %s)"
-        params.extend([team_id, team_id])
+    # Handle multiple team selections
+    if team_ids:
+        team_list = [tid.strip() for tid in team_ids.split(',') if tid.strip()]
+        if team_list:
+            team_conditions = []
+            for team_id in team_list:
+                team_conditions.append("(hometeamid = %s OR awayteamid = %s)")
+                params.extend([team_id, team_id])
+            query += " AND (" + " OR ".join(team_conditions) + ")"
 
-    if league_id:
-        query += " AND competitionname = (SELECT Name FROM League WHERE LeagueID = %s)"
-        params.append(league_id)
-
-    if tourn_id:
-        query += " AND competitionname = (SELECT Name FROM Tournament WHERE TournamentID = %s)"
-        params.append(tourn_id)
+    # Competition filter (Multiple Leagues OR Multiple Tournaments)
+    competition_conditions = []
+    
+    # Handle multiple league selections
+    if league_ids:
+        league_list = [lid.strip() for lid in league_ids.split(',') if lid.strip()]
+        for league_id in league_list:
+            competition_conditions.append("competitionname = (SELECT Name FROM League WHERE LeagueID = %s)")
+            params.append(league_id)
+    
+    # Handle multiple tournament selections
+    if tourn_ids:
+        tourn_list = [tid.strip() for tid in tourn_ids.split(',') if tid.strip()]
+        for tourn_id in tourn_list:
+            competition_conditions.append("competitionname = (SELECT Name FROM Tournament WHERE TournamentID = %s)")
+            params.append(tourn_id)
+    
+    # Join all competition conditions with OR
+    if competition_conditions:
+        query += " AND (" + " OR ".join(competition_conditions) + ")"
 
     query += ";"
 
+    # Debug logging
+    print(f"[DEBUG] Referee Matches Query: {query}")
+    print(f"[DEBUG] Parameters: {params}")
+
     matches = execute_query(query, tuple(params), fetch_all=True)
+    print(f"[DEBUG] Found {len(matches) if matches else 0} matches")
     return jsonify(matches if matches else [])
 
 

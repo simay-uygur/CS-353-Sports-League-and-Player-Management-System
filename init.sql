@@ -372,6 +372,8 @@ SELECT *
 FROM (
   SELECT
     m.MatchID,
+    m.HomeTeamID,
+    m.AwayTeamID,
     home.TeamName AS HomeTeamName,
     away.TeamName AS AwayTeamName,
     m.hometeamscore,
@@ -392,6 +394,8 @@ FROM (
 
   SELECT
     m.MatchID,
+    m.HomeTeamID,
+    m.AwayTeamID,
     home.TeamName AS HomeTeamName,
     away.TeamName AS AwayTeamName,
     m.hometeamscore,
