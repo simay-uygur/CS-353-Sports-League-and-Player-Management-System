@@ -743,6 +743,12 @@ button:hover {
     box-shadow: none;
 }
 
+.btn.small {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    min-width: auto;
+}
+
 .team-list-card {
     border: 1px solid #e5e7eb;
     border-radius: 20px;
