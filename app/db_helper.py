@@ -231,6 +231,12 @@ def report_players(filters):
       employed_after: datetime|None,
       ended_before: datetime|None,
       ended_after: datetime|None,
+      min_goals: int|None,
+      min_assists: int|None,
+      min_appearances: int|None,
+      min_yellow_cards: int|None,
+      min_red_cards: int|None,
+      min_saves: int|None,
     }
     """
     conn = get_connection()
@@ -238,6 +244,8 @@ def report_players(filters):
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             clauses = []
             params = []
+            having_clauses = []
+            having_params = []
 
             if filters.get("player_id"):
                 clauses.append("p.UsersID = %s")
@@ -262,7 +270,33 @@ def report_players(filters):
                 clauses.append("e.EndDate >= %s")
                 params.append(filters["ended_after"])
 
+            # Stats filters (using HAVING clause)
+            if filters.get("min_goals") is not None:
+                having_clauses.append("COALESCE(SUM(play.GoalsScored), 0) >= %s")
+                having_params.append(filters["min_goals"])
+
+            if filters.get("min_assists") is not None:
+                having_clauses.append("COALESCE(SUM(play.AssistsMade), 0) >= %s")
+                having_params.append(filters["min_assists"])
+
+            if filters.get("min_appearances") is not None:
+                having_clauses.append("COUNT(DISTINCT play.MatchID) >= %s")
+                having_params.append(filters["min_appearances"])
+
+            if filters.get("min_yellow_cards") is not None:
+                having_clauses.append("COALESCE(SUM(play.YellowCards), 0) >= %s")
+                having_params.append(filters["min_yellow_cards"])
+
+            if filters.get("min_red_cards") is not None:
+                having_clauses.append("COALESCE(SUM(play.RedCards), 0) >= %s")
+                having_params.append(filters["min_red_cards"])
+
+            if filters.get("min_saves") is not None:
+                having_clauses.append("COALESCE(SUM(play.Saves), 0) >= %s")
+                having_params.append(filters["min_saves"])
+
             where_sql = " WHERE " + " AND ".join(clauses) if clauses else ""
+            having_sql = " HAVING " + " AND ".join(having_clauses) if having_clauses else ""
 
             cur.execute(
                 f"""
@@ -275,16 +309,25 @@ def report_players(filters):
                        p.Weight,
                        e.StartDate,
                        e.EndDate,
-                       t.TeamName
+                       t.TeamName,
+                       COALESCE(SUM(play.GoalsScored), 0) as total_goals,
+                       COALESCE(SUM(play.AssistsMade), 0) as total_assists,
+                       COUNT(DISTINCT play.MatchID) as total_appearances,
+                       COALESCE(SUM(play.YellowCards), 0) as total_yellowcards,
+                       COALESCE(SUM(play.RedCards), 0) as total_redcards,
+                       COALESCE(SUM(play.Saves), 0) as total_saves
                 FROM Player p
                 JOIN Users u ON u.UsersID = p.UsersID
                 LEFT JOIN Employed em ON em.UsersID = p.UsersID
                 LEFT JOIN Employment e ON e.EmploymentID = em.EmploymentID
                 LEFT JOIN Team t ON t.TeamID = em.TeamID
+                LEFT JOIN Play play ON play.PlayerID = p.UsersID
                 {where_sql}
+                GROUP BY p.UsersID, u.FirstName, u.LastName, u.Email, p.Position, p.Height, p.Weight, e.StartDate, e.EndDate, t.TeamName
+                {having_sql}
                 ORDER BY u.LastName, u.FirstName, e.StartDate NULLS LAST;
                 """,
-                tuple(params),
+                tuple(params + having_params),
             )
             return cur.fetchall()
     finally:

@@ -2303,8 +2303,8 @@ button:hover {
 
 .rankings-filter-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1.25rem;
+    grid-template-columns: 1.5fr 0.8fr 1.2fr auto;
+    gap: 3rem;
     align-items: end;
 }
 

@@ -44,6 +44,27 @@
                     <label>Employment ended after</label>
                     <input type="datetime-local" name="ended_after" value="{{ request.form.get('ended_after','') }}">
 
+                    <hr style="margin: 1rem 0; border: none; border-top: 1px solid var(--border);">
+                    <p style="font-weight: 600; margin-bottom: 0.5rem;">Performance Filters (minimum values)</p>
+
+                    <label>Min Goals</label>
+                    <input type="text" inputmode="numeric" pattern="[0-9]*" name="min_goals" placeholder="e.g. 5" value="{{ request.form.get('min_goals','') }}">
+
+                    <label>Min Assists</label>
+                    <input type="text" inputmode="numeric" pattern="[0-9]*" name="min_assists" placeholder="e.g. 3" value="{{ request.form.get('min_assists','') }}">
+
+                    <label>Min Appearances</label>
+                    <input type="text" inputmode="numeric" pattern="[0-9]*" name="min_appearances" placeholder="e.g. 10" value="{{ request.form.get('min_appearances','') }}">
+
+                    <label>Min Yellow Cards</label>
+                    <input type="text" inputmode="numeric" pattern="[0-9]*" name="min_yellow_cards" placeholder="e.g. 2" value="{{ request.form.get('min_yellow_cards','') }}">
+
+                    <label>Min Red Cards</label>
+                    <input type="text" inputmode="numeric" pattern="[0-9]*" name="min_red_cards" placeholder="e.g. 1" value="{{ request.form.get('min_red_cards','') }}">
+
+                    <label>Min Saves</label>
+                    <input type="text" inputmode="numeric" pattern="[0-9]*" name="min_saves" placeholder="e.g. 5" value="{{ request.form.get('min_saves','') }}">
+
                     <button type="submit" class="btn solid">Generate</button>
                 </form>
             </div>
@@ -106,6 +127,12 @@
                     <input type="hidden" name="employed_after" value="{{ request.form.get('employed_after', '') }}">
                     <input type="hidden" name="ended_before" value="{{ request.form.get('ended_before', '') }}">
                     <input type="hidden" name="ended_after" value="{{ request.form.get('ended_after', '') }}">
+                    <input type="hidden" name="min_goals" value="{{ request.form.get('min_goals', '') }}">
+                    <input type="hidden" name="min_assists" value="{{ request.form.get('min_assists', '') }}">
+                    <input type="hidden" name="min_appearances" value="{{ request.form.get('min_appearances', '') }}">
+                    <input type="hidden" name="min_yellow_cards" value="{{ request.form.get('min_yellow_cards', '') }}">
+                    <input type="hidden" name="min_red_cards" value="{{ request.form.get('min_red_cards', '') }}">
+                    <input type="hidden" name="min_saves" value="{{ request.form.get('min_saves', '') }}">
                     <button type="submit" class="btn solid btn-small">Download PDF</button>
                 </form>
             </div>
@@ -119,6 +146,12 @@
                             <th>Team</th>
                             <th>Start</th>
                             <th>End</th>
+                            <th>Goals</th>
+                            <th>Assists</th>
+                            <th>Apps</th>
+                            <th>YC</th>
+                            <th>RC</th>
+                            <th>Saves</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -130,6 +163,12 @@
                             <td>{{ p.teamname or 'Unassigned' }}</td>
                             <td>{{ p.startdate|strftime('%Y-%m-%d') if p.startdate else '' }}</td>
                             <td>{{ p.enddate|strftime('%Y-%m-%d') if p.enddate else '' }}</td>
+                            <td>{{ p.total_goals or 0 }}</td>
+                            <td>{{ p.total_assists or 0 }}</td>
+                            <td>{{ p.total_appearances or 0 }}</td>
+                            <td>{{ p.total_yellowcards or 0 }}</td>
+                            <td>{{ p.total_redcards or 0 }}</td>
+                            <td>{{ p.total_saves or 0 }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>

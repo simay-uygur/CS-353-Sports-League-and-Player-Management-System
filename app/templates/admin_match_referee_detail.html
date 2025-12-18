@@ -55,6 +55,7 @@
                                 <small>{{ referee.email }}</small>
                             </div>
                             <form method="POST" class="inline-form" onsubmit="return confirm('Remove this referee from the match?');">
+                                {% if league_id %}<input type="hidden" name="league_id" value="{{ league_id }}">{% endif %}
                                 <button type="submit" class="btn small danger" formaction="{{ url_for('admin.remove_match_referee', match_id=match.matchid, referee_id=referee.usersid) }}">
                                     Remove
                                 </button>
@@ -84,6 +85,7 @@
                                             <small>{{ referee.email }}</small>
                                         </div>
                                         <form method="POST" class="inline-form">
+                                            {% if league_id %}<input type="hidden" name="league_id" value="{{ league_id }}">{% endif %}
                                             <button type="submit" class="btn small" formaction="{{ url_for('admin.assign_match_referee', match_id=match.matchid, referee_id=referee.usersid) }}">
                                                 Assign
                                             </button>

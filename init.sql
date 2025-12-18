@@ -382,7 +382,8 @@ FROM (
     m.MatchStartDatetime,
     l.Name AS CompetitionName,
     rma.RefereeID,
-    TRUE AS IsLeague
+    TRUE AS IsLeague,
+    m.IsLocked
   FROM Match m
   JOIN Team home ON m.HomeTeamID = home.TeamID
   JOIN Team away ON m.AwayTeamID = away.TeamID
@@ -404,7 +405,8 @@ FROM (
     m.MatchStartDatetime,
     t.Name AS CompetitionName,
     rma.RefereeID,
-    FALSE AS IsLeague
+    FALSE AS IsLeague,
+    m.IsLocked
   FROM Match m
   JOIN Team home ON m.HomeTeamID = home.TeamID
   JOIN Team away ON m.AwayTeamID = away.TeamID

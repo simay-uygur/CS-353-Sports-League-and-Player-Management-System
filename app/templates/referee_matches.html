@@ -400,6 +400,14 @@
                         ? 'Seasonal' 
                         : 'Tournament';
 
+                    // Determine button based on lock status
+                    let actionButton;
+                    if (match.islocked) {
+                        actionButton = `<a href="/referee/match/${match.matchid}" class="btn small ghost">View Match Info</a>`;
+                    } else {
+                        actionButton = `<a href="/referee/match/${match.matchid}" class="btn small solid">Enter Match Info</a>`;
+                    }
+
                     const row = document.createElement('tr');
                     row.className = 'match-row';
                     row.innerHTML = `
@@ -417,7 +425,7 @@
                         <td class="match-competition">${competitionName}</td>
                         <td class="match-type">${matchType}</td>
                         <td class="match-action">
-                            <a href="/referee/match/${match.matchid}" class="btn small solid">Enter Match Info</a>
+                            ${actionButton}
                         </td>
                     `;
                     tbody.appendChild(row);

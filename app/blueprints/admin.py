@@ -321,12 +321,13 @@ def assign_match_referee(match_id, referee_id=None):
         abort(403)
     
     ref_id = referee_id or request.form.get("referee_id")
+    league_id = request.form.get("league_id") or request.args.get("league_id")
     try:
         assign_referee_to_match(match_id, int(ref_id))
     except psycopg2.Error:
         pass  # Silent fail if already assigned
     
-    return redirect(url_for("admin.match_referee_assignment", match_id=match_id))
+    return redirect(url_for("admin.match_referee_assignment", match_id=match_id, league_id=league_id))
 
 
 @admin_bp.route("/matches/<int:match_id>/referees/<int:referee_id>/remove", methods=["POST"])
@@ -342,7 +343,8 @@ def remove_match_referee(match_id, referee_id):
         abort(403)
     
     remove_referee_from_match(match_id, referee_id)
-    return redirect(url_for("admin.match_referee_assignment", match_id=match_id))
+    league_id = request.form.get("league_id") or request.args.get("league_id")
+    return redirect(url_for("admin.match_referee_assignment", match_id=match_id, league_id=league_id))
 
 
 @admin_bp.route("/leagues/<int:league_id>/teams/add", methods=["GET", "POST"])
@@ -666,6 +668,12 @@ def reports():
                     "employed_after": request.form.get("employed_after"),
                     "ended_before": request.form.get("ended_before"),
                     "ended_after": request.form.get("ended_after"),
+                    "min_goals": _to_int(request.form.get("min_goals"), "Min Goals") if request.form.get("min_goals") else None,
+                    "min_assists": _to_int(request.form.get("min_assists"), "Min Assists") if request.form.get("min_assists") else None,
+                    "min_appearances": _to_int(request.form.get("min_appearances"), "Min Appearances") if request.form.get("min_appearances") else None,
+                    "min_yellow_cards": _to_int(request.form.get("min_yellow_cards"), "Min Yellow Cards") if request.form.get("min_yellow_cards") else None,
+                    "min_red_cards": _to_int(request.form.get("min_red_cards"), "Min Red Cards") if request.form.get("min_red_cards") else None,
+                    "min_saves": _to_int(request.form.get("min_saves"), "Min Saves") if request.form.get("min_saves") else None,
                 })
             elif report_type == "standings":
                 league_id = _to_int(request.form.get("league_id"), "League ID", required=True)
@@ -714,6 +722,12 @@ def download_report_pdf():
             employed_after = request.form.get("employed_after")
             ended_before = request.form.get("ended_before")
             ended_after = request.form.get("ended_after")
+            min_goals = request.form.get("min_goals")
+            min_assists = request.form.get("min_assists")
+            min_appearances = request.form.get("min_appearances")
+            min_yellow_cards = request.form.get("min_yellow_cards")
+            min_red_cards = request.form.get("min_red_cards")
+            min_saves = request.form.get("min_saves")
             
             if player_id:
                 filter_info.append(f"Player ID: {player_id}")
@@ -727,6 +741,18 @@ def download_report_pdf():
                 filter_info.append(f"Ended Before: {ended_before}")
             if ended_after:
                 filter_info.append(f"Ended After: {ended_after}")
+            if min_goals:
+                filter_info.append(f"Min Goals: {min_goals}")
+            if min_assists:
+                filter_info.append(f"Min Assists: {min_assists}")
+            if min_appearances:
+                filter_info.append(f"Min Appearances: {min_appearances}")
+            if min_yellow_cards:
+                filter_info.append(f"Min Yellow Cards: {min_yellow_cards}")
+            if min_red_cards:
+                filter_info.append(f"Min Red Cards: {min_red_cards}")
+            if min_saves:
+                filter_info.append(f"Min Saves: {min_saves}")
             
             data = report_players({
                 "player_id": _to_int(player_id, "Player ID") if player_id else None,
@@ -735,9 +761,15 @@ def download_report_pdf():
                 "employed_after": employed_after,
                 "ended_before": ended_before,
                 "ended_after": ended_after,
+                "min_goals": _to_int(min_goals, "Min Goals") if min_goals else None,
+                "min_assists": _to_int(min_assists, "Min Assists") if min_assists else None,
+                "min_appearances": _to_int(min_appearances, "Min Appearances") if min_appearances else None,
+                "min_yellow_cards": _to_int(min_yellow_cards, "Min Yellow Cards") if min_yellow_cards else None,
+                "min_red_cards": _to_int(min_red_cards, "Min Red Cards") if min_red_cards else None,
+                "min_saves": _to_int(min_saves, "Min Saves") if min_saves else None,
             })
             title = "Player Report"
-            headers = ["Name", "Email", "Position", "Team", "Start", "End"]
+            headers = ["Name", "Email", "Position", "Team", "Start", "End", "Goals", "Assists", "Apps", "YC", "RC", "Saves"]
             rows = [
                 [
                     f"{row['firstname']} {row['lastname']}",
@@ -746,6 +778,12 @@ def download_report_pdf():
                     row["teamname"] or "Unassigned",
                     row["startdate"].strftime("%Y-%m-%d") if row["startdate"] else "",
                     row["enddate"].strftime("%Y-%m-%d") if row["enddate"] else "",
+                    row["total_goals"] or 0,
+                    row["total_assists"] or 0,
+                    row["total_appearances"] or 0,
+                    row["total_yellowcards"] or 0,
+                    row["total_redcards"] or 0,
+                    row["total_saves"] or 0,
                 ]
                 for row in data
             ]
