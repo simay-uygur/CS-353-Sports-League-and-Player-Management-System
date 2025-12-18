@@ -743,6 +743,12 @@ button:hover {
     box-shadow: none;
 }
 
+.btn.small {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    min-width: auto;
+}
+
 .team-list-card {
     border: 1px solid #e5e7eb;
     border-radius: 20px;
@@ -1042,16 +1048,20 @@ button:hover {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 1rem;
     padding: 0.9rem 1.5rem;
     background: #0f172a;
     color: #e5e7eb;
     box-shadow: 0 6px 20px rgba(15, 23, 42, 0.25);
+    min-height: 64px;
 }
 
 .top-banner__brand {
     display: flex;
     align-items: center;
     gap: 0.7rem;
+    flex-shrink: 0;
+    min-width: 0;
 }
 
 .brand-mark {
@@ -1067,22 +1077,51 @@ button:hover {
 
 .top-banner__nav {
     display: flex;
-    gap: 0.25rem;
+    flex-wrap: wrap;
+    gap: 0.35rem;
     align-items: center;
-    padding: 0.3rem;
+    padding: 0.4rem;
     background: rgba(255, 255, 255, 0.06);
     border-radius: 12px;
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+    flex: 1;
+    min-width: 0;
+    max-width: calc(100vw - 400px);
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.top-banner__nav::-webkit-scrollbar {
+    height: 4px;
+}
+
+.top-banner__nav::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.top-banner__nav::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+}
+
+.top-banner__nav::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
 }
 
 .nav-link {
     color: #e5e7eb;
     text-decoration: none;
     font-weight: 600;
-    padding: 0.6rem 0.95rem;
-    border-radius: 10px;
+    padding: 0.55rem 0.85rem;
+    border-radius: 8px;
     transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
     border: 1px solid transparent;
+    font-size: 0.875rem;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .nav-link:hover {
@@ -1097,6 +1136,13 @@ button:hover {
 
 .nav-link.logout:hover {
     background: rgba(248, 113, 113, 0.25);
+}
+
+.user-name {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #fff;
+    margin-right: 0.25rem;
 }
 
 .role-pill {
@@ -1114,6 +1160,8 @@ button:hover {
     display: flex;
     align-items: center;
     gap: 0.75rem;
+    flex-shrink: 0;
+    margin-left: auto;
 }
 
 /* League admin and owner layouts */
@@ -1537,7 +1585,56 @@ button:hover {
     gap: 1rem;
 }
 
+@media (max-width: 1024px) {
+    .top-banner {
+        padding: 0.75rem 1rem;
+        flex-wrap: wrap;
+    }
+    
+    .top-banner__nav {
+        max-width: 100%;
+        order: 3;
+        width: 100%;
+        margin-top: 0.5rem;
+    }
+    
+    .top-banner__brand {
+        flex: 1;
+    }
+    
+    .top-banner__actions {
+        margin-left: 0;
+    }
+}
+
 @media (max-width: 640px) {
+    .top-banner {
+        padding: 0.65rem 0.85rem;
+    }
+    
+    .top-banner__nav {
+        gap: 0.25rem;
+        padding: 0.3rem;
+    }
+    
+    .nav-link {
+        padding: 0.5rem 0.7rem;
+        font-size: 0.8rem;
+    }
+    
+    .top-banner__brand strong {
+        font-size: 0.9rem;
+    }
+    
+    .user-name {
+        display: none;
+    }
+    
+    .role-pill {
+        font-size: 0.75rem;
+        padding: 0.3rem 0.5rem;
+    }
+    
     .dual-input-row {
         grid-template-columns: 1fr;
     }
@@ -1572,5 +1669,720 @@ button:hover {
 
     .level-rounds {
         grid-template-columns: 1fr;
+    }
+}
+
+/* Admin All Matches Lock Page Styles */
+.filters-section {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.filters-form {
+    width: 100%;
+}
+
+.filters-main-row {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+
+.filter-group-complete {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex: 1;
+    min-width: 200px;
+    max-width: 300px;
+}
+
+.filter-group-complete label {
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: #333;
+}
+
+.filter-group-complete input[type="search"] {
+    padding: 0.6rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.95rem;
+    background-color: white;
+    width: 100%;
+}
+
+.filter-group-complete input[type="search"]:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+}
+
+.filter-group-complete .checkbox-list {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    padding: 0.5rem;
+    background-color: #fafafa;
+    width: 100%;
+}
+
+.filter-group-complete .checkbox-line {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.filter-group-complete .checkbox-line:hover {
+    background-color: #f0f0f0;
+}
+
+.filter-group-complete .checkbox-line input[type="checkbox"] {
+    margin: 0;
+    cursor: pointer;
+}
+
+.filter-group-complete .checkbox-line.is-hidden {
+    display: none;
+}
+
+.filters-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    justify-content: flex-start;
+    align-items: flex-start;
+    flex-shrink: 0;
+    padding-top: 1.5rem;
+}
+
+.matches-section {
+    display: grid;
+    gap: 2rem;
+}
+
+.league-section {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.league-header {
+    background-color: #f5f5f5;
+    padding: 1.5rem;
+    border-bottom: 2px solid #e0e0e0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.league-header h2 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.25rem;
+    color: #333;
+}
+
+.badge {
+    display: inline-block;
+    padding: 0.4rem 0.8rem;
+    border-radius: 4px;
+    font-weight: 500;
+    font-size: 0.8rem;
+    margin-top: 0.5rem;
+}
+
+.badge.seasonal {
+    background-color: #e3f2fd;
+    color: #1976d2;
+}
+
+.badge.tournament {
+    background-color: #f3e5f5;
+    color: #7b1fa2;
+}
+
+.matches-table-container {
+    overflow-x: auto;
+}
+
+.matches-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.matches-table th {
+    padding: 1rem;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 1px solid #e0e0e0;
+    color: #333;
+    background-color: #fafafa;
+}
+
+.matches-table td {
+    padding: 1rem;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.match-row:hover {
+    background-color: #f9f9f9;
+}
+
+.match-teams {
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+.match-datetime {
+    font-size: 0.85rem;
+    color: #666;
+    white-space: nowrap;
+}
+
+.match-score {
+    font-weight: 600;
+    color: #333;
+}
+
+.match-score em {
+    color: #999;
+    font-style: italic;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 0.4rem 0.8rem;
+    border-radius: 4px;
+    font-weight: 500;
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+.status-badge.locked {
+    background-color: #ffebee;
+    color: #c62828;
+}
+
+.status-badge.unlocked {
+    background-color: #e8f5e9;
+    color: #2e7d32;
+}
+
+.match-action {
+    text-align: center;
+}
+
+.action-form {
+    margin: 0;
+}
+
+.text-muted {
+    color: #999;
+    font-style: italic;
+    font-size: 0.875rem;
+}
+
+.filter-select {
+    padding: 0.6rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.95rem;
+    background-color: white;
+    width: 100%;
+    cursor: pointer;
+}
+
+.filter-select:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+}
+
+.match-winner {
+    font-weight: 500;
+    color: #333;
+}
+
+.match-competition {
+    font-size: 0.9rem;
+    color: #666;
+}
+
+/* Match Entry Page Styles */
+
+/* Tab Navigation */
+.tab-navigation {
+    display: flex;
+    gap: 0.5rem;
+    padding: 1rem;
+    background: #f8fafc;
+    border-radius: 16px;
+    border: 1px solid #e5e7eb;
+    margin-bottom: 2rem;
+}
+
+.tab-button {
+    flex: 1;
+    padding: 0.85rem 1.5rem;
+    border: 2px solid transparent;
+    background: #ffffff;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.tab-button:hover {
+    background: #f1f5f9;
+    color: #334155;
+}
+
+.tab-button.active {
+    background: #111827;
+    color: #ffffff;
+    border-color: #111827;
+    box-shadow: 0 4px 12px rgba(17, 24, 39, 0.2);
+}
+
+.tab-icon {
+    font-size: 1.1rem;
+}
+
+/* Match Entry Grid */
+.match-entry-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1.5fr;
+    gap: 1.5rem;
+    margin-top: 1rem;
+}
+
+/* Roster Cards */
+.roster-card {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.roster-card-header {
+    padding: 1.25rem;
+    border-bottom: 2px solid #e5e7eb;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-weight: 600;
+}
+
+.roster-card-header.home-team {
+    background: linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%);
+    border-bottom-color: #93c5fd;
+}
+
+.roster-card-header.away-team {
+    background: linear-gradient(135deg, #fee2e2 0%, #fef2f2 100%);
+    border-bottom-color: #fca5a5;
+}
+
+.roster-card-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: #0f172a;
+}
+
+.team-badge {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: #ffffff;
+}
+
+.team-badge.home {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+}
+
+.team-badge.away {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+}
+
+/* Player Roster List */
+.player-roster-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.roster-item {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid #f1f5f9;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.roster-item:hover {
+    background: #f8fafc;
+}
+
+.roster-item.active {
+    background: linear-gradient(90deg, #eef2ff 0%, #f8fafc 100%);
+    border-left: 4px solid #4f46e5;
+    font-weight: 600;
+    color: #4f46e5;
+}
+
+.avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.875rem;
+    flex-shrink: 0;
+}
+
+.avatar-home {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: white;
+}
+
+.avatar-away {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: white;
+}
+
+.status-badge-injured,
+.status-badge-banned {
+    background: #fef2f2;
+    color: #dc2626;
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-left: auto;
+}
+
+.player-name-span {
+    flex: 1;
+}
+
+/* Entry Panel */
+.entry-panel {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.entry-view {
+    padding: 2rem;
+}
+
+.entry-view-header {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid #f1f5f9;
+}
+
+.entry-view-header h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.5rem;
+    color: #0f172a;
+    font-weight: 700;
+}
+
+.entry-hint {
+    margin: 0;
+    color: #64748b;
+    font-size: 0.9rem;
+}
+
+/* Form Grids */
+.stats-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.injury-form-grid,
+.ban-form-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.form-group.full-width {
+    grid-column: 1 / -1;
+}
+
+.form-group label {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #334155;
+}
+
+.form-group input[type="number"],
+.form-group input[type="date"],
+.form-group textarea,
+.form-select {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    background: #ffffff;
+    color: #0f172a;
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-select:focus {
+    outline: none;
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.form-group textarea {
+    resize: vertical;
+    min-height: 100px;
+}
+
+.form-note {
+    margin: 0.25rem 0 0 0;
+    font-size: 0.8rem;
+    color: #94a3b8;
+}
+
+/* Substitution Section */
+.substitution-section {
+    margin: 1.5rem 0;
+    padding: 1.25rem;
+    background: #f8fafc;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-weight: 600;
+    color: #334155;
+    cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    accent-color: #4f46e5;
+}
+
+.sub-dropdown-container {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e5e7eb;
+}
+
+.sub-dropdown-container label {
+    display: block;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #334155;
+    margin-bottom: 0.5rem;
+}
+
+/* Form Actions */
+.form-actions-injury,
+.form-actions-ban {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.form-actions-injury button,
+.form-actions-ban button {
+    flex: 1;
+}
+
+/* Utility Classes */
+.full-width-button {
+    width: 100%;
+    margin-top: 1rem;
+}
+
+.hidden {
+    display: none;
+}
+
+.visible-block {
+    display: block;
+}
+
+.visible-flex {
+    display: flex;
+}
+
+/* Match Entry Responsive */
+@media (max-width: 1200px) {
+    .match-entry-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .stats-form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .tab-button {
+        font-size: 0.85rem;
+        padding: 0.7rem 1rem;
+    }
+
+    .tab-icon {
+        display: none;
+    }
+
+    .match-entry-grid {
+        gap: 1rem;
+    }
+
+    .entry-view {
+        padding: 1.5rem;
+    }
+}
+
+/* Rankings Filter Styles */
+.rankings-filter-form {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.rankings-filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.25rem;
+    align-items: end;
+}
+
+.rankings-filter-grid .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.rankings-filter-grid .form-group label {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #334155;
+}
+
+.rankings-filter-grid .form-group.filter-actions {
+    display: flex;
+    flex-direction: row;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.form-input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    background: #ffffff;
+    color: #0f172a;
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.form-input::placeholder {
+    color: #9ca3af;
+}
+
+/* Goal difference colors */
+.goal-diff-positive {
+    color: #059669;
+    font-weight: 600;
+}
+
+.goal-diff-negative {
+    color: #dc2626;
+    font-weight: 600;
+}
+
+.goals-highlight {
+    color: #059669;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 2rem;
+    color: #64748b;
+    font-size: 0.95rem;
+}
+
+/* Rankings Responsive */
+@media (max-width: 768px) {
+    .rankings-filter-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .rankings-filter-grid .form-group.filter-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .rankings-filter-grid .form-group.filter-actions .btn {
+        width: 100%;
     }
 }

@@ -1410,8 +1410,30 @@ def delete_league(league_id):
         conn.close()
 
 
-def create_season_match(league_id, season_no, season_year, home_team_id, away_team_id, start_dt, venue):
-    """Create a Match and link it to SeasonalMatch for the given season."""
+def fetch_season_dates(league_id, season_no, season_year):
+    """Fetch start and end dates for a specific season."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT StartDate, EndDate
+                FROM Season
+                WHERE LeagueID = %s AND SeasonNo = %s AND SeasonYear = %s;
+                """,
+                (league_id, season_no, season_year),
+            )
+            result = cur.fetchone()
+            if result:
+                return result["startdate"], result["enddate"]
+            return None, None
+    finally:
+        conn.close()
+
+
+def create_season_match(league_id, season_no, season_year, home_team_id, away_team_id, start_dt):
+    """Create a Match and link it to SeasonalMatch for the given season.
+    The venue is automatically set to the home team's venue."""
     if home_team_id == away_team_id:
         raise ValueError("Home and away team cannot be the same.")
 
@@ -1428,12 +1450,12 @@ def create_season_match(league_id, season_no, season_year, home_team_id, away_te
                         HomeTeamName, AwayTeamName,
                         HomeTeamScore, AwayTeamScore, WinnerTeam, IsLocked
                     )
-                    SELECT %s, %s, %s, NULL, %s, ht.teamname, at.teamname, NULL, NULL, NULL, FALSE
+                    SELECT %s, %s, %s, NULL, ht.HomeVenue, ht.teamname, at.teamname, NULL, NULL, NULL, FALSE
                     FROM Team ht, Team at
                     WHERE ht.teamid = %s AND at.teamid = %s
                     RETURNING MatchID;
                     """,
-                    (home_team_id, away_team_id, start_dt, venue, home_team_id, away_team_id),
+                    (home_team_id, away_team_id, start_dt, home_team_id, away_team_id),
                 )
                 match_id = cur.fetchone()[0]
 
@@ -2433,6 +2455,109 @@ def toggle_match_lock(match_id, lock_state):
         conn.close()
 
         
+def fetch_team_rankings(league_id=None, season_no=None, season_year=None):
+    """Fetch team rankings with optional filters.
+    If all parameters provided: rankings for specific league/season
+    If only league_id: all seasons in that league aggregated
+    If none: all teams across all leagues aggregated
+    Returns list of team stats sorted by points, goal difference, goals for."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            query = """
+                SELECT
+                    m.HomeTeamID,
+                    m.AwayTeamID,
+                    m.HomeTeamName,
+                    m.AwayTeamName,
+                    m.HomeTeamScore,
+                    m.AwayTeamScore,
+                    sm.LeagueID,
+                    l.Name as LeagueName,
+                    sm.SeasonNo,
+                    sm.SeasonYear
+                FROM Match m
+                JOIN SeasonalMatch sm ON m.MatchID = sm.MatchID
+                JOIN League l ON sm.LeagueID = l.LeagueID
+                WHERE m.HomeTeamScore IS NOT NULL AND m.AwayTeamScore IS NOT NULL
+            """
+            params = []
+            
+            if league_id is not None:
+                query += " AND sm.LeagueID = %s"
+                params.append(league_id)
+            
+            if season_no is not None:
+                query += " AND sm.SeasonNo = %s"
+                params.append(season_no)
+            
+            if season_year is not None:
+                query += " AND sm.SeasonYear = %s"
+                params.append(season_year)
+            
+            cur.execute(query, params)
+            rows = cur.fetchall()
+    
+    finally:
+        conn.close()
+    
+    stats = {}
+    
+    def ensure(team_id, name):
+        if team_id not in stats:
+            stats[team_id] = {
+                "teamid": team_id,
+                "teamname": name,
+                "played": 0,
+                "wins": 0,
+                "draws": 0,
+                "losses": 0,
+                "gf": 0,  # goals for
+                "ga": 0,  # goals against
+                "points": 0,
+            }
+    
+    for row in rows:
+        home_id = row["hometeamid"]
+        away_id = row["awayteamid"]
+        home_name = row["hometeamname"]
+        away_name = row["awayteamname"]
+        hs = row["hometeamscore"]
+        as_ = row["awayteamscore"]
+        
+        if hs is None or as_ is None:
+            continue
+        
+        ensure(home_id, home_name)
+        ensure(away_id, away_name)
+        stats[home_id]["played"] += 1
+        stats[away_id]["played"] += 1
+        stats[home_id]["gf"] += hs
+        stats[home_id]["ga"] += as_
+        stats[away_id]["gf"] += as_
+        stats[away_id]["ga"] += hs
+        
+        if hs > as_:
+            stats[home_id]["wins"] += 1
+            stats[home_id]["points"] += 3
+            stats[away_id]["losses"] += 1
+        elif hs < as_:
+            stats[away_id]["wins"] += 1
+            stats[away_id]["points"] += 3
+            stats[home_id]["losses"] += 1
+        else:
+            stats[home_id]["draws"] += 1
+            stats[away_id]["draws"] += 1
+            stats[home_id]["points"] += 1
+            stats[away_id]["points"] += 1
+    
+    # Calculate goal difference and sort
+    for team in stats.values():
+        team["gd"] = team["gf"] - team["ga"]
+    
+    return sorted(stats.values(), key=lambda s: (-s["points"], -s["gd"], -s["gf"], -s["wins"]))
+
+
 def fetch_seasons_for_dropdown():
     """Fetch distinct season years for dropdown."""
     conn = get_connection()
@@ -2652,6 +2777,62 @@ def fetch_player_stats_all(player_id):
                 (player_id,),
             )
             return cur.fetchone()
+    finally:
+        conn.close()
+
+
+def fetch_player_rankings(league_id=None, season_no=None, season_year=None):
+    """Fetch player rankings aggregated from PlayerSeasonStats view.
+    If all parameters provided: rankings for specific league/season
+    If only league_id: all seasons in that league aggregated
+    If none: all players across all leagues/seasons aggregated
+    Returns list of player stats sorted by goals, assists, appearances.
+    Does NOT include Overall field."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            query = """
+                SELECT
+                    UsersID,
+                    FirstName,
+                    LastName,
+                    SUM(total_appearances) as total_appearances,
+                    SUM(total_goals) as total_goals,
+                    SUM(total_assistsmade) as total_assistsmade,
+                    SUM(total_yellowcards) as total_yellowcards,
+                    SUM(total_redcards) as total_redcards,
+                    SUM(total_saves) as total_saves,
+                    SUM(total_penalties) as total_penalties,
+                    SUM(total_minutes) as total_minutes,
+                    SUM(total_successfulpasses) as total_successfulpasses,
+                    SUM(total_totalpasses) as total_totalpasses
+                FROM PlayerSeasonStats
+                WHERE 1=1
+            """
+            params = []
+            
+            if league_id is not None:
+                query += " AND LeagueID = %s"
+                params.append(league_id)
+            
+            if season_no is not None:
+                query += " AND SeasonNo = %s"
+                params.append(season_no)
+            
+            if season_year is not None:
+                query += " AND SeasonYear = %s"
+                params.append(season_year)
+            
+            query += """
+                GROUP BY UsersID, FirstName, LastName
+                ORDER BY 
+                    SUM(total_goals) DESC NULLS LAST,
+                    SUM(total_assistsmade) DESC NULLS LAST,
+                    SUM(total_appearances) DESC NULLS LAST
+            """
+            
+            cur.execute(query, params)
+            return cur.fetchall()
     finally:
         conn.close()
 

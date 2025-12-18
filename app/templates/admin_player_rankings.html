@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin | Player Rankings</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="dashboard-body">
+    {% include "_banner.html" %}
+    <main class="dashboard-container">
+        <header class="admin-header">
+            <div>
+                <p class="eyebrow">Admin Console</p>
+                <h1>Player Rankings</h1>
+            </div>
+        </header>
+
+        <section class="filters-section">
+            <form method="GET" action="{{ url_for('admin.player_rankings') }}" class="rankings-filter-form">
+                <div class="rankings-filter-grid">
+                    <div class="form-group">
+                        <label for="league_id">League</label>
+                        <select id="league_id" name="league_id" class="form-select">
+                            <option value="">All Leagues</option>
+                            {% for league in leagues %}
+                            <option value="{{ league.leagueid }}" {% if selected_league_id and selected_league_id == league.leagueid %}selected{% endif %}>
+                                {{ league.leaguename }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="season_no">Season No</label>
+                        <input type="number" id="season_no" name="season_no" value="{{ selected_season_no or '' }}" placeholder="Optional" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label for="season_year">Season Year</label>
+                        <input type="date" id="season_year" name="season_year" value="{{ selected_season_year.strftime('%Y-%m-%d') if selected_season_year else '' }}" class="form-input">
+                    </div>
+                    <div class="form-group filter-actions">
+                        <button type="submit" class="btn solid">Apply Filters</button>
+                        <a href="{{ url_for('admin.player_rankings') }}" class="btn ghost">Clear</a>
+                    </div>
+                </div>
+            </form>
+        </section>
+
+        <section class="rankings-section">
+            {% if rankings and rankings|length > 0 %}
+            <div class="table-card">
+                <table class="simple-table">
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>Player</th>
+                            <th>Appearances</th>
+                            <th>Goals</th>
+                            <th>Assists</th>
+                            <th>Yellow Cards</th>
+                            <th>Red Cards</th>
+                            <th>Saves</th>
+                            <th>Penalties</th>
+                            <th>Minutes</th>
+                            <th>Passes (Suc/Total)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for player in rankings %}
+                        <tr>
+                            <td><strong>{{ loop.index }}</strong></td>
+                            <td><strong>{{ player.firstname }} {{ player.lastname }}</strong></td>
+                            <td>{{ player.total_appearances or 0 }}</td>
+                            <td><strong class="goals-highlight">{{ player.total_goals or 0 }}</strong></td>
+                            <td>{{ player.total_assistsmade or 0 }}</td>
+                            <td>{{ player.total_yellowcards or 0 }}</td>
+                            <td>{{ player.total_redcards or 0 }}</td>
+                            <td>{{ player.total_saves or 0 }}</td>
+                            <td>{{ player.total_penalties or 0 }}</td>
+                            <td>{{ "%.0f"|format(player.total_minutes or 0) }}</td>
+                            <td>
+                                {{ player.total_successfulpasses or 0 }} / {{ player.total_totalpasses or 0 }}
+                                {% if player.total_totalpasses and player.total_totalpasses > 0 %}
+                                    ({{ "%.1f"|format((player.total_successfulpasses or 0) / player.total_totalpasses * 100) }}%)
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="card">
+                <p class="empty-state">
+                    No player rankings found for the selected filters. Try adjusting your filters or ensure players have participated in matches.
+                </p>
+            </div>
+            {% endif %}
+        </section>
+    </main>
+</body>
+</html>
+
+

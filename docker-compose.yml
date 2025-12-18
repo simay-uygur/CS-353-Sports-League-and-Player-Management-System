@@ -1,7 +1,22 @@
 version: '3.8'
 
 services:
+  db:
+    env_file: .env
+    image: postgres:15
+    container_name: postgres_db 
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_HOST: ${POSTGRES_HOST}
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+
   web:
+    env_file: .env
     build:
       context: .
       dockerfile: Dockerfile   
@@ -16,19 +31,3 @@ services:
       - FLASK_SECRET_KEY=${FLASK_SECRET_KEY_ENV}
     depends_on:
       - db
-
-  db:
-    image: postgres:15
-    container_name: postgres_db
-    ports:
-      - "5433:5432"
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
-
-volumes:
-  postgres_data:
