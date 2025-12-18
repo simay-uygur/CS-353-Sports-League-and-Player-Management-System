@@ -597,22 +597,8 @@ def team_rankings():
     rankings = fetch_team_rankings(league_id, season_no, season_year)
     
     # Fetch filter options
-    admin_leagues = fetch_admin_leagues(admin_id)
     leagues = fetch_leagues_for_dropdown()
-    
-    # Get unique seasons from admin leagues
-    seasons = []
-    seen_seasons = set()
-    for league in admin_leagues:
-        key = (league["leagueid"], league["seasonno"], league["seasonyear"])
-        if key not in seen_seasons:
-            seen_seasons.add(key)
-            seasons.append({
-                "leagueid": league["leagueid"],
-                "leaguename": league["name"],
-                "seasonno": league["seasonno"],
-                "seasonyear": league["seasonyear"]
-            })
+    seasons = fetch_all_seasons_for_dropdown()
     
     return render_template(
         "admin_team_rankings.html",
@@ -644,22 +630,8 @@ def player_rankings():
     rankings = fetch_player_rankings(league_id, season_no, season_year)
     
     # Fetch filter options
-    admin_leagues = fetch_admin_leagues(admin_id)
     leagues = fetch_leagues_for_dropdown()
-    
-    # Get unique seasons from admin leagues
-    seasons = []
-    seen_seasons = set()
-    for league in admin_leagues:
-        key = (league["leagueid"], league["seasonno"], league["seasonyear"])
-        if key not in seen_seasons:
-            seen_seasons.add(key)
-            seasons.append({
-                "leagueid": league["leagueid"],
-                "leaguename": league["name"],
-                "seasonno": league["seasonno"],
-                "seasonyear": league["seasonyear"]
-            })
+    seasons = fetch_all_seasons_for_dropdown()
     
     return render_template(
         "admin_player_rankings.html",

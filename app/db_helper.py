@@ -2455,15 +2455,52 @@ def toggle_match_lock(match_id, lock_state):
         conn.close()
 
         
+def fetch_all_seasons_for_dropdown():
+    """Fetch all seasons from all leagues for dropdown."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT DISTINCT s.LeagueID, l.Name as leaguename, s.SeasonNo, s.SeasonYear
+                FROM Season s
+                JOIN League l ON s.LeagueID = l.LeagueID
+                ORDER BY s.SeasonYear DESC, l.Name, s.SeasonNo
+            """)
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
 def fetch_team_rankings(league_id=None, season_no=None, season_year=None):
     """Fetch team rankings with optional filters.
     If all parameters provided: rankings for specific league/season
     If only league_id: all seasons in that league aggregated
     If none: all teams across all leagues aggregated
-    Returns list of team stats sorted by points, goal difference, goals for."""
+    Returns list of team stats sorted by points, goal difference, goals for.
+    Includes teams with 0 matches played."""
     conn = get_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # First, get all teams in the filtered scope
+            if league_id is not None:
+                # If league filter is selected, get teams in that league
+                teams_query = """
+                    SELECT DISTINCT t.TeamID, t.TeamName
+                    FROM Team t
+                    JOIN LeagueTeam lt ON t.TeamID = lt.TeamID
+                    WHERE lt.LeagueID = %s
+                """
+                cur.execute(teams_query, [league_id])
+            else:
+                # No filter: get all teams
+                teams_query = """
+                    SELECT TeamID, TeamName FROM Team
+                """
+                cur.execute(teams_query)
+            
+            all_teams = cur.fetchall()
+            
+            # Then get match results
             query = """
                 SELECT
                     m.HomeTeamID,
@@ -2503,6 +2540,21 @@ def fetch_team_rankings(league_id=None, season_no=None, season_year=None):
     
     stats = {}
     
+    # Initialize all teams with 0 stats
+    for team in all_teams:
+        team_id = team["teamid"]
+        stats[team_id] = {
+            "teamid": team_id,
+            "teamname": team["teamname"],
+            "played": 0,
+            "wins": 0,
+            "draws": 0,
+            "losses": 0,
+            "gf": 0,
+            "ga": 0,
+            "points": 0,
+        }
+    
     def ensure(team_id, name):
         if team_id not in stats:
             stats[team_id] = {
@@ -2512,8 +2564,8 @@ def fetch_team_rankings(league_id=None, season_no=None, season_year=None):
                 "wins": 0,
                 "draws": 0,
                 "losses": 0,
-                "gf": 0,  # goals for
-                "ga": 0,  # goals against
+                "gf": 0,
+                "ga": 0,
                 "points": 0,
             }
     
