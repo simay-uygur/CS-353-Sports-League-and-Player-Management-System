@@ -7,6 +7,9 @@
         </div>
     </div>
     <nav class="top-banner__nav">
+        {% if g.get("banner_home_endpoint") %}
+        <a href="{{ url_for(g.banner_home_endpoint) }}" class="nav-link">Home</a>
+        {% endif %}
         {% if g.get("banner_view_endpoint") %}
         <a href="{{ url_for(g.banner_view_endpoint) }}" class="nav-link">View Tournaments</a>
         {% endif %}
@@ -51,6 +54,9 @@
         {% endif %}
         {% if g.get("banner_assign_training_endpoint") %}
         <a href="{{ url_for(g.banner_assign_training_endpoint) }}" class="nav-link">Assign Training</a>
+        {% endif %}
+        {% if g.get("banner_assigned_matches_endpoint") %}
+        <a href="{{ url_for(g.banner_assigned_matches_endpoint) }}" class="nav-link">Assigned Matches</a>
         {% endif %}
     </nav>
     <div class="top-banner__actions">
