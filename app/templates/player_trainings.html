@@ -9,6 +9,22 @@
 <body class="dashboard-body">
     {% include "_banner.html" %}
     <main class="dashboard-container">
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <div class="flash-messages" style="margin-bottom: 20px;">
+              {% for category, message in messages %}
+                <div class="alert {{ category }}" style="padding: 15px; border-radius: 8px; font-weight: bold; margin-bottom: 10px;
+                     background-color: {{ '#fee2e2' if category == 'error' else '#dcfce7' }}; 
+                     color: {{ '#991b1b' if category == 'error' else '#166534' }};
+                     border: 1px solid {{ '#f87171' if category == 'error' else '#86efac' }};">
+                  {{ message }}
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+
         <header class="admin-header">
             <div>
                 <p class="eyebrow">Player Dashboard</p>
@@ -57,16 +73,16 @@
                         </td>
                         <td>
                             {% if training.sessiondate > now and training.attendancestatus is none %}
+                                
                                 <form method="POST" action="{{ url_for('player.update_training_attendance', session_id=training.sessionid) }}" style="display: inline-block; margin: 0;">
                                     <input type="hidden" name="status" value="1">
                                     <button type="submit" class="btn small solid" style="margin-right: 0.5rem;">Join</button>
                                 </form>
+                                
                                 <form method="POST" action="{{ url_for('player.update_training_attendance', session_id=training.sessionid) }}" style="display: inline-block; margin: 0;">
                                     <input type="hidden" name="status" value="0">
                                     <button type="submit" class="btn small ghost">Skip</button>
                                 </form>
-                            {% else %}
-                                <span class="subtle">-</span>
                             {% endif %}
                         </td>
                     </tr>
@@ -82,4 +98,3 @@
     </main>
 </body>
 </html>
-

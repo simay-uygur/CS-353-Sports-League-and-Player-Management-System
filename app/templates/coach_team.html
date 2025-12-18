@@ -9,6 +9,21 @@
 <body class="dashboard-body">
     {% include "_banner.html" %}
     <main class="dashboard-container">
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <div class="flash-messages" style="margin-bottom: 20px;">
+              {% for category, message in messages %}
+                <div class="alert {{ category }}" style="padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; font-weight: bold;
+                     background-color: {{ '#fee2e2' if category == 'error' else '#dcfce7' }}; 
+                     color: {{ '#991b1b' if category == 'error' else '#166534' }};
+                     border: 1px solid {{ '#f87171' if category == 'error' else '#86efac' }};">
+                  {{ message }}
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
         <header class="admin-header">
             <div>
                 <p class="eyebrow">Coach Console</p>
@@ -81,7 +96,7 @@
                                     <th>Height</th>
                                     <th>Weight</th>
                                     <th>Overall</th>
-                                </tr>
+                                    <th>Status / Action</th> </tr>
                             </thead>
                             <tbody>
                                 {% for player in players %}
@@ -100,6 +115,31 @@
                                             <strong style="color: #059669;">{{ player.overall }}</strong>
                                         {% else %}
                                             <span class="subtle">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if player.iseligible and player.iseligible|lower != 'eligible' %}
+                                            <div style="text-align: center;">
+                                                <span class="status-badge error" style="color: #ef4444; font-weight: bold; font-size: 1.2rem;">
+                                                    Injured
+                                                </span>
+                                                {% if player.recoverydate %}
+                                                    <br><span style="font-size: 0.75rem; color: gray;">Until: {{ player.recoverydate }}</span>
+                                                {% endif %}
+                                                
+                                                <div style="margin-top: 5px;">
+                                                    <form method="POST" action="{{ url_for('coach.clear_injury', player_id=player.usersid) }}" style="display:inline;">
+                                                        <button type="submit" class="btn small solid" style="background-color: #22c55e; border-color: #22c55e; color: white; font-size: 0.7rem; padding: 2px 6px; cursor: pointer;">
+                                                            ✓ Clear
+                                                        </button>
+                                                    </form>
+                                                </div>
+
+                                            </div>
+                                        {% else %}
+                                            <a href="{{ url_for('coach.log_injury', player_id=player.usersid) }}" class="btn small ghost destructive">
+                                                Report Injury
+                                            </a>
                                         {% endif %}
                                     </td>
                                 </tr>
@@ -123,4 +163,3 @@
     </main>
 </body>
 </html>
-

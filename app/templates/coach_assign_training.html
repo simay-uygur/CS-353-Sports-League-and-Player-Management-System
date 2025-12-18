@@ -2,29 +2,63 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sports League | Assign Training</title>
+    <title>Trainings</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 <body class="dashboard-body">
     {% include "_banner.html" %}
     <main class="dashboard-container">
+        
         <header class="admin-header">
-            <div>
-                <p class="eyebrow">Coach Console</p>
-                <h1>Assign Training Session</h1>
-            </div>
-            <div class="admin-actions">
-                <a href="{{ url_for('coach.view_team') }}" class="back-link">← Back to My Team</a>
-            </div>
+            <h1>Create Training Session</h1>
+            <a href="{{ url_for('coach.view_trainings') }}" class="back-link">← Back</a>
         </header>
 
-        <section>
-            <div class="card">
-                <p class="subtle">Training assignment functionality coming soon.</p>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <div class="flash-messages" style="margin-bottom: 20px;">
+              {% for category, message in messages %}
+                <div class="alert {{ category }}" style="padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; font-weight: bold;
+                     background-color: {{ '#fee2e2' if category == 'error' else '#dcfce7' }}; 
+                     color: {{ '#991b1b' if category == 'error' else '#166534' }};
+                     border: 1px solid {{ '#f87171' if category == 'error' else '#86efac' }};">
+                  {{ message }}
+                </div>
+              {% endfor %}
             </div>
-        </section>
+          {% endif %}
+        {% endwith %}
+        <div class="card">
+            <form method="POST" action="{{ url_for('coach.create_training') }}">
+                <div class="form-group">
+                    <label>Date</label>
+                    <input type="date" name="date" required class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Time</label>
+                    <input type="time" name="time" required class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Location</label>
+                    <input type="text" name="location" placeholder="e.g. Main Pitch" required class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Focus / Drill</label>
+                    <input type="text" name="focus" placeholder="e.g. Cardio & Passing" required class="form-control">
+                </div>
+                <button type="submit" class="btn solid">Create Session</button>
+            </form>
+        </div>
     </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var dateInput = document.querySelector('input[name="date"]');
+            if (dateInput) {
+                var today = new Date().toISOString().split('T')[0];
+                dateInput.setAttribute('min', today);
+            }
+        });
+    </script>
 </body>
 </html>
-

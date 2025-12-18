@@ -5,7 +5,16 @@ from decimal import Decimal, InvalidOperation
 
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from flask import Flask, jsonify, render_template, request, session, redirect, url_for, g
+from flask import (
+    Flask,
+    jsonify,
+    render_template,
+    request,
+    session,
+    redirect,
+    url_for,
+    g,
+)
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from db import get_connection
@@ -27,23 +36,27 @@ app.register_blueprint(owner_bp)
 app.register_blueprint(referee_bp)
 app.register_blueprint(player_bp)
 
-@app.template_filter('strftime')
-def strftime_filter(value, format_string='%Y-%m-%d %H:%M:%S'):
+
+@app.template_filter("strftime")
+def strftime_filter(value, format_string="%Y-%m-%d %H:%M:%S"):
     if value is None:
         return ""
     if isinstance(value, str):
         try:
-            value = datetime.fromisoformat(value.replace(' ', 'T'))
+            value = datetime.fromisoformat(value.replace(" ", "T"))
         except (ValueError, TypeError, AttributeError):
             return value
-    if hasattr(value, 'strftime'):
+    if hasattr(value, "strftime"):
         return value.strftime(format_string)
     return value
+
 
 @app.context_processor
 def inject_now():
     """Make datetime.now() available in templates."""
-    return {'now': datetime.now()}
+    return {"now": datetime.now()}
+
+
 @app.before_request
 def _set_default_banner():
     role = session.get("role")
@@ -82,7 +95,7 @@ def _set_default_banner():
         g.banner_statistics_endpoint = None
         g.banner_transfer_market_endpoint = "coach.view_transfer_market"
         g.banner_view_team_offers_endpoint = "coach.view_team_offers"
-        g.banner_assign_training_endpoint = "coach.assign_training"
+        g.banner_assign_training_endpoint = "coach.view_trainings"
     elif role == "player":
         g.banner_view_endpoint = None
         g.banner_league_endpoint = None
@@ -104,7 +117,8 @@ def _set_default_banner():
     g.banner_create_endpoint = None
     g.banner_allow_create = False
 
-# Role to home endpoint mapping - tournamnet-admin is now also league admin 
+
+# Role to home endpoint mapping - tournamnet-admin is now also league admin
 ROLE_HOME_ENDPOINTS = {
     "player": "player.home",
     "coach": "home_coach",
@@ -115,11 +129,10 @@ ROLE_HOME_ENDPOINTS = {
     "superadmin": "superadmin.view_tournaments",
 }
 
+
 @app.route("/")
 def home():
     return render_template("home.html")
-
-
 
 
 @app.route("/home/coach")
@@ -146,6 +159,7 @@ def home_tournament_admin():
 def home_superadmin():
     return redirect(url_for("superadmin.view_tournaments"))
 
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -160,7 +174,7 @@ def login():
             safe_next = _safe_next_path(user, next_path)
             if safe_next:
                 return redirect(safe_next)
-            
+
             # Use ROLE_HOME_ENDPOINTS to redirect based on role
             endpoint = ROLE_HOME_ENDPOINTS.get(user["role"])
             if endpoint:
@@ -171,6 +185,7 @@ def login():
         return render_template("login.html", message=message)
 
     return render_template("login.html")
+
 
 @app.route("/register/player", methods=["GET", "POST"])
 def register_player():
@@ -183,6 +198,7 @@ def register_player():
             message = _friendly_db_error(exc)
     return render_template("register_player.html", message=message)
 
+
 @app.route("/register/coach", methods=["GET", "POST"])
 def register_coach():
     message = None
@@ -193,6 +209,7 @@ def register_coach():
         except (ValueError, psycopg2.Error) as exc:
             message = _friendly_db_error(exc)
     return render_template("register_coach.html", message=message)
+
 
 @app.route("/register/referee", methods=["GET", "POST"])
 def register_referee():
@@ -205,6 +222,7 @@ def register_referee():
             message = _friendly_db_error(exc)
     return render_template("register_referee.html", message=message)
 
+
 @app.route("/register/team-owner", methods=["GET", "POST"])
 def register_team_owner():
     message = None
@@ -216,6 +234,7 @@ def register_team_owner():
             message = _friendly_db_error(exc)
     return render_template("register_team_owner.html", message=message)
 
+
 @app.route("/register/tournament-admin", methods=["GET", "POST"])
 def register_tournament_admin():
     message = None
@@ -226,6 +245,7 @@ def register_tournament_admin():
         except (ValueError, psycopg2.Error) as exc:
             message = _friendly_db_error(exc)
     return render_template("register_tournament_admin.html", message=message)
+
 
 @app.route("/register", methods=["GET"])
 def register_select():
@@ -302,7 +322,9 @@ def _register_referee(form):
 
 def _register_team_owner(form):
     user_data = _extract_user_fields(form, role="team_owner")
-    net_worth = _parse_decimal(form.get("net_worth"), "Net worth", minimum=0, allow_empty=True)
+    net_worth = _parse_decimal(
+        form.get("net_worth"), "Net worth", minimum=0, allow_empty=True
+    )
 
     conn = get_connection()
     try:
@@ -454,9 +476,7 @@ def _insert_admin(cur, user_id):
 
 
 def _assign_league_moderation(cur, admin_id):
-    cur.execute(
-        "SELECT LeagueID, SeasonNo, SeasonYear FROM Season;"
-    )
+    cur.execute("SELECT LeagueID, SeasonNo, SeasonYear FROM Season;")
     seasons = cur.fetchall()
     for league_id, season_no, season_year in seasons:
         cur.execute(
@@ -514,6 +534,7 @@ _CONSTRAINT_MESSAGES = {
     "net_worth_check": "Net worth must be greater than 100000.",
 }
 
+
 def _safe_next_path(user, next_path):
     if not next_path:
         return None
@@ -523,6 +544,7 @@ def _safe_next_path(user, next_path):
     if next_path.startswith("/superadmin") and user.get("role") != "superadmin":
         return None
     return next_path
+
 
 def _authenticate_user(email, password):
     if not email or not password:
@@ -547,7 +569,9 @@ def _authenticate_user(email, password):
         raise ValueError("Invalid email or password.")
 
     user_id, role, hashed_password, salt = row
-    hashed_password = hashed_password.strip() if isinstance(hashed_password, str) else hashed_password
+    hashed_password = (
+        hashed_password.strip() if isinstance(hashed_password, str) else hashed_password
+    )
     salt = salt.strip() if isinstance(salt, str) else salt
 
     if not check_password_hash(hashed_password, password + salt):
