@@ -112,12 +112,13 @@
                                 <th>Score</th>
                                 <th>Winner</th>
                                 <th>Competition</th>
+                                <th>Match Type</th>
                                 <th>Action</th>
                             </tr>
                         </thead>
                         <tbody id="matchesBody">
                             <tr>
-                                <td colspan="6" style="text-align: center; padding: 2rem; color: #666;">
+                                <td colspan="7" style="text-align: center; padding: 2rem; color: #666;">
                                     Loading matches...
                                 </td>
                             </tr>
@@ -365,7 +366,7 @@
                 tbody.innerHTML = '';
 
                 if (matches.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 2rem; color: #666;">No matches found for the selected filters.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding: 2rem; color: #666;">No matches found for the selected filters.</td></tr>';
                     return;
                 }
 
@@ -382,8 +383,8 @@
                         minute: '2-digit'
                     });
 
-                    let winnerText = 'Not Determined';
-                    if (match.winnerteam != undefined && match.winnerteam != null && match.winnerteam !== '') {
+                    let winnerText = 'Tied';
+                    if (match.winnerteam != undefined && match.winnerteam != null) {
                         winnerText = match.winnerteam;
                     }
 
@@ -393,6 +394,11 @@
                     }
 
                     const competitionName = match.competitionname || match.leaguename || 'Tournament';
+                    
+                    // Determine match type based on isleague field
+                    const matchType = match.isleague === true || match.isleague === 'true' || match.isleague === 1 
+                        ? 'Seasonal' 
+                        : 'Tournament';
 
                     const row = document.createElement('tr');
                     row.className = 'match-row';
@@ -409,6 +415,7 @@
                         <td class="match-score">${scoreText}</td>
                         <td class="match-winner">${winnerText}</td>
                         <td class="match-competition">${competitionName}</td>
+                        <td class="match-type">${matchType}</td>
                         <td class="match-action">
                             <a href="/referee/match/${match.matchid}" class="btn small solid">Enter Match Info</a>
                         </td>
@@ -418,7 +425,7 @@
             } catch (error) {
                 console.error("Error fetching matches:", error);
                 const tbody = document.getElementById('matchesBody');
-                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 2rem; color: #c62828;">Error loading matches. Please try again.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding: 2rem; color: #c62828;">Error loading matches. Please try again.</td></tr>';
             }
         }
 

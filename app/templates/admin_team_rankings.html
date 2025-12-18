@@ -16,13 +16,12 @@
             </div>
         </header>
 
-        <section class="filters-section" style="margin-bottom: 2rem;">
-            <div class="card">
-                <h3 style="margin-bottom: 1rem;">Filters</h3>
-                <form method="GET" action="{{ url_for('admin.team_rankings') }}" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end;">
-                    <div style="flex: 1; min-width: 200px;">
+        <section class="filters-section">
+            <form method="GET" action="{{ url_for('admin.team_rankings') }}" class="rankings-filter-form">
+                <div class="rankings-filter-grid">
+                    <div class="form-group">
                         <label for="league_id">League</label>
-                        <select id="league_id" name="league_id" style="width: 100%; padding: 0.5rem;">
+                        <select id="league_id" name="league_id" class="form-select">
                             <option value="">All Leagues</option>
                             {% for league in leagues %}
                             <option value="{{ league.leagueid }}" {% if selected_league_id and selected_league_id == league.leagueid %}selected{% endif %}>
@@ -31,20 +30,20 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div style="flex: 1; min-width: 200px;">
+                    <div class="form-group">
                         <label for="season_no">Season No</label>
-                        <input type="number" id="season_no" name="season_no" value="{{ selected_season_no or '' }}" placeholder="Optional" style="width: 100%; padding: 0.5rem;">
+                        <input type="number" id="season_no" name="season_no" value="{{ selected_season_no or '' }}" placeholder="Optional" class="form-input">
                     </div>
-                    <div style="flex: 1; min-width: 200px;">
+                    <div class="form-group">
                         <label for="season_year">Season Year</label>
-                        <input type="date" id="season_year" name="season_year" value="{{ selected_season_year.strftime('%Y-%m-%d') if selected_season_year else '' }}" placeholder="Optional" style="width: 100%; padding: 0.5rem;">
+                        <input type="date" id="season_year" name="season_year" value="{{ selected_season_year.strftime('%Y-%m-%d') if selected_season_year else '' }}" class="form-input">
                     </div>
-                    <div>
-                        <button type="submit" class="btn solid">Filter</button>
-                        <a href="{{ url_for('admin.team_rankings') }}" class="btn" style="margin-left: 0.5rem;">Clear</a>
+                    <div class="form-group filter-actions">
+                        <button type="submit" class="btn solid">Apply Filters</button>
+                        <a href="{{ url_for('admin.team_rankings') }}" class="btn ghost">Clear</a>
                     </div>
-                </form>
-            </div>
+                </div>
+            </form>
         </section>
 
         <section class="rankings-section">
@@ -78,9 +77,9 @@
                             <td>{{ team.ga }}</td>
                             <td>
                                 {% if team.gd > 0 %}
-                                    <span style="color: #059669;">+{{ team.gd }}</span>
+                                    <span class="goal-diff-positive">+{{ team.gd }}</span>
                                 {% elif team.gd < 0 %}
-                                    <span style="color: #dc2626;">{{ team.gd }}</span>
+                                    <span class="goal-diff-negative">{{ team.gd }}</span>
                                 {% else %}
                                     {{ team.gd }}
                                 {% endif %}
@@ -93,7 +92,7 @@
             </div>
             {% else %}
             <div class="card">
-                <p class="subtle" style="text-align: center; padding: 2rem;">
+                <p class="empty-state">
                     No team rankings found for the selected filters. Try adjusting your filters or ensure matches have been played and scored.
                 </p>
             </div>

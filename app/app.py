@@ -6,7 +6,7 @@ from decimal import Decimal, InvalidOperation
 
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from flask import Flask, jsonify, render_template, request, session, redirect, url_for, g
+from flask import Flask, jsonify, render_template, request, session, redirect, url_for, g, make_response
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from db import get_connection
@@ -217,27 +217,48 @@ def login():
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
+        remember = request.form.get("remember") == "on"
+        
         try:
             # user = _authenticate_user(email, password)
             user = _authenticate_user_bypass(email, password)
             session["user_id"] = user["id"]
             session["role"] = user["role"]
 
+            # Determine redirect URL
             next_path = session.pop("next", None)
             safe_next = _safe_next_path(user, next_path)
             if safe_next:
-                return redirect(safe_next)
+                redirect_url = safe_next
+            else:
+                # Use ROLE_HOME_ENDPOINTS to redirect based on role
+                endpoint = ROLE_HOME_ENDPOINTS.get(user["role"])
+                if endpoint:
+                    redirect_url = url_for(endpoint)
+                else:
+                    redirect_url = url_for("home")
 
-            # Use ROLE_HOME_ENDPOINTS to redirect based on role
-            endpoint = ROLE_HOME_ENDPOINTS.get(user["role"])
-            if endpoint:
-                return redirect(url_for(endpoint))
-            return redirect(url_for("home"))
+            # Create response with redirect
+            response = make_response(redirect(redirect_url))
+            
+            # Handle remember me functionality
+            if remember:
+                # Set cookie to expire in 30 days
+                response.set_cookie("remembered_email", email, max_age=30*24*60*60)
+            else:
+                # Clear the cookie if remember me is not checked
+                response.set_cookie("remembered_email", "", expires=0)
+            
+            return response
         except (ValueError, psycopg2.Error) as exc:
             message = _friendly_db_error(exc)
-        return render_template("login.html", message=message)
+            # Get remembered email for error case
+            remembered_email = request.cookies.get("remembered_email", "")
+            return render_template("login.html", message=message, remembered_email=remembered_email)
 
-    return render_template("login.html")
+    # GET request - check for remembered email
+    remembered_email = request.cookies.get("remembered_email", "")
+    return render_template("login.html", remembered_email=remembered_email)
 
 
 @app.route("/register/player", methods=["GET", "POST"])
