@@ -201,39 +201,32 @@ def create_training():
         coach_id = session.get("user_id")
 
         try:
-            # Tarih ve saati birleştirip nesneye çeviriyoruz
+
             session_datetime = datetime.strptime(
                 f"{date_str} {time_str}", "%Y-%m-%d %H:%M"
             )
 
-            # Şu anki zamandan geride mi?
             if session_datetime < datetime.now():
                 flash("You cannot schedule a training session in the past.", "error")
-                # Hata verince sayfayı yenilemeden geri dön (veriler kaybolmasın diye render_template de yapılabilir ama redirect en temizidir)
                 return redirect(url_for("coach.create_training"))
 
         except ValueError:
             flash("Invalid date or time format.", "error")
             return redirect(url_for("coach.create_training"))
 
-        # 1. HOCANIN TAKIMINI BUL
         team_data = fetch_team_by_coach(coach_id)
 
         if not team_data:
-            # Eğer hocanın takımı yoksa antrenman oluşturamaz
             return render_template(
                 "coach_assign_training.html", error="You are not assigned to any team."
             )
 
         team_id = team_data["teamid"]
 
-        # 2. MAÇ ÇAKIŞMA KONTROLÜ (CONFLICT CHECK)
-        # db_helper'daki fonksiyonu kullanıyoruz
         if team_has_match_on_date(team_id, date_str):
             error_msg = f"Cannot schedule training on {date_str}. Your team has a MATCH on this date!"
             return render_template("coach_assign_training.html", error=error_msg)
 
-        # 3. ANTRENMANI OLUŞTUR
         full_datetime = f"{date_str} {time_str}"
         create_training_session(coach_id, full_datetime, location, focus)
 
@@ -249,7 +242,6 @@ def log_injury(player_id):
         description = request.form.get("description")
         recovery_date = request.form.get("recovery_date")
 
-        # Sakatlığı kaydet ve oyuncuyu "Ineligible" yap
         log_player_injury_db(
             player_id,
             None,  # match_id (antrenmanda olduğu varsayılıyor)

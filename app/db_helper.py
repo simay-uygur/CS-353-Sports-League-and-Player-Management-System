@@ -2945,7 +2945,6 @@ def update_training_attendance(player_id, session_id, status):
     try:
         with conn:
             with conn.cursor() as cur:
-                # Check if training session exists and is in the future
                 cur.execute(
                     """
                     SELECT SessionDate FROM TrainingSession WHERE SessionID = %s;
@@ -2956,7 +2955,6 @@ def update_training_attendance(player_id, session_id, status):
                 if not session_row:
                     raise ValueError("Training session not found.")
 
-                # Verify player is on the same team as the coach
                 cur.execute(
                     """
                     SELECT 1
@@ -2974,7 +2972,6 @@ def update_training_attendance(player_id, session_id, status):
                         "You are not on the same team as this training's coach."
                     )
 
-                # Insert or update attendance
                 cur.execute(
                     """
                     INSERT INTO TrainingAttendance (SessionID, PlayerID, Status)
@@ -3028,7 +3025,6 @@ def fetch_session_details(session_id):
     conn = get_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            # Oturum detayları + Katılan oyuncular
             cur.execute(
                 """
                 SELECT 
@@ -3059,7 +3055,6 @@ def log_player_injury_db(
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            # 1. Injury tablosuna ekle
             cur.execute(
                 """
                 INSERT INTO Injury (PlayerID, MatchID, TrainingID, InjuryDate, InjuryType, Description, RecoveryDate)
@@ -3076,7 +3071,6 @@ def log_player_injury_db(
                 ),
             )
 
-            # 2. Oyuncuyu "Ineligible" yap (Player tablosundaki IsEligible alanı)
             cur.execute(
                 """
                 UPDATE Player 
@@ -3092,17 +3086,14 @@ def log_player_injury_db(
 
 
 def is_player_eligible(player_id):
-    """Oyuncunun sakat olup olmadığını kontrol eder (Eligible = 'eligible')."""
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            # Player tablosunda IsEligible sütununu kontrol et (büyük/küçük harf duyarsız yapalım)
             cur.execute(
                 "SELECT IsEligible FROM Player WHERE UsersID = %s", (player_id,)
             )
             result = cur.fetchone()
 
-            # Eğer kayıt varsa ve durumu 'eligible' ise True döner
             if result and str(result[0]).lower() == "eligible":
                 return True
             return False
@@ -3111,14 +3102,9 @@ def is_player_eligible(player_id):
 
 
 def get_player_injury_status(player_id):
-    """
-    Oyuncunun uygunluk durumunu ve varsa son iyileşme tarihini döndürür.
-    Return: (is_eligible (bool), recovery_date (datetime or None))
-    """
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            # Oyuncunun statüsünü ve son sakatlık kaydındaki iyileşme tarihini çek
             cur.execute(
                 """
                 SELECT 
@@ -3146,7 +3132,6 @@ def get_player_injury_status(player_id):
 
 
 def fetch_session_date(session_id):
-    """Antrenman tarihini döndürür."""
     conn = get_connection()
     try:
         with conn.cursor() as cur:
@@ -3161,7 +3146,6 @@ def fetch_session_date(session_id):
 
 
 def clear_player_injury_db(player_id):
-    """Oyuncunun sakatlığını manuel olarak kaldırır (Eligible yapar)."""
     conn = get_connection()
     try:
         with conn.cursor() as cur:
@@ -3175,17 +3159,11 @@ def clear_player_injury_db(player_id):
 
 
 def update_expired_injuries():
-    """
-    Otomatik Bakım: İyileşme tarihi gelmiş veya geçmiş olan oyuncuların
-    statüsünü 'Injured' durumundan 'Eligible' durumuna çeker.
-    """
+
     conn = get_connection()
     try:
         with conn:
             with conn.cursor() as cur:
-                # Mantık:
-                # 1. Oyuncu şu an 'Injured' (veya Eligible değil) OLMALI.
-                # 2. Son sakatlık kaydındaki RecoveryDate BUGÜN veya GEÇMİŞ OLMALI.
                 cur.execute(
                     """
                     UPDATE Player p
