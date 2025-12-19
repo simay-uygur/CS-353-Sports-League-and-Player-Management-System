@@ -24,24 +24,41 @@
                 <h3>Player Report</h3>
                 <form method="POST">
                     <input type="hidden" name="report_type" value="players">
-                    <label>Player ID (optional)</label>
-                    <input type="text" inputmode="numeric" pattern="[0-9]*" name="player_id" placeholder="e.g. 12" value="{{ request.form.get('player_id','') }}">
+                    <div class="filter-group-complete">
+                        <label for="player_search">Players (optional)</label>
+                        <input type="search"
+                               id="player_search"
+                               class="player-search"
+                               placeholder="Search players"
+                               aria-label="Search players">
+                        <div class="checkbox-list player-checkbox-list">
+                            {% for player in players %}
+                                <label class="checkbox-line" data-player-search="{{ (player.firstname ~ ' ' ~ player.lastname)|lower }}">
+                                    <input type="checkbox"
+                                           name="player_id"
+                                           value="{{ player.playerid }}"
+                                           {% if request.form.getlist('player_id') and player.playerid|string in request.form.getlist('player_id') %}checked{% endif %}>
+                                    <span>{{ player.firstname }} {{ player.lastname }}</span>
+                                </label>
+                            {% endfor %}
+                        </div>
+                    </div>
 
                     <label class="checkbox-field">
                         <input type="checkbox" name="currently_employed">
                         <span>Currently employed</span>
                     </label>
 
-                    <label>Employed before</label>
+                    <label>Employment start date before</label>
                     <input type="datetime-local" name="employed_before" value="{{ request.form.get('employed_before','') }}">
 
-                    <label>Employed after</label>
+                    <label>Employment start date after</label>
                     <input type="datetime-local" name="employed_after" value="{{ request.form.get('employed_after','') }}">
 
-                    <label>Employment ended before</label>
+                    <label>Employment end date before</label>
                     <input type="datetime-local" name="ended_before" value="{{ request.form.get('ended_before','') }}">
 
-                    <label>Employment ended after</label>
+                    <label>Employment end date after</label>
                     <input type="datetime-local" name="ended_after" value="{{ request.form.get('ended_after','') }}">
 
                     <hr style="margin: 1rem 0; border: none; border-top: 1px solid var(--border);">
@@ -74,7 +91,7 @@
                 <form method="POST">
                     <input type="hidden" name="report_type" value="standings">
                     <label>League</label>
-                    <select name="league_id" required>
+                    <select name="league_id" class="form-select" required>
                         <option value="">Select league</option>
                         {% for l in leagues %}
                         <option value="{{ l.leagueid }}" {% if request.form.get('league_id') == l.leagueid|string %}selected{% endif %}>{{ l.name }}</option>
@@ -96,10 +113,47 @@
                     <input type="date" name="date_from" value="{{ request.form.get('date_from','') }}">
                     <label>Date To (optional)</label>
                     <input type="date" name="date_to" value="{{ request.form.get('date_to','') }}">
-                    <label>Player ID (optional)</label>
-                    <input type="text" inputmode="numeric" pattern="[0-9]*" name="player_id" placeholder="e.g. 12" value="{{ request.form.get('player_id','') }}">
+                    <div class="filter-group-complete">
+                        <label for="attendance_player_search">Players (optional)</label>
+                        <input type="search"
+                               id="attendance_player_search"
+                               class="attendance-player-search"
+                               placeholder="Search players"
+                               aria-label="Search players">
+                        <div class="checkbox-list attendance-player-checkbox-list">
+                            {% for player in players %}
+                                <label class="checkbox-line" data-attendance-player-search="{{ (player.firstname ~ ' ' ~ player.lastname)|lower }}">
+                                    <input type="checkbox"
+                                           name="player_id"
+                                           value="{{ player.playerid }}"
+                                           {% if request.form.getlist('player_id') and player.playerid|string in request.form.getlist('player_id') %}checked{% endif %}>
+                                    <span>{{ player.firstname }} {{ player.lastname }}</span>
+                                </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="filter-group-complete">
+                        <label for="training_session_search">Training Sessions (optional)</label>
+                        <input type="search"
+                               id="training_session_search"
+                               class="training-session-search"
+                               placeholder="Search training sessions"
+                               aria-label="Search training sessions">
+                        <div class="checkbox-list training-session-checkbox-list">
+                            {% for session in training_sessions %}
+                                {% set session_label = session.sessiondate|strftime('%Y-%m-%d') ~ ' - ' ~ session.location ~ ' (' ~ session.teamname ~ ')' %}
+                                <label class="checkbox-line" data-training-session-search="{{ session_label|lower }}">
+                                    <input type="checkbox"
+                                           name="session_id"
+                                           value="{{ session.sessionid }}"
+                                           {% if request.form.getlist('session_id') and session.sessionid|string in request.form.getlist('session_id') %}checked{% endif %}>
+                                    <span>{{ session_label }}</span>
+                                </label>
+                            {% endfor %}
+                        </div>
+                    </div>
                     <label>Team (optional)</label>
-                    <select name="team_id">
+                    <select name="team_id" class="form-select">
                         <option value="">All teams</option>
                         {% for t in teams %}
                         <option value="{{ t.teamid }}" {% if request.form.get('team_id') == t.teamid|string %}selected{% endif %}>{{ t.teamname }}</option>
@@ -121,7 +175,9 @@
             <div class="report-actions">
                 <form method="POST" action="{{ url_for('admin.download_report_pdf') }}" class="inline-form">
                     <input type="hidden" name="report_type" value="players">
-                    <input type="hidden" name="player_id" value="{{ request.form.get('player_id', '') }}">
+                    {% for player_id in request.form.getlist('player_id') %}
+                    <input type="hidden" name="player_id" value="{{ player_id }}">
+                    {% endfor %}
                     <input type="hidden" name="currently_employed" value="{{ 1 if request.form.get('currently_employed') else '' }}">
                     <input type="hidden" name="employed_before" value="{{ request.form.get('employed_before', '') }}">
                     <input type="hidden" name="employed_after" value="{{ request.form.get('employed_after', '') }}">
@@ -238,7 +294,12 @@
                     <input type="hidden" name="report_type" value="attendance">
                     <input type="hidden" name="date_from" value="{{ request.form.get('date_from', '') }}">
                     <input type="hidden" name="date_to" value="{{ request.form.get('date_to', '') }}">
-                    <input type="hidden" name="player_id" value="{{ request.form.get('player_id', '') }}">
+                    {% for player_id in request.form.getlist('player_id') %}
+                    <input type="hidden" name="player_id" value="{{ player_id }}">
+                    {% endfor %}
+                    {% for session_id in request.form.getlist('session_id') %}
+                    <input type="hidden" name="session_id" value="{{ session_id }}">
+                    {% endfor %}
                     <input type="hidden" name="team_id" value="{{ request.form.get('team_id', '') }}">
                     <input type="hidden" name="all_teams" value="{{ 1 if request.form.get('all_teams') else '' }}">
                     <button type="submit" class="btn solid btn-small">Download PDF</button>
@@ -292,6 +353,81 @@
         .reports-grid input[type="number"] {
             -moz-appearance: textfield;
         }
+
+        /* Ensure select dropdowns show selected value properly */
+        .reports-grid select {
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.375rem;
+            background: #fff;
+            font-size: 0.9rem;
+            color: #0f172a;
+            cursor: pointer;
+        }
+
+        .reports-grid select:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .reports-grid select option {
+            color: #0f172a;
+            background: #fff;
+            padding: 0.5rem;
+        }
+
+        .reports-grid select option:checked {
+            background: #3b82f6;
+            color: #fff;
+        }
     </style>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            // Player search for Player Report
+            const playerSearch = document.querySelector(".player-search");
+            const playerRows = document.querySelectorAll(".player-checkbox-list .checkbox-line");
+            if (playerSearch) {
+                playerSearch.addEventListener("input", function (event) {
+                    const query = (event.target.value || "").toLowerCase().trim();
+                    playerRows.forEach(row => {
+                        const haystack = (row.dataset.playerSearch || row.innerText || "").toLowerCase();
+                        const match = !query || haystack.includes(query);
+                        row.classList.toggle("is-hidden", !match);
+                    });
+                });
+            }
+
+            // Player search for Training Attendance Report
+            const attendancePlayerSearch = document.querySelector(".attendance-player-search");
+            const attendancePlayerRows = document.querySelectorAll(".attendance-player-checkbox-list .checkbox-line");
+            if (attendancePlayerSearch) {
+                attendancePlayerSearch.addEventListener("input", function (event) {
+                    const query = (event.target.value || "").toLowerCase().trim();
+                    attendancePlayerRows.forEach(row => {
+                        const haystack = (row.dataset.attendancePlayerSearch || row.innerText || "").toLowerCase();
+                        const match = !query || haystack.includes(query);
+                        row.classList.toggle("is-hidden", !match);
+                    });
+                });
+            }
+
+            // Training session search for Training Attendance Report
+            const trainingSessionSearch = document.querySelector(".training-session-search");
+            const trainingSessionRows = document.querySelectorAll(".training-session-checkbox-list .checkbox-line");
+            if (trainingSessionSearch) {
+                trainingSessionSearch.addEventListener("input", function (event) {
+                    const query = (event.target.value || "").toLowerCase().trim();
+                    trainingSessionRows.forEach(row => {
+                        const haystack = (row.dataset.trainingSessionSearch || row.innerText || "").toLowerCase();
+                        const match = !query || haystack.includes(query);
+                        row.classList.toggle("is-hidden", !match);
+                    });
+                });
+            }
+        });
+    </script>
 </body>
 </html>

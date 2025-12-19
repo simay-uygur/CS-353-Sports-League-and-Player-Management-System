@@ -661,8 +661,10 @@ def reports():
         report_type = request.form.get("report_type")
         try:
             if report_type == "players":
+                player_ids = request.form.getlist("player_id")
+                player_ids = [_to_int(pid, "Player ID") for pid in player_ids if pid] if player_ids else None
                 players_report = report_players({
-                    "player_id": _to_int(request.form.get("player_id"), "Player ID") if request.form.get("player_id") else None,
+                    "player_ids": player_ids,
                     "currently_employed": bool(request.form.get("currently_employed")),
                     "employed_before": request.form.get("employed_before"),
                     "employed_after": request.form.get("employed_after"),
@@ -685,15 +687,20 @@ def reports():
             elif report_type == "attendance":
                 date_from = request.form.get("date_from") or None
                 date_to = request.form.get("date_to") or None
-                player_id = _to_int(request.form.get("player_id"), "Player ID") if request.form.get("player_id") else None
+                player_ids = request.form.getlist("player_id")
+                player_ids = [_to_int(pid, "Player ID") for pid in player_ids if pid] if player_ids else None
+                session_ids = request.form.getlist("session_id")
+                session_ids = [_to_int(sid, "Session ID") for sid in session_ids if sid] if session_ids else None
                 team_id = _to_int(request.form.get("team_id"), "Team ID") if request.form.get("team_id") else None
                 all_teams = bool(request.form.get("all_teams"))
-                attendance_report = report_player_attendance(date_from, date_to, player_id, team_id, all_teams)
+                attendance_report = report_player_attendance(date_from, date_to, player_ids, session_ids, team_id, all_teams)
         except ValueError as exc:
             error_message = str(exc)
 
     leagues = fetch_all_leagues()
     teams = fetch_all_teams()
+    players = fetch_all_players()
+    training_sessions = fetch_all_training_sessions()
     return render_template(
         "admin_reports.html",
         error_message=error_message,
@@ -702,6 +709,8 @@ def reports():
         attendance_report=attendance_report,
         leagues=leagues,
         teams=teams,
+        players=players,
+        training_sessions=training_sessions,
     )
 
 
@@ -716,7 +725,8 @@ def download_report_pdf():
     
     try:
         if report_type == "players":
-            player_id = request.form.get("player_id")
+            player_ids = request.form.getlist("player_id")
+            player_ids = [_to_int(pid, "Player ID") for pid in player_ids if pid] if player_ids else None
             currently_employed = request.form.get("currently_employed")
             employed_before = request.form.get("employed_before")
             employed_after = request.form.get("employed_after")
@@ -729,8 +739,8 @@ def download_report_pdf():
             min_red_cards = request.form.get("min_red_cards")
             min_saves = request.form.get("min_saves")
             
-            if player_id:
-                filter_info.append(f"Player ID: {player_id}")
+            if player_ids:
+                filter_info.append(f"Player IDs: {', '.join(map(str, player_ids))}")
             if currently_employed:
                 filter_info.append("Currently Employed: Yes")
             if employed_before:
@@ -755,7 +765,7 @@ def download_report_pdf():
                 filter_info.append(f"Min Saves: {min_saves}")
             
             data = report_players({
-                "player_id": _to_int(player_id, "Player ID") if player_id else None,
+                "player_ids": player_ids,
                 "currently_employed": bool(currently_employed),
                 "employed_before": employed_before,
                 "employed_after": employed_after,
@@ -819,7 +829,10 @@ def download_report_pdf():
         elif report_type == "attendance":
             date_from = request.form.get("date_from") or None
             date_to = request.form.get("date_to") or None
-            player_id = request.form.get("player_id")
+            player_ids = request.form.getlist("player_id")
+            player_ids = [_to_int(pid, "Player ID") for pid in player_ids if pid] if player_ids else None
+            session_ids = request.form.getlist("session_id")
+            session_ids = [_to_int(sid, "Session ID") for sid in session_ids if sid] if session_ids else None
             team_id = request.form.get("team_id")
             all_teams = request.form.get("all_teams")
             
@@ -827,8 +840,10 @@ def download_report_pdf():
                 filter_info.append(f"Date From: {date_from}")
             if date_to:
                 filter_info.append(f"Date To: {date_to}")
-            if player_id:
-                filter_info.append(f"Player ID: {player_id}")
+            if player_ids:
+                filter_info.append(f"Player IDs: {', '.join(map(str, player_ids))}")
+            if session_ids:
+                filter_info.append(f"Session IDs: {', '.join(map(str, session_ids))}")
             if team_id:
                 filter_info.append(f"Team ID: {team_id}")
             if all_teams:
@@ -839,7 +854,8 @@ def download_report_pdf():
             data = report_player_attendance(
                 date_from,
                 date_to,
-                _to_int(player_id, "Player ID") if player_id else None,
+                player_ids,
+                session_ids,
                 _to_int(team_id, "Team ID") if team_id else None,
                 bool(all_teams)
             )

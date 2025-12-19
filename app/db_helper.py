@@ -79,11 +79,38 @@ def fetch_all_players():
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 """
-                SELECT playerid,
-                       firstname,
-                       lastname
-                FROM Player
-                ORDER BY lastname, firstname;
+                SELECT p.UsersID as playerid,
+                       u.FirstName as firstname,
+                       u.LastName as lastname
+                FROM Player p
+                JOIN Users u ON p.UsersID = u.UsersID
+                ORDER BY u.LastName, u.FirstName;
+                """
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_all_training_sessions():
+    """Fetch all training sessions for dropdown/checkbox lists."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT ts.SessionID,
+                       ts.SessionDate,
+                       ts.Location,
+                       ts.Focus,
+                       t.TeamName,
+                       u.FirstName || ' ' || u.LastName as CoachName
+                FROM TrainingSession ts
+                JOIN Coach c ON ts.CoachID = c.UsersID
+                JOIN Users u ON c.UsersID = u.UsersID
+                JOIN Employee e ON c.UsersID = e.UsersID
+                JOIN Team t ON e.TeamID = t.TeamID
+                ORDER BY ts.SessionDate DESC;
                 """
             )
             return cur.fetchall()
@@ -247,9 +274,9 @@ def report_players(filters):
             having_clauses = []
             having_params = []
 
-            if filters.get("player_id"):
-                clauses.append("p.UsersID = %s")
-                params.append(filters["player_id"])
+            if filters.get("player_ids") and len(filters["player_ids"]) > 0:
+                clauses.append("p.UsersID = ANY(%s)")
+                params.append(filters["player_ids"])
 
             if filters.get("currently_employed"):
                 clauses.append("e.EndDate >= NOW()")
@@ -409,10 +436,10 @@ def report_league_standings(league_id, season_no, season_year):
     return sorted(stats.values(), key=lambda s: (-s["points"], -(s["gf"] - s["ga"]), -s["wins"]))
 
 
-def report_player_attendance(date_from=None, date_to=None, player_id=None, team_id=None, all_teams=False):
+def report_player_attendance(date_from=None, date_to=None, player_ids=None, session_ids=None, team_id=None, all_teams=False):
     """
     Counts training attendance per player from TrainingAttendance table.
-    Filters by training session dates, optionally by player_id, team_id, or all teams.
+    Filters by training session dates, optionally by player_ids (list), session_ids (list), team_id, or all teams.
     """
     conn = get_connection()
     try:
@@ -445,10 +472,15 @@ def report_player_attendance(date_from=None, date_to=None, player_id=None, team_
                 clauses.append("ts.SessionDate <= %s")
                 params.append(date_to)
             
-            # Filter by specific player
-            if player_id:
-                clauses.append("ta.PlayerID = %s")
-                params.append(player_id)
+            # Filter by specific players (multiple)
+            if player_ids and len(player_ids) > 0:
+                clauses.append("ta.PlayerID = ANY(%s)")
+                params.append(player_ids)
+            
+            # Filter by specific training sessions (multiple)
+            if session_ids and len(session_ids) > 0:
+                clauses.append("ta.SessionID = ANY(%s)")
+                params.append(session_ids)
             
             # Filter by team (unless all_teams is True)
             if not all_teams and team_id:

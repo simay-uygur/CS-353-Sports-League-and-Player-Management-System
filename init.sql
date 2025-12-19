@@ -1004,6 +1004,95 @@ AFTER UPDATE ON Offer
 FOR EACH ROW
 EXECUTE FUNCTION handle_accepted_transfer_offer();
 
+-- ===== TRIGGER: Update Play records when employment ends =====
+-- Purpose: When a player's employment ends, delete their Play records for future matches
+--          (only for matches where they were on the old team)
+CREATE OR REPLACE FUNCTION handle_employment_end()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_player_id INT;
+    v_team_id INT;
+BEGIN
+    -- Only process if EndDate is being set to NOW() or a past date
+    -- and it wasn't already in the past
+    IF NEW.EndDate <= NOW() AND (OLD.EndDate IS NULL OR OLD.EndDate > NOW()) THEN
+        -- Get the player and team from the Employed table
+        SELECT em.UsersID, em.TeamID
+        INTO v_player_id, v_team_id
+        FROM Employed em
+        WHERE em.EmploymentID = NEW.EmploymentID
+        LIMIT 1;
+        
+        -- Only proceed if we found the employment record
+        IF v_player_id IS NOT NULL AND v_team_id IS NOT NULL THEN
+            -- Delete Play records for future matches where the player was on this team
+            DELETE FROM Play
+            WHERE PlayerID = v_player_id
+              AND MatchID IN (
+                  SELECT MatchID
+                  FROM Match
+                  WHERE MatchStartDatetime > NOW()
+                    AND (HomeTeamID = v_team_id OR AwayTeamID = v_team_id)
+              );
+        END IF;
+    END IF;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_employment_end
+AFTER UPDATE OF EndDate ON Employment
+FOR EACH ROW
+EXECUTE FUNCTION handle_employment_end();
+
+-- ===== TRIGGER: Update Play records when employment starts =====
+-- Purpose: When a player starts new employment, create Play records for future matches
+--          where their new team is involved
+CREATE OR REPLACE FUNCTION handle_employment_start()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_player_id INT;
+    v_team_id INT;
+    v_start_date TIMESTAMP;
+    v_end_date TIMESTAMP;
+BEGIN
+    -- Get employment details
+    SELECT e.StartDate, e.EndDate
+    INTO v_start_date, v_end_date
+    FROM Employment e
+    WHERE e.EmploymentID = NEW.EmploymentID;
+    
+    v_player_id := NEW.UsersID;
+    v_team_id := NEW.TeamID;
+    
+    -- Only process if employment is active (not in the past)
+    IF v_start_date IS NOT NULL AND v_end_date IS NOT NULL AND v_end_date >= NOW() THEN
+        -- Insert Play records for future matches where the new team is involved
+        INSERT INTO Play (MatchID, PlayerID)
+        SELECT m.MatchID, v_player_id
+        FROM Match m
+        WHERE (m.HomeTeamID = v_team_id OR m.AwayTeamID = v_team_id)
+          AND m.MatchStartDatetime > NOW()
+          AND m.MatchStartDatetime >= v_start_date
+          AND m.MatchStartDatetime <= v_end_date
+          AND NOT EXISTS (
+              SELECT 1
+              FROM Play p
+              WHERE p.MatchID = m.MatchID
+                AND p.PlayerID = v_player_id
+          );
+    END IF;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_employment_start
+AFTER INSERT ON Employed
+FOR EACH ROW
+EXECUTE FUNCTION handle_employment_start();
+
 -- sample data ---------------------------------------------------------------
 INSERT INTO Users (
   FirstName,
