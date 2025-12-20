@@ -418,19 +418,6 @@
             form.addEventListener("submit", function (event) {
                 const cards = seasonsContainer.querySelectorAll(".season-card");
                 const selectedTeams = getSelectedCount();
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                for (const card of cards) {
-                    const startInput = card.querySelector('input[id^="start_date_"]');
-                    if (startInput && startInput.value) {
-                        const startDate = new Date(startInput.value);
-                        if (startDate < today) {
-                            event.preventDefault();
-                            alert("Season start date cannot be in the past.");
-                            return;
-                        }
-                    }
-                }
 
                 if (selectedTeams < 2) {
                     event.preventDefault();

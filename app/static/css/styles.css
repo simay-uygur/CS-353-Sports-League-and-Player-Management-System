@@ -2303,9 +2303,9 @@ button:hover {
 
 .rankings-filter-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1.25rem;
-    align-items: end;
+    grid-template-columns: 1.5fr 0.8fr 1.2fr auto;
+    gap: 3rem;
+    align-items: start;
 }
 
 .rankings-filter-grid .form-group {
@@ -2318,6 +2318,9 @@ button:hover {
     font-weight: 600;
     font-size: 0.9rem;
     color: #334155;
+    height: 1.5rem;
+    display: flex;
+    align-items: center;
 }
 
 .rankings-filter-grid .form-group.filter-actions {

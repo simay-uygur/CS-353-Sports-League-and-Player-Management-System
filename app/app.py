@@ -142,6 +142,7 @@ def _set_default_banner():
         g.banner_league_endpoint = None
         g.banner_all_matches_endpoint = None
         g.banner_create_league_endpoint = None
+        g.banner_home_endpoint = "player.home"
         g.banner_owner_endpoint = "player.view_team"
         g.banner_reports_endpoint = None
         g.banner_statistics_endpoint = None
@@ -171,7 +172,7 @@ def _set_default_banner():
 # Role to home endpoint mapping - tournamnet-admin is now also league admin
 ROLE_HOME_ENDPOINTS = {
     "player": "player.home",
-    "coach": "home_coach",
+    "coach": "coach.view_team",
     "referee": "artunsPart.view_referee_dashboard",
     "team_owner": "home_team_owner",
     "admin": "admin.view_tournaments",

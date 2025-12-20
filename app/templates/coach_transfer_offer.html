@@ -10,38 +10,43 @@
 
 <body class="auth-body">
   {% include "_banner.html" %}
-  <div class="auth-card">
-    <h1>Transfer Offer</h1>
-    <p class="subtitle">Create an offer for this player</p>
+  <div style="padding-top: 4rem; min-height: 100vh;">
+    <div class="auth-card">
+      <h1>Transfer Offer</h1>
+      <p class="subtitle">Create an offer for this player</p>
 
-    <div style="margin-bottom: 2rem; padding: 1.5rem; background: #f8f9fa; border-radius: 10px;">
-      <h2 style="margin: 0 0 1rem; font-size: 1.1rem;">Player Information</h2>
-      <div style="font-size: 0.95rem; line-height: 1.8;">
-        <div><strong>Name:</strong> {{ player['firstname'] }} {{ player['lastname']}}</div>
-        <div><strong>Position:</strong> {{ player['position'] }}</div>
-        <div><strong>Current Team:</strong> {{ player['teamname'] if 'teamname' in player else '-' }}</div>
-        <div><strong>Current Salary:</strong> {{ player['salary'] if 'salary' in player else '-' }}</div>
+      <div style="margin-bottom: 2rem; padding: 1.5rem; background: #f8f9fa; border-radius: 10px;">
+        <h2 style="margin: 0 0 1rem; font-size: 1.1rem;">Player Information</h2>
+        <div style="font-size: 0.95rem; line-height: 1.8;">
+          <div><strong>Name:</strong> {{ player['firstname'] }} {{ player['lastname']}}</div>
+          <div><strong>Position:</strong> {{ player['position'] }}</div>
+          <div><strong>Current Team:</strong> {{ player['teamname'] if 'teamname' in player else '-' }}</div>
+          <div><strong>Current Salary:</strong> {{ player['salary'] if 'salary' in player else '-' }}</div>
+        </div>
       </div>
+
+      <form method="post">
+        <div class="form-group">
+          <label for="amount">Offer Amount</label>
+          <input name="amount" type="number" min="0" required>
+        </div>
+
+        <div class="form-group">
+          <label for="availableUntil">Available Until</label>
+          <input type="date" name="availableUntil" id="availableUntil" required>
+        </div>
+
+        <div class="form-group">
+          <label for="contractEndDate">Contract End Date</label>
+          <input type="date" name="offeredEndDate" id="contractEndDate" required>
+        </div>
+
+        <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+          <button type="submit" class="btn solid">Send Offer</button>
+          <a href="{{ url_for('coach.view_transfer_market') }}" class="btn ghost">Cancel</a>
+        </div>
+      </form>
     </div>
-
-    <form method="post">
-      <div class="form-group">
-        <label for="amount">Offer Amount</label>
-        <input name="amount" type="number" min="0" required>
-      </div>
-
-      <div class="form-group">
-        <label for="availableUntil">Available Until</label>
-        <input type="date" name="availableUntil" id="availableUntil" required>
-      </div>
-
-      <div class="form-group">
-        <label for="contractEndDate">Contract End Date</label>
-        <input type="date" name="offeredEndDate" id="contractEndDate" required>
-      </div>
-
-      <button type="submit">Send Offer</button>
-    </form>
   </div>
 
   <script>

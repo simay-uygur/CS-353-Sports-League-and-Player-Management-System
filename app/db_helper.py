@@ -79,11 +79,40 @@ def fetch_all_players():
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 """
-                SELECT playerid,
-                       firstname,
-                       lastname
-                FROM Player
-                ORDER BY lastname, firstname;
+                SELECT p.UsersID as playerid,
+                       u.FirstName as firstname,
+                       u.LastName as lastname
+                FROM Player p
+                JOIN Users u ON p.UsersID = u.UsersID
+                ORDER BY u.LastName, u.FirstName;
+                """
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_all_training_sessions():
+    """
+    Fetch all training sessions for dropdown/checkbox lists.
+    Uses historical employment data (AllEmploymentInfo) to correctly show which team
+    the coach was employed with when the session was created.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT ts.SessionID,
+                       ts.SessionDate,
+                       ts.Location,
+                       ts.Focus,
+                       t.TeamName
+                FROM TrainingSession ts
+                JOIN AllEmploymentInfo aei ON ts.CoachID = aei.UsersID
+                JOIN Team t ON aei.TeamID = t.TeamID
+                WHERE ts.SessionDate BETWEEN aei.StartDate AND aei.EndDate
+                ORDER BY ts.SessionDate DESC;
                 """
             )
             return cur.fetchall()
@@ -231,6 +260,12 @@ def report_players(filters):
       employed_after: datetime|None,
       ended_before: datetime|None,
       ended_after: datetime|None,
+      min_goals: int|None,
+      min_assists: int|None,
+      min_appearances: int|None,
+      min_yellow_cards: int|None,
+      min_red_cards: int|None,
+      min_saves: int|None,
     }
     """
     conn = get_connection()
@@ -238,10 +273,12 @@ def report_players(filters):
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             clauses = []
             params = []
+            having_clauses = []
+            having_params = []
 
-            if filters.get("player_id"):
-                clauses.append("p.UsersID = %s")
-                params.append(filters["player_id"])
+            if filters.get("player_ids") and len(filters["player_ids"]) > 0:
+                clauses.append("p.UsersID = ANY(%s)")
+                params.append(filters["player_ids"])
 
             if filters.get("currently_employed"):
                 clauses.append("e.EndDate >= NOW()")
@@ -262,7 +299,33 @@ def report_players(filters):
                 clauses.append("e.EndDate >= %s")
                 params.append(filters["ended_after"])
 
+            # Stats filters (using HAVING clause)
+            if filters.get("min_goals") is not None:
+                having_clauses.append("COALESCE(SUM(play.GoalsScored), 0) >= %s")
+                having_params.append(filters["min_goals"])
+
+            if filters.get("min_assists") is not None:
+                having_clauses.append("COALESCE(SUM(play.AssistsMade), 0) >= %s")
+                having_params.append(filters["min_assists"])
+
+            if filters.get("min_appearances") is not None:
+                having_clauses.append("COUNT(DISTINCT play.MatchID) >= %s")
+                having_params.append(filters["min_appearances"])
+
+            if filters.get("min_yellow_cards") is not None:
+                having_clauses.append("COALESCE(SUM(play.YellowCards), 0) >= %s")
+                having_params.append(filters["min_yellow_cards"])
+
+            if filters.get("min_red_cards") is not None:
+                having_clauses.append("COALESCE(SUM(play.RedCards), 0) >= %s")
+                having_params.append(filters["min_red_cards"])
+
+            if filters.get("min_saves") is not None:
+                having_clauses.append("COALESCE(SUM(play.Saves), 0) >= %s")
+                having_params.append(filters["min_saves"])
+
             where_sql = " WHERE " + " AND ".join(clauses) if clauses else ""
+            having_sql = " HAVING " + " AND ".join(having_clauses) if having_clauses else ""
 
             cur.execute(
                 f"""
@@ -275,16 +338,25 @@ def report_players(filters):
                        p.Weight,
                        e.StartDate,
                        e.EndDate,
-                       t.TeamName
+                       t.TeamName,
+                       COALESCE(SUM(play.GoalsScored), 0) as total_goals,
+                       COALESCE(SUM(play.AssistsMade), 0) as total_assists,
+                       COUNT(DISTINCT play.MatchID) as total_appearances,
+                       COALESCE(SUM(play.YellowCards), 0) as total_yellowcards,
+                       COALESCE(SUM(play.RedCards), 0) as total_redcards,
+                       COALESCE(SUM(play.Saves), 0) as total_saves
                 FROM Player p
                 JOIN Users u ON u.UsersID = p.UsersID
                 LEFT JOIN Employed em ON em.UsersID = p.UsersID
                 LEFT JOIN Employment e ON e.EmploymentID = em.EmploymentID
                 LEFT JOIN Team t ON t.TeamID = em.TeamID
+                LEFT JOIN Play play ON play.PlayerID = p.UsersID
                 {where_sql}
+                GROUP BY p.UsersID, u.FirstName, u.LastName, u.Email, p.Position, p.Height, p.Weight, e.StartDate, e.EndDate, t.TeamName
+                {having_sql}
                 ORDER BY u.LastName, u.FirstName, e.StartDate NULLS LAST;
                 """,
-                tuple(params),
+                tuple(params + having_params),
             )
             return cur.fetchall()
     finally:
@@ -296,8 +368,8 @@ def report_league_standings(league_id, season_no, season_year):
     conn = get_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(
-                """
+            # Build query dynamically based on which parameters are provided
+            query = """
                 SELECT
                     m.HomeTeamID,
                     m.AwayTeamID,
@@ -307,10 +379,19 @@ def report_league_standings(league_id, season_no, season_year):
                     m.AwayTeamScore
                 FROM Match m
                 JOIN SeasonalMatch sm ON m.MatchID = sm.MatchID
-                WHERE sm.LeagueID = %s AND sm.SeasonNo = %s AND sm.SeasonYear = %s
-                """,
-                (league_id, season_no, season_year),
-            )
+                WHERE sm.LeagueID = %s
+            """
+            params = [league_id]
+            
+            if season_no is not None:
+                query += " AND sm.SeasonNo = %s"
+                params.append(season_no)
+            
+            if season_year is not None:
+                query += " AND sm.SeasonYear = %s"
+                params.append(season_year)
+            
+            cur.execute(query, tuple(params))
             rows = cur.fetchall()
 
     finally:
@@ -366,10 +447,12 @@ def report_league_standings(league_id, season_no, season_year):
     return sorted(stats.values(), key=lambda s: (-s["points"], -(s["gf"] - s["ga"]), -s["wins"]))
 
 
-def report_player_attendance(date_from=None, date_to=None, player_id=None, team_id=None, all_teams=False):
+def report_player_attendance(date_from=None, date_to=None, player_ids=None, session_ids=None, team_id=None, all_teams=False):
     """
     Counts training attendance per player from TrainingAttendance table.
-    Filters by training session dates, optionally by player_id, team_id, or all teams.
+    Uses historical employment data (AllEmploymentInfo) to correctly attribute sessions to teams
+    based on which team the coach was employed with when the session was created.
+    Filters by training session dates, optionally by player_ids (list), session_ids (list), team_id, or all teams.
     """
     conn = get_connection()
     try:
@@ -377,7 +460,7 @@ def report_player_attendance(date_from=None, date_to=None, player_id=None, team_
             clauses = []
             params = []
             
-            # Base query joins TrainingAttendance with TrainingSession, Coach, Employee, Team, and Users
+            # Base query uses AllEmploymentInfo to get the team the coach was on when session was created
             query = """
                 SELECT 
                     u.UsersID AS PlayerID,
@@ -386,11 +469,11 @@ def report_player_attendance(date_from=None, date_to=None, player_id=None, team_
                     COUNT(*) AS appearances
                 FROM TrainingAttendance ta
                 JOIN TrainingSession ts ON ta.SessionID = ts.SessionID
-                JOIN Coach c ON ts.CoachID = c.UsersID
-                JOIN Employee e ON c.UsersID = e.UsersID
-                JOIN Team t ON e.TeamID = t.TeamID
+                JOIN AllEmploymentInfo aei ON ts.CoachID = aei.UsersID
+                JOIN Team t ON aei.TeamID = t.TeamID
                 JOIN Users u ON ta.PlayerID = u.UsersID
                 WHERE ta.Status = 1
+                  AND ts.SessionDate BETWEEN aei.StartDate AND aei.EndDate
             """
             
             # Filter by training session date range
@@ -402,10 +485,15 @@ def report_player_attendance(date_from=None, date_to=None, player_id=None, team_
                 clauses.append("ts.SessionDate <= %s")
                 params.append(date_to)
             
-            # Filter by specific player
-            if player_id:
-                clauses.append("ta.PlayerID = %s")
-                params.append(player_id)
+            # Filter by specific players (multiple)
+            if player_ids and len(player_ids) > 0:
+                clauses.append("ta.PlayerID = ANY(%s)")
+                params.append(player_ids)
+            
+            # Filter by specific training sessions (multiple)
+            if session_ids and len(session_ids) > 0:
+                clauses.append("ta.SessionID = ANY(%s)")
+                params.append(session_ids)
             
             # Filter by team (unless all_teams is True)
             if not all_teams and team_id:
@@ -525,11 +613,14 @@ def fetch_transferable_players(filters, coachid):
             conditions.append("p.position = %s")
             params.append(position)
         if contact_expiration_date:
-            conditions.append("emp.EndDate < %s")
+            # Include players with no contract (NULL EndDate) OR contracts expiring before the date
+            conditions.append("(ce.EndDate IS NULL OR ce.EndDate < %s)")
             params.append(contact_expiration_date)
 
         # Exclude players from the coach's own team
-        conditions.append("e.teamid <> (SELECT teamid FROM Employee WHERE usersid = %s)")
+        # Always include players with no contract (ce.EndDate IS NULL)
+        # For players with contracts: include if they have no team OR not on coach's team
+        conditions.append("(ce.EndDate IS NULL OR e.teamid IS NULL OR e.teamid <> (SELECT teamid FROM Employee WHERE usersid = %s))")
         params.append(coachid)
 
         where_clause = " AND ".join(conditions) if conditions else "1=1"
@@ -550,7 +641,7 @@ def fetch_transferable_players(filters, coachid):
                     ce.TeamName
                 FROM Player p
                 JOIN Users u ON p.UsersID = u.UsersID
-                JOIN Employee e ON p.UsersID = e.UsersID
+                LEFT JOIN Employee e ON p.UsersID = e.UsersID
                 LEFT JOIN CurrentEmployment ce ON p.UsersID = ce.UsersID
                 WHERE {where_clause}
                 """,
@@ -2455,15 +2546,52 @@ def toggle_match_lock(match_id, lock_state):
         conn.close()
 
         
+def fetch_all_seasons_for_dropdown():
+    """Fetch all seasons from all leagues for dropdown."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT DISTINCT s.LeagueID, l.Name as leaguename, s.SeasonNo, s.SeasonYear
+                FROM Season s
+                JOIN League l ON s.LeagueID = l.LeagueID
+                ORDER BY s.SeasonYear DESC, l.Name, s.SeasonNo
+            """)
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
 def fetch_team_rankings(league_id=None, season_no=None, season_year=None):
     """Fetch team rankings with optional filters.
     If all parameters provided: rankings for specific league/season
     If only league_id: all seasons in that league aggregated
     If none: all teams across all leagues aggregated
-    Returns list of team stats sorted by points, goal difference, goals for."""
+    Returns list of team stats sorted by points, goal difference, goals for.
+    Includes teams with 0 matches played."""
     conn = get_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # First, get all teams in the filtered scope
+            if league_id is not None:
+                # If league filter is selected, get teams in that league
+                teams_query = """
+                    SELECT DISTINCT t.TeamID, t.TeamName
+                    FROM Team t
+                    JOIN LeagueTeam lt ON t.TeamID = lt.TeamID
+                    WHERE lt.LeagueID = %s
+                """
+                cur.execute(teams_query, [league_id])
+            else:
+                # No filter: get all teams
+                teams_query = """
+                    SELECT TeamID, TeamName FROM Team
+                """
+                cur.execute(teams_query)
+            
+            all_teams = cur.fetchall()
+            
+            # Then get match results
             query = """
                 SELECT
                     m.HomeTeamID,
@@ -2503,6 +2631,21 @@ def fetch_team_rankings(league_id=None, season_no=None, season_year=None):
     
     stats = {}
     
+    # Initialize all teams with 0 stats
+    for team in all_teams:
+        team_id = team["teamid"]
+        stats[team_id] = {
+            "teamid": team_id,
+            "teamname": team["teamname"],
+            "played": 0,
+            "wins": 0,
+            "draws": 0,
+            "losses": 0,
+            "gf": 0,
+            "ga": 0,
+            "points": 0,
+        }
+    
     def ensure(team_id, name):
         if team_id not in stats:
             stats[team_id] = {
@@ -2512,8 +2655,8 @@ def fetch_team_rankings(league_id=None, season_no=None, season_year=None):
                 "wins": 0,
                 "draws": 0,
                 "losses": 0,
-                "gf": 0,  # goals for
-                "ga": 0,  # goals against
+                "gf": 0,
+                "ga": 0,
                 "points": 0,
             }
     
@@ -2981,8 +3124,11 @@ def fetch_player_trainings(player_id):
 def fetch_player_offers(player_id):
     """
     Fetch all offers and invites for a player.
-    Returns offers ordered by date (newest first).
-    Only returns offers when the player has no responsible coach (no team or team has no coach).
+    Returns a tuple: (pending_offers, past_offers)
+    - pending_offers: offers with status NULL and AvailableUntil > NOW()
+    - past_offers: expired offers or offers with accepted/rejected status
+    Only returns offers where PlayerTeamAtOfferTime IS NULL (player was free when offer was made).
+    If player was employed when offer was made, those offers are handled by the coach.
     """
     conn = get_connection()
     try:
@@ -2991,6 +3137,7 @@ def fetch_player_offers(player_id):
                 """
                 SELECT 
                     O.OfferID,
+                    O.OfferAmount,
                     O.AvailableUntil,
                     O.OfferedEndDate,
                     O.OfferStatus,
@@ -3005,20 +3152,28 @@ def fetch_player_offers(player_id):
                 JOIN Team T ON E.TeamID = T.TeamID
                 JOIN Users RC ON O.RequestingCoach = RC.UsersID
                 WHERE O.RequestedPlayer = %s
-                  AND NOT EXISTS (
-                      -- Check if player has a team with a coach
-                      SELECT 1
-                      FROM Employee PE
-                      JOIN Employee CE ON CE.TeamID = PE.TeamID
-                      JOIN Coach C2 ON CE.UsersID = C2.UsersID
-                      WHERE PE.UsersID = O.RequestedPlayer
-                        AND PE.TeamID IS NOT NULL
-                  )
+                  AND O.PlayerTeamAtOfferTime IS NULL
                 ORDER BY O.AvailableUntil DESC;
                 """,
                 (player_id,),
             )
-            return cur.fetchall()
+            all_offers = cur.fetchall()
+            
+            # Split into pending and past
+            now = datetime.now()
+            pending = []
+            past = []
+            
+            for offer in all_offers:
+                is_expired = offer['availableuntil'] < now
+                is_pending = offer['offerstatus'] is None and not is_expired
+                
+                if is_pending:
+                    pending.append(offer)
+                else:
+                    past.append(offer)
+            
+            return (pending, past)
     finally:
         conn.close()
 

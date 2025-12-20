@@ -94,17 +94,19 @@ def update_training_attendance(session_id):
 @player_bp.route("/offers")
 def view_offers():
     player_id = session.get("user_id")
-    offers = fetch_player_offers(player_id)
+    pending_offers, past_offers = fetch_player_offers(player_id)
+    now = datetime.now()
     
-    return render_template("player_offers.html", offers=offers)
+    return render_template("player_offers.html", pending_offers=pending_offers, past_offers=past_offers, now=now)
 
 @player_bp.route("/offers/<int:offer_id>/evaluate", methods=["POST"])
 def evaluate_offer(offer_id):
     player_id = session.get("user_id")
     
     # Verify the offer belongs to this player
-    offers = fetch_player_offers(player_id)
-    if not any(offer["offerid"] == offer_id for offer in offers):
+    pending_offers, past_offers = fetch_player_offers(player_id)
+    all_offers = pending_offers + past_offers
+    if not any(offer["offerid"] == offer_id for offer in all_offers):
         return redirect(url_for("player.view_offers"))
     
     decision = request.form.get("decision")
