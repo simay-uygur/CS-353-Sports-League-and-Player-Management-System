@@ -171,7 +171,7 @@ def _set_default_banner():
 # Role to home endpoint mapping - tournamnet-admin is now also league admin
 ROLE_HOME_ENDPOINTS = {
     "player": "player.home",
-    "coach": "home_coach",
+    "coach": "coach.view_team",
     "referee": "artunsPart.view_referee_dashboard",
     "team_owner": "home_team_owner",
     "admin": "admin.view_tournaments",

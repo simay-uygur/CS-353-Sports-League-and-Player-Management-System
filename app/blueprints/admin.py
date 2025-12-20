@@ -679,10 +679,8 @@ def reports():
                 })
             elif report_type == "standings":
                 league_id = _to_int(request.form.get("league_id"), "League ID", required=True)
-                season_no = _to_int(request.form.get("season_no"), "Season No", required=True)
-                season_year = request.form.get("season_year")
-                if not season_year:
-                    raise ValueError("Season year is required.")
+                season_no = _to_int(request.form.get("season_no"), "Season No") if request.form.get("season_no") else None
+                season_year = request.form.get("season_year") or None
                 standings_report = report_league_standings(league_id, season_no, season_year)
             elif report_type == "attendance":
                 date_from = request.form.get("date_from") or None
@@ -692,8 +690,7 @@ def reports():
                 session_ids = request.form.getlist("session_id")
                 session_ids = [_to_int(sid, "Session ID") for sid in session_ids if sid] if session_ids else None
                 team_id = _to_int(request.form.get("team_id"), "Team ID") if request.form.get("team_id") else None
-                all_teams = bool(request.form.get("all_teams"))
-                attendance_report = report_player_attendance(date_from, date_to, player_ids, session_ids, team_id, all_teams)
+                attendance_report = report_player_attendance(date_from, date_to, player_ids, session_ids, team_id, False)
         except ValueError as exc:
             error_message = str(exc)
 
@@ -800,14 +797,14 @@ def download_report_pdf():
             filename = "player-report.pdf"
         elif report_type == "standings":
             league_id = _to_int(request.form.get("league_id"), "League ID", required=True)
-            season_no = _to_int(request.form.get("season_no"), "Season No", required=True)
-            season_year = request.form.get("season_year")
-            if not season_year:
-                raise ValueError("Season year is required.")
+            season_no = _to_int(request.form.get("season_no"), "Season No") if request.form.get("season_no") else None
+            season_year = request.form.get("season_year") or None
             
             filter_info.append(f"League ID: {league_id}")
-            filter_info.append(f"Season No: {season_no}")
-            filter_info.append(f"Season Year: {season_year}")
+            if season_no is not None:
+                filter_info.append(f"Season No: {season_no}")
+            if season_year is not None:
+                filter_info.append(f"Season Year: {season_year}")
             
             data = report_league_standings(league_id, season_no, season_year)
             title = f"League Standings"
@@ -834,7 +831,6 @@ def download_report_pdf():
             session_ids = request.form.getlist("session_id")
             session_ids = [_to_int(sid, "Session ID") for sid in session_ids if sid] if session_ids else None
             team_id = request.form.get("team_id")
-            all_teams = request.form.get("all_teams")
             
             if date_from:
                 filter_info.append(f"Date From: {date_from}")
@@ -846,8 +842,6 @@ def download_report_pdf():
                 filter_info.append(f"Session IDs: {', '.join(map(str, session_ids))}")
             if team_id:
                 filter_info.append(f"Team ID: {team_id}")
-            if all_teams:
-                filter_info.append("All Teams: Yes")
             if not filter_info:
                 filter_info.append("All Trainings")
             
@@ -857,7 +851,7 @@ def download_report_pdf():
                 player_ids,
                 session_ids,
                 _to_int(team_id, "Team ID") if team_id else None,
-                bool(all_teams)
+                False
             )
             title = "Training Attendance Report"
             headers = ["Player", "Appearances"]

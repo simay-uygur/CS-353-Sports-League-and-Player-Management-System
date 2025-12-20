@@ -97,10 +97,10 @@
                         <option value="{{ l.leagueid }}" {% if request.form.get('league_id') == l.leagueid|string %}selected{% endif %}>{{ l.name }}</option>
                         {% endfor %}
                     </select>
-                    <label>Season No</label>
-                    <input type="text" inputmode="numeric" pattern="[0-9]*" name="season_no" required value="{{ request.form.get('season_no','') }}">
-                    <label>Season Year</label>
-                    <input type="date" name="season_year" required value="{{ request.form.get('season_year','') }}">
+                    <label>Season No (optional)</label>
+                    <input type="text" inputmode="numeric" pattern="[0-9]*" name="season_no" placeholder="Optional" value="{{ request.form.get('season_no','') }}">
+                    <label>Season Year (optional)</label>
+                    <input type="date" name="season_year" placeholder="Optional" value="{{ request.form.get('season_year','') }}">
                     <button type="submit" class="btn solid">Generate</button>
                 </form>
             </div>
@@ -159,10 +159,6 @@
                         <option value="{{ t.teamid }}" {% if request.form.get('team_id') == t.teamid|string %}selected{% endif %}>{{ t.teamname }}</option>
                         {% endfor %}
                     </select>
-                    <label class="checkbox-field">
-                        <input type="checkbox" name="all_teams" {% if request.form.get('all_teams') %}checked{% endif %}>
-                        <span>All Teams</span>
-                    </label>
                     <button type="submit" class="btn solid">Generate</button>
                 </form>
             </div>
@@ -301,7 +297,6 @@
                     <input type="hidden" name="session_id" value="{{ session_id }}">
                     {% endfor %}
                     <input type="hidden" name="team_id" value="{{ request.form.get('team_id', '') }}">
-                    <input type="hidden" name="all_teams" value="{{ 1 if request.form.get('all_teams') else '' }}">
                     <button type="submit" class="btn solid btn-small">Download PDF</button>
                 </form>
             </div>

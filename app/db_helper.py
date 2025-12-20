@@ -93,7 +93,11 @@ def fetch_all_players():
 
 
 def fetch_all_training_sessions():
-    """Fetch all training sessions for dropdown/checkbox lists."""
+    """
+    Fetch all training sessions for dropdown/checkbox lists.
+    Uses historical employment data (AllEmploymentInfo) to correctly show which team
+    the coach was employed with when the session was created.
+    """
     conn = get_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -103,13 +107,11 @@ def fetch_all_training_sessions():
                        ts.SessionDate,
                        ts.Location,
                        ts.Focus,
-                       t.TeamName,
-                       u.FirstName || ' ' || u.LastName as CoachName
+                       t.TeamName
                 FROM TrainingSession ts
-                JOIN Coach c ON ts.CoachID = c.UsersID
-                JOIN Users u ON c.UsersID = u.UsersID
-                JOIN Employee e ON c.UsersID = e.UsersID
-                JOIN Team t ON e.TeamID = t.TeamID
+                JOIN AllEmploymentInfo aei ON ts.CoachID = aei.UsersID
+                JOIN Team t ON aei.TeamID = t.TeamID
+                WHERE ts.SessionDate BETWEEN aei.StartDate AND aei.EndDate
                 ORDER BY ts.SessionDate DESC;
                 """
             )
@@ -366,8 +368,8 @@ def report_league_standings(league_id, season_no, season_year):
     conn = get_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute(
-                """
+            # Build query dynamically based on which parameters are provided
+            query = """
                 SELECT
                     m.HomeTeamID,
                     m.AwayTeamID,
@@ -377,10 +379,19 @@ def report_league_standings(league_id, season_no, season_year):
                     m.AwayTeamScore
                 FROM Match m
                 JOIN SeasonalMatch sm ON m.MatchID = sm.MatchID
-                WHERE sm.LeagueID = %s AND sm.SeasonNo = %s AND sm.SeasonYear = %s
-                """,
-                (league_id, season_no, season_year),
-            )
+                WHERE sm.LeagueID = %s
+            """
+            params = [league_id]
+            
+            if season_no is not None:
+                query += " AND sm.SeasonNo = %s"
+                params.append(season_no)
+            
+            if season_year is not None:
+                query += " AND sm.SeasonYear = %s"
+                params.append(season_year)
+            
+            cur.execute(query, tuple(params))
             rows = cur.fetchall()
 
     finally:
@@ -439,6 +450,8 @@ def report_league_standings(league_id, season_no, season_year):
 def report_player_attendance(date_from=None, date_to=None, player_ids=None, session_ids=None, team_id=None, all_teams=False):
     """
     Counts training attendance per player from TrainingAttendance table.
+    Uses historical employment data (AllEmploymentInfo) to correctly attribute sessions to teams
+    based on which team the coach was employed with when the session was created.
     Filters by training session dates, optionally by player_ids (list), session_ids (list), team_id, or all teams.
     """
     conn = get_connection()
@@ -447,7 +460,7 @@ def report_player_attendance(date_from=None, date_to=None, player_ids=None, sess
             clauses = []
             params = []
             
-            # Base query joins TrainingAttendance with TrainingSession, Coach, Employee, Team, and Users
+            # Base query uses AllEmploymentInfo to get the team the coach was on when session was created
             query = """
                 SELECT 
                     u.UsersID AS PlayerID,
@@ -456,11 +469,11 @@ def report_player_attendance(date_from=None, date_to=None, player_ids=None, sess
                     COUNT(*) AS appearances
                 FROM TrainingAttendance ta
                 JOIN TrainingSession ts ON ta.SessionID = ts.SessionID
-                JOIN Coach c ON ts.CoachID = c.UsersID
-                JOIN Employee e ON c.UsersID = e.UsersID
-                JOIN Team t ON e.TeamID = t.TeamID
+                JOIN AllEmploymentInfo aei ON ts.CoachID = aei.UsersID
+                JOIN Team t ON aei.TeamID = t.TeamID
                 JOIN Users u ON ta.PlayerID = u.UsersID
                 WHERE ta.Status = 1
+                  AND ts.SessionDate BETWEEN aei.StartDate AND aei.EndDate
             """
             
             # Filter by training session date range
@@ -600,11 +613,14 @@ def fetch_transferable_players(filters, coachid):
             conditions.append("p.position = %s")
             params.append(position)
         if contact_expiration_date:
-            conditions.append("emp.EndDate < %s")
+            # Include players with no contract (NULL EndDate) OR contracts expiring before the date
+            conditions.append("(ce.EndDate IS NULL OR ce.EndDate < %s)")
             params.append(contact_expiration_date)
 
         # Exclude players from the coach's own team
-        conditions.append("e.teamid <> (SELECT teamid FROM Employee WHERE usersid = %s)")
+        # Always include players with no contract (ce.EndDate IS NULL)
+        # For players with contracts: include if they have no team OR not on coach's team
+        conditions.append("(ce.EndDate IS NULL OR e.teamid IS NULL OR e.teamid <> (SELECT teamid FROM Employee WHERE usersid = %s))")
         params.append(coachid)
 
         where_clause = " AND ".join(conditions) if conditions else "1=1"
@@ -625,7 +641,7 @@ def fetch_transferable_players(filters, coachid):
                     ce.TeamName
                 FROM Player p
                 JOIN Users u ON p.UsersID = u.UsersID
-                JOIN Employee e ON p.UsersID = e.UsersID
+                LEFT JOIN Employee e ON p.UsersID = e.UsersID
                 LEFT JOIN CurrentEmployment ce ON p.UsersID = ce.UsersID
                 WHERE {where_clause}
                 """,

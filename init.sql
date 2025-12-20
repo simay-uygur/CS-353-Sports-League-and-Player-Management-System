@@ -1358,7 +1358,7 @@ insert_users AS (
     email,
     'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'),
     'player',
-    'Local'
+    (ARRAY['USA', 'Canada', 'UK', 'Spain', 'France', 'Germany', 'Italy', 'Brazil', 'Argentina', 'Mexico', 'Japan', 'South Korea', 'Australia', 'Netherlands', 'Portugal', 'Turkey', 'Russia', 'Poland', 'Sweden', 'Norway', 'Denmark', 'Belgium', 'Switzerland', 'Greece', 'Egypt', 'Morocco', 'Nigeria', 'South Africa', 'India', 'China'])[1 + floor(random() * 30)::int]
   FROM numbered_players
   RETURNING UsersID, Email
 ),
@@ -1600,3 +1600,59 @@ INSERT INTO RefereeMatchAttendance (MatchID, RefereeID)
 VALUES (
     (SELECT MAX(MatchID) FROM Match),
     (SELECT UsersID FROM Users WHERE Email = 'ref_test@example.com'));
+
+-- Players without teams (no employment records)
+-- These players exist as Users, Employees (with NULL TeamID), and Players, but have no Employment records
+INSERT INTO Users (
+  FirstName,
+  LastName,
+  Email,
+  HashedPassword,
+  Salt,
+  PasswordDate,
+  PhoneNumber,
+  BirthDate,
+  Role,
+  Nationality
+) VALUES
+  ('Jake', 'Freeman', 'free1@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-2001', TO_DATE('1995-03-15','YYYY-MM-DD'), 'player', 'USA'),
+  ('Marcus', 'Wilder', 'free2@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-2002', TO_DATE('1996-07-22','YYYY-MM-DD'), 'player', 'Canada'),
+  ('Oscar', 'Mitchell', 'free3@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-2003', TO_DATE('1994-11-08','YYYY-MM-DD'), 'player', 'UK'),
+  ('Ryan', 'Bennett', 'free4@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-2004', TO_DATE('1997-02-14','YYYY-MM-DD'), 'player', 'Australia'),
+  ('Victor', 'Garcia', 'free5@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-2005', TO_DATE('1993-09-30','YYYY-MM-DD'), 'player', 'Spain');
+
+-- Insert these players as Employees with NULL TeamID (no team assignment)
+INSERT INTO Employee (UsersID, TeamID)
+SELECT u.UsersID, NULL
+FROM Users u
+WHERE u.Email IN ('free1@gmail.com', 'free2@gmail.com', 'free3@gmail.com', 'free4@gmail.com', 'free5@gmail.com');
+
+-- Insert these players into the Player table
+INSERT INTO Player (UsersID, Height, Weight, Overall, Position, IsEligible)
+SELECT 
+  u.UsersID,
+  CASE u.Email
+    WHEN 'free1@gmail.com' THEN 182
+    WHEN 'free2@gmail.com' THEN 185
+    WHEN 'free3@gmail.com' THEN 178
+    WHEN 'free4@gmail.com' THEN 188
+    ELSE 192
+  END,
+  CASE u.Email
+    WHEN 'free1@gmail.com' THEN 76
+    WHEN 'free2@gmail.com' THEN 79
+    WHEN 'free3@gmail.com' THEN 74
+    WHEN 'free4@gmail.com' THEN 82
+    ELSE 85
+  END,
+  '82',
+  CASE u.Email
+    WHEN 'free1@gmail.com' THEN 'Forward'
+    WHEN 'free2@gmail.com' THEN 'Midfielder'
+    WHEN 'free3@gmail.com' THEN 'Defender'
+    WHEN 'free4@gmail.com' THEN 'Midfielder'
+    ELSE 'Goalkeeper'
+  END,
+  'eligible'
+FROM Users u
+WHERE u.Email IN ('free1@gmail.com', 'free2@gmail.com', 'free3@gmail.com', 'free4@gmail.com', 'free5@gmail.com');

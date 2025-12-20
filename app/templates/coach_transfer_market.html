@@ -20,7 +20,7 @@
 
     <!-- Player filtering Section -->
     <div class="create-card">
-      <form class="create-card-inner">
+      <form class="create-card-inner" method="GET" action="{{ url_for('coach.view_transfer_market') }}">
         <div class="match-grid">
           <div class="form-group">
             <label for="nationality">Nationality</label>
@@ -42,11 +42,11 @@
           </div>
           <div class="form-group">
             <label for="minAge">Minimum Age</label>
-            <input type="number" id="minAge" name="minAge" min="15" max="200" placeholder="15">
+            <input type="text" id="minAge" name="minAge" inputmode="numeric" pattern="[0-9]*" placeholder="15">
           </div>
           <div class="form-group">
             <label for="maxAge">Maximum Age</label>
-            <input type="number" id="maxAge" name="maxAge" min="15" max="200" placeholder="99">
+            <input type="text" id="maxAge" name="maxAge" inputmode="numeric" pattern="[0-9]*" placeholder="99">
           </div>
           <div class="form-group">
             <label for="contactExpirationDate">Contract Expiration Date</label>
@@ -61,15 +61,16 @@
               {% endfor %}
             </select>
           </div>
-        </div>
-        <!-- Search by name -->
-        <div class="form-group">
-          <label for="search-input">Search by Name</label>
-          <input type="text" id="search-input" name="name" placeholder="Search players...">
-        </div>
-        <div class="form-action-buttons">
-          <button class="btn solid" id="filter-button">Filter</button>
-          <button class="btn ghost" id="search-button">Search</button>
+          <div class="form-group" style="display: flex; align-items: flex-end; gap: 1rem;">
+            <div style="flex: 1;">
+              <label for="search-input">Player name </label>
+              <input type="text" id="search-input" name="name" placeholder="Search players...">
+            </div>
+            <div class="filters-actions" style="display: flex; gap: 0.5rem; align-items: flex-end;">
+              <button type="submit" class="btn small">Apply Filters</button>
+              <a href="{{ url_for('coach.view_transfer_market') }}" class="btn small ghost">Clear Filters</a>
+            </div>
+          </div>
         </div>
       </form>
     </div>
@@ -111,6 +112,17 @@
       {% endif %}
     </div>
   </div>
+  <style>
+    /* Remove number spinners for transfer market filters */
+    .create-card input[type="text"][inputmode="numeric"]::-webkit-outer-spin-button,
+    .create-card input[type="text"][inputmode="numeric"]::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    .create-card input[type="text"][inputmode="numeric"] {
+      -moz-appearance: textfield;
+    }
+  </style>
 </body>
 
 </html>
