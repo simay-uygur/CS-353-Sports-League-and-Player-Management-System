@@ -3124,8 +3124,11 @@ def fetch_player_trainings(player_id):
 def fetch_player_offers(player_id):
     """
     Fetch all offers and invites for a player.
-    Returns offers ordered by date (newest first).
-    Only returns offers when the player has no responsible coach (no team or team has no coach).
+    Returns a tuple: (pending_offers, past_offers)
+    - pending_offers: offers with status NULL and AvailableUntil > NOW()
+    - past_offers: expired offers or offers with accepted/rejected status
+    Only returns offers where PlayerTeamAtOfferTime IS NULL (player was free when offer was made).
+    If player was employed when offer was made, those offers are handled by the coach.
     """
     conn = get_connection()
     try:
@@ -3134,6 +3137,7 @@ def fetch_player_offers(player_id):
                 """
                 SELECT 
                     O.OfferID,
+                    O.OfferAmount,
                     O.AvailableUntil,
                     O.OfferedEndDate,
                     O.OfferStatus,
@@ -3148,20 +3152,28 @@ def fetch_player_offers(player_id):
                 JOIN Team T ON E.TeamID = T.TeamID
                 JOIN Users RC ON O.RequestingCoach = RC.UsersID
                 WHERE O.RequestedPlayer = %s
-                  AND NOT EXISTS (
-                      -- Check if player has a team with a coach
-                      SELECT 1
-                      FROM Employee PE
-                      JOIN Employee CE ON CE.TeamID = PE.TeamID
-                      JOIN Coach C2 ON CE.UsersID = C2.UsersID
-                      WHERE PE.UsersID = O.RequestedPlayer
-                        AND PE.TeamID IS NOT NULL
-                  )
+                  AND O.PlayerTeamAtOfferTime IS NULL
                 ORDER BY O.AvailableUntil DESC;
                 """,
                 (player_id,),
             )
-            return cur.fetchall()
+            all_offers = cur.fetchall()
+            
+            # Split into pending and past
+            now = datetime.now()
+            pending = []
+            past = []
+            
+            for offer in all_offers:
+                is_expired = offer['availableuntil'] < now
+                is_pending = offer['offerstatus'] is None and not is_expired
+                
+                if is_pending:
+                    pending.append(offer)
+                else:
+                    past.append(offer)
+            
+            return (pending, past)
     finally:
         conn.close()
 
