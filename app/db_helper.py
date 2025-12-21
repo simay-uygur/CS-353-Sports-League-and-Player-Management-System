@@ -519,14 +519,9 @@ def fetch_matches_grouped(tournament_id):
     """
     Fetch tournament bracket with all rounds (including those without matches).
     Returns rounds grouped by level (for display).
+    Levels increase as teams advance: first round = level 1, final = highest level.
     """
     
-    
-    def _round_level(round_no):
-        if round_no <= 0:
-            return 1
-        return math.floor(math.log2(round_no)) + 1
-  
     conn = get_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -553,11 +548,30 @@ def fetch_matches_grouped(tournament_id):
     finally:
         conn.close()
 
+    # Find the maximum depth (level) in the tournament
+    # The round_no follows: level 0 = 1 (final/root), level 1 = 2-3, level 2 = 4-7, etc.
+    # Leaves (first round matches) are at the highest internal level
+    if not rows:
+        return {}
+    
+    max_round_no = max(row["roundno"] for row in rows)
+    max_internal_level = math.floor(math.log2(max_round_no)) if max_round_no > 0 else 0
+    
+    def _round_level(round_no):
+        """Calculate display level: first round (leaves) = 1, final (root) = highest level"""
+        if round_no <= 0:
+            return max_internal_level + 1  # Root (final) is the highest display level
+        # Calculate the internal level (0-based from root, where root=0)
+        internal_level = math.floor(math.log2(round_no)) if round_no > 0 else 0
+        # Convert to display level: leaves (highest internal) = 1, root (0) = max_internal_level + 1
+        return max_internal_level - internal_level + 1
+
     grouped = defaultdict(list)
     for row in rows:
         level = _round_level(row["roundno"])
         grouped[level].append(row)
 
+    # Return sorted by level (1, 2, 3, ...) so first round appears first (left side)
     return dict(sorted(grouped.items()))
 
 def fetch_transferable_players(filters, coachid):

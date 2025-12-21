@@ -509,7 +509,7 @@ button:hover {
 
 .bracket-card {
     display: flex;
-    flex-direction: row-reverse; /* root on the right */
+    flex-direction: row; /* first round on the left, final on the right */
     gap: 1.5rem;
     overflow-x: auto;
     padding-bottom: 0.5rem;
@@ -945,7 +945,7 @@ button:hover {
     margin-bottom: 1.5rem;
     color: #0d121c;
     font-size: 1.1rem;
-    text-align: right;
+    text-align: left;
 }
 
 .level-rounds {
