@@ -224,12 +224,13 @@ def create_training():
         team_id = team_data["teamid"]
 
         if team_has_match_on_date(team_id, date_str):
-            error_msg = f"Cannot schedule training on {date_str}. Your team has a MATCH on this date!"
-            return render_template("coach_assign_training.html", error=error_msg)
+            flash(f"Cannot schedule training on {date_str}. Your team has a MATCH on this date!", "error")
+            return redirect(url_for("coach.create_training"))
 
         full_datetime = f"{date_str} {time_str}"
         create_training_session(coach_id, full_datetime, location, focus)
 
+        flash("Training session created successfully!", "success")
         return redirect(url_for("coach.view_trainings"))
 
     return render_template("coach_assign_training.html")

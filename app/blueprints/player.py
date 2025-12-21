@@ -36,36 +36,23 @@ def require_player_session():
 @player_bp.route("/home")
 def home():
     player_id = session.get("user_id")
-
-    # Fetch overall statistics for summary cards
+    
+    # Fetch overall statistics from PlayerStatsAll view
     overall_stats = fetch_player_stats_all(player_id)
-
-    # Fetch available seasons and leagues for filters
-    available_seasons = fetch_player_available_seasons(player_id)
-    available_leagues = fetch_player_available_leagues(player_id)
-
-    # Get filter parameters
-    league_id = request.args.get("league_id", type=int)
-    season_no = request.args.get("season_no", type=int)
-    season_year = request.args.get("season_year")
-
-    # Fetch season-specific stats if filters are provided
-    season_stats = None
-    if league_id is not None and season_no is not None and season_year:
-        season_stats = fetch_player_season_stats(
-            player_id, league_id, season_no, season_year
-        )
-
-    # Fetch tournament stats
+    
+    # Fetch all season stats from PlayerSeasonStats view
+    season_stats = fetch_player_season_stats(player_id)
+    
+    # Fetch tournament stats from PlayerTournamentStats view
     tournament_stats = fetch_player_tournament_stats(player_id)
-
-    # Get player info for display
+    
+    # Get player info for display (including Overall)
     conn = get_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 """
-                SELECT FirstName, LastName, IsEligible
+                SELECT FirstName, LastName, IsEligible, Overall
                 FROM Users u
                 JOIN Player p ON u.UsersID = p.UsersID
                 WHERE u.UsersID = %s;
@@ -75,18 +62,16 @@ def home():
             player_info = cur.fetchone()
     finally:
         conn.close()
-
+    
+    # Fetch all season stats (no filtering)
+    all_season_stats = fetch_player_season_stats(player_id)
+    
     return render_template(
         "home_player.html",
         player_info=player_info,
         overall_stats=overall_stats,
-        season_stats=season_stats,
+        season_stats=all_season_stats,
         tournament_stats=tournament_stats,
-        available_seasons=available_seasons,
-        available_leagues=available_leagues,
-        selected_league_id=league_id,
-        selected_season_no=season_no,
-        selected_season_year=season_year,
     )
 
 
@@ -164,9 +149,10 @@ def update_training_attendance(session_id):
 @player_bp.route("/offers")
 def view_offers():
     player_id = session.get("user_id")
-    offers = fetch_player_offers(player_id)
-
-    return render_template("player_offers.html", offers=offers)
+    pending_offers, past_offers = fetch_player_offers(player_id)
+    now = datetime.now()
+    
+    return render_template("player_offers.html", pending_offers=pending_offers, past_offers=past_offers, now=now)
 
 
 @player_bp.route("/offers/<int:offer_id>/evaluate", methods=["POST"])
@@ -174,8 +160,9 @@ def evaluate_offer(offer_id):
     player_id = session.get("user_id")
 
     # Verify the offer belongs to this player
-    offers = fetch_player_offers(player_id)
-    if not any(offer["offerid"] == offer_id for offer in offers):
+    pending_offers, past_offers = fetch_player_offers(player_id)
+    all_offers = pending_offers + past_offers
+    if not any(offer["offerid"] == offer_id for offer in all_offers):
         return redirect(url_for("player.view_offers"))
 
     decision = request.form.get("decision")

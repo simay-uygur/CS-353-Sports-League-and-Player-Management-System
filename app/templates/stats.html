@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Player Statistics</h2>
+
+<div class="card">
+  <h3 id="playerName">Loading...</h3>
+  <p id="seasonLabel">Season: 2025-2026</p>
+</div>
+
+<div class="form-grid">
+  <div class="stat-box">
+    <div>Goals Scored</div>
+    <div class="stat-value" id="statGoals">-</div>
+  </div>
+  <div class="stat-box">
+    <div>Matches Played</div>
+    <div class="stat-value" id="statMatches">-</div>
+  </div>
+  <div class="stat-box">
+    <div>Yellow Cards</div>
+    <div class="stat-value" id="statYellow">-</div>
+  </div>
+  <div class="stat-box">
+    <div>Red Cards</div>
+    <div class="stat-value" id="statRed">-</div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Example: Fetch stats for Player ID 5 in League 1, Season 1, Year 2025
+  const PID = 5;
+  const LID = 1;
+  const SNO = 1;
+  const SYEAR = '2025-01-01';
+
+  async function loadStats() {
+    // Calls API Source [1440]
+    const url = `${API_BASE}/stats/player/season?playerid=${PID}&leagueid=${LID}&seasonno=${SNO}&seasonyear=${SYEAR}`;
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (data.length > 0) {
+      const stats = data[0];
+      document.getElementById('playerName').innerText = `${stats.firstname} ${stats.lastname}`;
+      document.getElementById('statGoals').innerText = stats.total_goals || 0;
+      document.getElementById('statMatches').innerText = stats.total_appearences || 0;
+      document.getElementById('statYellow').innerText = stats.total_yellowcards || 0;
+      document.getElementById('statRed').innerText = stats.total_redcards || 0;
+    }
+  }
+
+  loadStats();
+</script>
+{% endblock %}

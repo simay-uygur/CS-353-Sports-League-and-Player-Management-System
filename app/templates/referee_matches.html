@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sports League | Referee Matches</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="dashboard-body">
+    {% include "_banner.html" %}
+    <main class="dashboard-container">
+        <header class="admin-header">
+            <div>
+                <p class="eyebrow">Referee Console</p>
+                <h1>Assigned Matches</h1>
+                <p class="subtitle">View and manage your assigned matches for today.</p>
+            </div>
+        </header>
+
+        <!-- Filters Section -->
+        <section class="filters-section">
+            <form class="filters-form" onsubmit="event.preventDefault(); fetchMatches();">
+                <div class="filters-main-row">
+                    <!-- League Filter Group -->
+                    <div class="filter-group-complete">
+                        <label for="league_search">League</label>
+                        <input type="search"
+                               id="league_search"
+                               class="league-search"
+                               placeholder="Search leagues"
+                               aria-label="Search leagues">
+                        <div class="checkbox-list league-checkbox-list">
+                            <label class="checkbox-line">
+                                <input type="checkbox"
+                                       id="league_all"
+                                       name="league_id"
+                                       value=""
+                                       checked>
+                                <span>All Leagues</span>
+                            </label>
+                            <!-- Leagues will be populated by JavaScript -->
+                        </div>
+                    </div>
+
+                    <!-- Tournament Filter Group -->
+                    <div class="filter-group-complete">
+                        <label for="tournament_search">Tournament</label>
+                        <input type="search"
+                               id="tournament_search"
+                               class="tournament-search"
+                               placeholder="Search tournaments"
+                               aria-label="Search tournaments">
+                        <div class="checkbox-list tournament-checkbox-list">
+                            <label class="checkbox-line">
+                                <input type="checkbox"
+                                       id="tournament_all"
+                                       name="tournament_id"
+                                       value=""
+                                       checked>
+                                <span>All Tournaments</span>
+                            </label>
+                            <!-- Tournaments will be populated by JavaScript -->
+                        </div>
+                    </div>
+
+                    <!-- Team Filter Group -->
+                    <div class="filter-group-complete">
+                        <label for="team_search">Team</label>
+                        <input type="search"
+                               id="team_search"
+                               class="team-search"
+                               placeholder="Search teams"
+                               aria-label="Search teams">
+                        <div class="checkbox-list team-checkbox-list">
+                            <label class="checkbox-line">
+                                <input type="checkbox"
+                                       id="team_all"
+                                       name="team_id"
+                                       value=""
+                                       checked>
+                                <span>All Teams</span>
+                            </label>
+                            <!-- Teams will be populated by JavaScript -->
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="filters-actions">
+                        <button type="button" class="btn small" onclick="fetchMatches()">Apply Filters</button>
+                        <button type="button" class="btn small ghost" onclick="clearFilters()">Clear Filters</button>
+                    </div>
+                </div>
+            </form>
+        </section>
+
+        <!-- Matches Section -->
+        <section class="matches-section">
+            <div class="league-section">
+                <div class="league-header">
+                    <div>
+                        <h2>Today's Matches</h2>
+                        <span class="badge seasonal">Assigned Matches</span>
+                    </div>
+                </div>
+
+                <div class="matches-table-container">
+                    <table class="matches-table">
+                        <thead>
+                            <tr>
+                                <th>Match</th>
+                                <th>Date & Time</th>
+                                <th>Score</th>
+                                <th>Winner</th>
+                                <th>Competition</th>
+                                <th>Match Type</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="matchesBody">
+                            <tr>
+                                <td colspan="7" style="text-align: center; padding: 2rem; color: #666;">
+                                    Loading matches...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // Hardcoded Referee ID for demo purposes (using session from Flask)
+        const REF_ID = {{ session["user_id"] }};
+        const API_BASE = '';
+
+        // Function to clear filters
+        function clearFilters() {
+            // Reset checkboxes
+            document.getElementById('league_all').checked = true;
+            document.querySelectorAll('.league-checkbox-list input[type="checkbox"]:not([value=""])').forEach(cb => cb.checked = false);
+            
+            document.getElementById('tournament_all').checked = true;
+            document.querySelectorAll('.tournament-checkbox-list input[type="checkbox"]:not([value=""])').forEach(cb => cb.checked = false);
+            
+            document.getElementById('team_all').checked = true;
+            document.querySelectorAll('.team-checkbox-list input[type="checkbox"]:not([value=""])').forEach(cb => cb.checked = false);
+            
+            // Clear search inputs
+            document.getElementById('league_search').value = '';
+            document.getElementById('tournament_search').value = '';
+            document.getElementById('team_search').value = '';
+            
+            // Show all checkbox lines
+            document.querySelectorAll('.checkbox-line.is-hidden').forEach(line => line.classList.remove('is-hidden'));
+            
+            fetchMatches();
+        }
+
+        // 1. Function to Populate Filters on Page Load
+        async function loadFilters() {
+            try {
+                // Fetch options from the backend (matches Source 992-1000)
+                const res = await fetch(`${API_BASE}/referee/filters`);
+                const data = await res.json();
+
+                // Populate teams (as checkboxes)
+                const teamList = document.querySelector('.team-checkbox-list');
+                [...data.teams].forEach(t => {
+                    const label = document.createElement('label');
+                    label.className = 'checkbox-line';
+                    label.setAttribute('data-team-search', t.teamname.toLowerCase());
+                    label.innerHTML = `
+                        <input type="checkbox"
+                               name="team_id"
+                               value="${t.teamid}">
+                        <span>${t.teamname}</span>
+                    `;
+                    teamList.appendChild(label);
+                });
+
+                // Populate leagues (as checkboxes)
+                const leagueList = document.querySelector('.league-checkbox-list');
+                [...data.leagues].forEach(l => {
+                    const label = document.createElement('label');
+                    label.className = 'checkbox-line';
+                    label.setAttribute('data-league-search', l.leaguename.toLowerCase());
+                    label.innerHTML = `
+                        <input type="checkbox"
+                               name="league_id"
+                               value="${l.leagueid}">
+                        <span>${l.leaguename}</span>
+                    `;
+                    leagueList.appendChild(label);
+                });
+
+                // Populate tournaments (as checkboxes)
+                const tournamentList = document.querySelector('.tournament-checkbox-list');
+                [...data.tournaments].forEach(t => {
+                    const label = document.createElement('label');
+                    label.className = 'checkbox-line';
+                    label.setAttribute('data-tournament-search', t.tournamentname.toLowerCase());
+                    label.innerHTML = `
+                        <input type="checkbox"
+                               name="tournament_id"
+                               value="${t.tournamentid}">
+                        <span>${t.tournamentname}</span>
+                    `;
+                    tournamentList.appendChild(label);
+                });
+
+                // Setup search functionality
+                setupSearchFilters();
+                // Setup "All" option logic
+                setupAllOptionLogic();
+
+            } catch (err) {
+                console.error("Failed to load filters:", err);
+            }
+        }
+
+        // Setup search functionality for filters
+        function setupSearchFilters() {
+            // League search
+            const leagueSearch = document.getElementById('league_search');
+            if (leagueSearch) {
+                leagueSearch.addEventListener("input", function (event) {
+                    const query = (event.target.value || "").toLowerCase().trim();
+                    const leagueRows = document.querySelectorAll(".league-checkbox-list .checkbox-line");
+                    leagueRows.forEach(row => {
+                        const haystack = (row.dataset.leagueSearch || row.innerText || "").toLowerCase();
+                        const match = !query || haystack.includes(query);
+                        row.classList.toggle("is-hidden", !match);
+                    });
+                });
+            }
+
+            // Tournament search
+            const tournamentSearch = document.getElementById('tournament_search');
+            if (tournamentSearch) {
+                tournamentSearch.addEventListener("input", function (event) {
+                    const query = (event.target.value || "").toLowerCase().trim();
+                    const tournamentRows = document.querySelectorAll(".tournament-checkbox-list .checkbox-line");
+                    tournamentRows.forEach(row => {
+                        const haystack = (row.dataset.tournamentSearch || row.innerText || "").toLowerCase();
+                        const match = !query || haystack.includes(query);
+                        row.classList.toggle("is-hidden", !match);
+                    });
+                });
+            }
+
+            // Team search
+            const teamSearch = document.getElementById('team_search');
+            if (teamSearch) {
+                teamSearch.addEventListener("input", function (event) {
+                    const query = (event.target.value || "").toLowerCase().trim();
+                    const teamRows = document.querySelectorAll(".team-checkbox-list .checkbox-line");
+                    teamRows.forEach(row => {
+                        const haystack = (row.dataset.teamSearch || row.innerText || "").toLowerCase();
+                        const match = !query || haystack.includes(query);
+                        row.classList.toggle("is-hidden", !match);
+                    });
+                });
+            }
+        }
+
+        // Handle "All" option logic - if "All" is checked, uncheck others; if any specific is checked, uncheck "All"
+        function setupAllOptionLogic() {
+            // League "All" logic
+            const leagueAll = document.getElementById('league_all');
+            const leagueCheckboxes = document.querySelectorAll('.league-checkbox-list input[type="checkbox"]:not([value=""])');
+            if (leagueAll) {
+                leagueAll.addEventListener("change", function() {
+                    if (this.checked) {
+                        leagueCheckboxes.forEach(cb => cb.checked = false);
+                    }
+                });
+            }
+            leagueCheckboxes.forEach(cb => {
+                cb.addEventListener("change", function() {
+                    if (this.checked && leagueAll) {
+                        leagueAll.checked = false;
+                    }
+                });
+            });
+
+            // Tournament "All" logic
+            const tournamentAll = document.getElementById('tournament_all');
+            const tournamentCheckboxes = document.querySelectorAll('.tournament-checkbox-list input[type="checkbox"]:not([value=""])');
+            if (tournamentAll) {
+                tournamentAll.addEventListener("change", function() {
+                    if (this.checked) {
+                        tournamentCheckboxes.forEach(cb => cb.checked = false);
+                    }
+                });
+            }
+            tournamentCheckboxes.forEach(cb => {
+                cb.addEventListener("change", function() {
+                    if (this.checked && tournamentAll) {
+                        tournamentAll.checked = false;
+                    }
+                });
+            });
+
+            // Team "All" logic
+            const teamAll = document.getElementById('team_all');
+            const teamCheckboxes = document.querySelectorAll('.team-checkbox-list input[type="checkbox"]:not([value=""])');
+            if (teamAll) {
+                teamAll.addEventListener("change", function() {
+                    if (this.checked) {
+                        teamCheckboxes.forEach(cb => cb.checked = false);
+                    }
+                });
+            }
+            teamCheckboxes.forEach(cb => {
+                cb.addEventListener("change", function() {
+                    if (this.checked && teamAll) {
+                        teamAll.checked = false;
+                    }
+                });
+            });
+        }
+
+        async function fetchMatches() {
+            // Get selected team IDs from checkboxes
+            const selectedTeams = Array.from(document.querySelectorAll('.team-checkbox-list input[type="checkbox"]:checked:not([value=""])'))
+                .map(cb => cb.value);
+            
+            // Get selected league IDs from checkboxes
+            const selectedLeagues = Array.from(document.querySelectorAll('.league-checkbox-list input[type="checkbox"]:checked:not([value=""])'))
+                .map(cb => cb.value);
+            
+            // Get selected tournament IDs from checkboxes
+            const selectedTournaments = Array.from(document.querySelectorAll('.tournament-checkbox-list input[type="checkbox"]:checked:not([value=""])'))
+                .map(cb => cb.value);
+
+            // Create query and its parameters
+            let url = `${API_BASE}/referee/matches?referee_id=${REF_ID}`;
+            
+            // Add all selected teams (comma-separated)
+            if (selectedTeams.length > 0) {
+                url += `&team_ids=${selectedTeams.join(',')}`;
+            }
+            
+            // Add all selected leagues (comma-separated)
+            if (selectedLeagues.length > 0) {
+                url += `&league_ids=${selectedLeagues.join(',')}`;
+            }
+            
+            // Add all selected tournaments (comma-separated)
+            if (selectedTournaments.length > 0) {
+                url += `&tournament_ids=${selectedTournaments.join(',')}`;
+            }
+
+            // Debug logging
+            console.log('Fetching matches with URL:', url);
+            console.log('Filters - Leagues:', selectedLeagues, 'Tournaments:', selectedTournaments, 'Teams:', selectedTeams);
+
+            try {
+                // Send the api request
+                const response = await fetch(url);
+                const matches = await response.json();
+                console.log('Received matches:', matches.length, 'matches');
+
+                const tbody = document.getElementById('matchesBody');
+                tbody.innerHTML = '';
+
+                if (matches.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding: 2rem; color: #666;">No matches found for the selected filters.</td></tr>';
+                    return;
+                }
+
+                // Set row values
+                matches.forEach(match => {
+                    const dateObj = new Date(match.matchstartdatetime);
+                    const formattedDate = dateObj.toLocaleDateString('en-US', { 
+                        year: 'numeric', 
+                        month: 'short', 
+                        day: 'numeric' 
+                    });
+                    const formattedTime = dateObj.toLocaleTimeString('en-US', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+
+                    let winnerText = 'Tied';
+                    if (match.winnerteam != undefined && match.winnerteam != null) {
+                        winnerText = match.winnerteam;
+                    }
+
+                    let scoreText = '<em>Pending</em>';
+                    if (match.hometeamscore != undefined && match.awayteamscore != undefined) {
+                        scoreText = `${match.hometeamscore} - ${match.awayteamscore}`;
+                    }
+
+                    const competitionName = match.competitionname || match.leaguename || 'Tournament';
+                    
+                    // Determine match type based on isleague field
+                    const matchType = match.isleague === true || match.isleague === 'true' || match.isleague === 1 
+                        ? 'Seasonal' 
+                        : 'Tournament';
+
+                    // Determine button based on lock status
+                    let actionButton;
+                    if (match.islocked) {
+                        actionButton = `<a href="/referee/match/${match.matchid}" class="btn small ghost">View Match Info</a>`;
+                    } else {
+                        actionButton = `<a href="/referee/match/${match.matchid}" class="btn small solid">Enter Match Info</a>`;
+                    }
+
+                    const row = document.createElement('tr');
+                    row.className = 'match-row';
+                    row.innerHTML = `
+                        <td class="match-teams">
+                            <strong>${match.hometeamname}</strong>
+                            vs<br>
+                            <strong>${match.awayteamname}</strong>
+                        </td>
+                        <td class="match-datetime">
+                            ${formattedDate}<br>
+                            ${formattedTime}
+                        </td>
+                        <td class="match-score">${scoreText}</td>
+                        <td class="match-winner">${winnerText}</td>
+                        <td class="match-competition">${competitionName}</td>
+                        <td class="match-type">${matchType}</td>
+                        <td class="match-action">
+                            ${actionButton}
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            } catch (error) {
+                console.error("Error fetching matches:", error);
+                const tbody = document.getElementById('matchesBody');
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding: 2rem; color: #c62828;">Error loading matches. Please try again.</td></tr>';
+            }
+        }
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', () => {
+            loadFilters();   // Load dropdown options
+            fetchMatches();  // Load initial matches
+        });
+    </script>
+</body>
+</html>

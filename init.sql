@@ -372,12 +372,18 @@ SELECT *
 FROM (
   SELECT
     m.MatchID,
+    m.HomeTeamID,
+    m.AwayTeamID,
     home.TeamName AS HomeTeamName,
     away.TeamName AS AwayTeamName,
+    m.hometeamscore,
+    m.awayteamscore,
+    m.winnerteam,
     m.MatchStartDatetime,
     l.Name AS CompetitionName,
     rma.RefereeID,
-    TRUE AS IsLeague
+    TRUE AS IsLeague,
+    m.IsLocked
   FROM Match m
   JOIN Team home ON m.HomeTeamID = home.TeamID
   JOIN Team away ON m.AwayTeamID = away.TeamID
@@ -389,12 +395,18 @@ FROM (
 
   SELECT
     m.MatchID,
+    m.HomeTeamID,
+    m.AwayTeamID,
     home.TeamName AS HomeTeamName,
     away.TeamName AS AwayTeamName,
+    m.hometeamscore,
+    m.awayteamscore,
+    m.winnerteam,
     m.MatchStartDatetime,
     t.Name AS CompetitionName,
     rma.RefereeID,
-    FALSE AS IsLeague
+    FALSE AS IsLeague,
+    m.IsLocked
   FROM Match m
   JOIN Team home ON m.HomeTeamID = home.TeamID
   JOIN Team away ON m.AwayTeamID = away.TeamID
@@ -725,8 +737,73 @@ FOR EACH ROW
 EXECUTE FUNCTION auto_create_plays_on_match_insert();
 
 
+-- Function to handle the logic of switching substitutes
+CREATE OR REPLACE FUNCTION handle_substitution_change()
+RETURNS TRIGGER AS $$
+DECLARE
+    target_play_id INT;
+BEGIN
+    -- Only proceed if the SubstitutionID has actually changed
+    IF (OLD.SubstitutionID IS DISTINCT FROM NEW.SubstitutionID) THEN
 
+        -- 1. Handle Removal of the OLD substitute (if one existed)
+        IF OLD.SubstitutionID IS NOT NULL THEN
+            -- Find the specific play record to delete based on the "closest start time" rule.
+            -- We look for the play record where the PlayerID matches the OLD substitute.
+            -- We assume the substitute's StartTime should have matched the original player's StopTime.
+            SELECT PlayID INTO target_play_id
+            FROM Play
+            WHERE MatchID = OLD.MatchID
+              AND PlayerID = OLD.SubstitutionID
+            -- Calculate absolute difference to find the closest time match
+            ORDER BY ABS(StartTime - COALESCE(OLD.StopTime, 0)) ASC
+            LIMIT 1;
 
+            -- If a matching record is found, delete it
+            IF target_play_id IS NOT NULL THEN
+                DELETE FROM Play WHERE PlayID = target_play_id;
+            END IF;
+        END IF;
+
+        -- 2. Handle Insertion of the NEW substitute (if one is provided)
+        IF NEW.SubstitutionID IS NOT NULL THEN
+            -- Insert a new record for the new substitute
+            -- They enter the game at the exact moment the original player leaves (NEW.StopTime)
+            INSERT INTO Play (
+                MatchID, 
+                PlayerID, 
+                SubstitutionID, 
+                StartTime, 
+                StopTime,
+                GoalsScored, 
+                PenaltiesScored, 
+                AssistsMade, 
+                TotalPasses, 
+                YellowCards, 
+                RedCards, 
+                Saves
+            )
+            VALUES (
+                NEW.MatchID,
+                NEW.SubstitutionID,
+                NULL, -- The incoming player is not yet substituted out
+                COALESCE(NEW.StopTime, 0), -- StartTime = StopTime of player leaving
+                NULL, -- StopTime is null (they are currently playing)
+                0, 0, 0, 0, 0, 0, 0 -- Initialize stats to 0
+            );
+        END IF;
+
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger definition
+CREATE TRIGGER trg_handle_substitution_change
+AFTER UPDATE OF SubstitutionID ON Play
+FOR EACH ROW
+EXECUTE FUNCTION handle_substitution_change();
 
 
 -- trigger to update scores on play insert, excluding tournament matches
@@ -926,6 +1003,95 @@ CREATE TRIGGER tr_accepted_transfer_offer
 AFTER UPDATE ON Offer
 FOR EACH ROW
 EXECUTE FUNCTION handle_accepted_transfer_offer();
+
+-- ===== TRIGGER: Update Play records when employment ends =====
+-- Purpose: When a player's employment ends, delete their Play records for future matches
+--          (only for matches where they were on the old team)
+CREATE OR REPLACE FUNCTION handle_employment_end()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_player_id INT;
+    v_team_id INT;
+BEGIN
+    -- Only process if EndDate is being set to NOW() or a past date
+    -- and it wasn't already in the past
+    IF NEW.EndDate <= NOW() AND (OLD.EndDate IS NULL OR OLD.EndDate > NOW()) THEN
+        -- Get the player and team from the Employed table
+        SELECT em.UsersID, em.TeamID
+        INTO v_player_id, v_team_id
+        FROM Employed em
+        WHERE em.EmploymentID = NEW.EmploymentID
+        LIMIT 1;
+        
+        -- Only proceed if we found the employment record
+        IF v_player_id IS NOT NULL AND v_team_id IS NOT NULL THEN
+            -- Delete Play records for future matches where the player was on this team
+            DELETE FROM Play
+            WHERE PlayerID = v_player_id
+              AND MatchID IN (
+                  SELECT MatchID
+                  FROM Match
+                  WHERE MatchStartDatetime > NOW()
+                    AND (HomeTeamID = v_team_id OR AwayTeamID = v_team_id)
+              );
+        END IF;
+    END IF;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_employment_end
+AFTER UPDATE OF EndDate ON Employment
+FOR EACH ROW
+EXECUTE FUNCTION handle_employment_end();
+
+-- ===== TRIGGER: Update Play records when employment starts =====
+-- Purpose: When a player starts new employment, create Play records for future matches
+--          where their new team is involved
+CREATE OR REPLACE FUNCTION handle_employment_start()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_player_id INT;
+    v_team_id INT;
+    v_start_date TIMESTAMP;
+    v_end_date TIMESTAMP;
+BEGIN
+    -- Get employment details
+    SELECT e.StartDate, e.EndDate
+    INTO v_start_date, v_end_date
+    FROM Employment e
+    WHERE e.EmploymentID = NEW.EmploymentID;
+    
+    v_player_id := NEW.UsersID;
+    v_team_id := NEW.TeamID;
+    
+    -- Only process if employment is active (not in the past)
+    IF v_start_date IS NOT NULL AND v_end_date IS NOT NULL AND v_end_date >= NOW() THEN
+        -- Insert Play records for future matches where the new team is involved
+        INSERT INTO Play (MatchID, PlayerID)
+        SELECT m.MatchID, v_player_id
+        FROM Match m
+        WHERE (m.HomeTeamID = v_team_id OR m.AwayTeamID = v_team_id)
+          AND m.MatchStartDatetime > NOW()
+          AND m.MatchStartDatetime >= v_start_date
+          AND m.MatchStartDatetime <= v_end_date
+          AND NOT EXISTS (
+              SELECT 1
+              FROM Play p
+              WHERE p.MatchID = m.MatchID
+                AND p.PlayerID = v_player_id
+          );
+    END IF;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_employment_start
+AFTER INSERT ON Employed
+FOR EACH ROW
+EXECUTE FUNCTION handle_employment_start();
 
 -- sample data ---------------------------------------------------------------
 INSERT INTO Users (
@@ -1192,7 +1358,7 @@ insert_users AS (
     email,
     'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-1002', TO_DATE('1990-01-01','YYYY-MM-DD'),
     'player',
-    'Local'
+    (ARRAY['USA', 'Canada', 'UK', 'Spain', 'France', 'Germany', 'Italy', 'Brazil', 'Argentina', 'Mexico', 'Japan', 'South Korea', 'Australia', 'Netherlands', 'Portugal', 'Turkey', 'Russia', 'Poland', 'Sweden', 'Norway', 'Denmark', 'Belgium', 'Switzerland', 'Greece', 'Egypt', 'Morocco', 'Nigeria', 'South Africa', 'India', 'China'])[1 + floor(random() * 30)::int]
   FROM numbered_players
   RETURNING UsersID, Email
 ),
@@ -1291,3 +1457,202 @@ BEGIN
     ON CONFLICT (SessionID, PlayerID) DO NOTHING;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Migrate password storage away from CHAR padding
+ALTER TABLE Users ALTER COLUMN HashedPassword TYPE TEXT;
+ALTER TABLE Users ALTER COLUMN Salt TYPE TEXT;
+UPDATE Users SET HashedPassword = RTRIM(HashedPassword);
+UPDATE Users SET Salt = RTRIM(Salt);
+
+
+
+---------------------------------------------------------------------------------------------------------------------------
+
+-- 1. Create a Test Referee
+-- Email: ref_test@example.com, Password: (Matches your hashed sample)
+INSERT INTO Users (FirstName, LastName, Email, HashedPassword, Salt, BirthDate, Role, Nationality)
+VALUES ('Test', 'Referee', 'ref_test@example.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1985-05-20', 'referee', 'USA');
+
+INSERT INTO Referee (UsersID, Certification)
+SELECT UsersID, 'FIFA Pro' FROM Users WHERE Email = 'ref_test@example.com';
+
+-- 2. Create Team Owners
+INSERT INTO Users (FirstName, LastName, Email, HashedPassword, Salt, BirthDate, Role, Nationality)
+VALUES 
+('Owner', 'Red', 'owner_red@example.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1970-01-01', 'team_owner', 'USA'),
+('Owner', 'Blue', 'owner_blue@example.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1972-01-01', 'team_owner', 'UK');
+
+INSERT INTO TeamOwner (UsersID, NetWorth)
+SELECT UsersID, 5000000 FROM Users WHERE Email IN ('owner_red@example.com', 'owner_blue@example.com');
+
+-- 3. Create Teams
+INSERT INTO Team (OwnerID, TeamName, EstablishedDate, HomeVenue)
+VALUES 
+((SELECT UsersID FROM Users WHERE Email = 'owner_red@example.com'), 'Red Dragons', '2020-01-01', 'Dragon Pit'),
+((SELECT UsersID FROM Users WHERE Email = 'owner_blue@example.com'), 'Blue Knights', '2020-01-01', 'Castle Arena');
+
+-- 4. Create Players, Employees, and Contracts
+-- We perform a bulk insert logic here to ensure they are "Employed" BEFORE the match is created.
+
+WITH new_players AS (
+    INSERT INTO Users (FirstName, LastName, Email, HashedPassword, Salt, BirthDate, Role, Nationality)
+    VALUES 
+    -- Red Team Players
+    ('John', 'Striker', 'p_red1@example.com', 'hash', 'salt', '1998-01-01', 'player', 'USA'),
+    ('Mike', 'Mid', 'p_red2@example.com', 'hash', 'salt', '1999-01-01', 'player', 'USA'),
+    ('Steve', 'Defender', 'p_red3@example.com', 'hash', 'salt', '1997-01-01', 'player', 'USA'),
+    ('Dave', 'Goalie', 'p_red4@example.com', 'hash', 'salt', '1996-01-01', 'player', 'USA'),
+    ('Tom', 'Bench', 'p_red5@example.com', 'hash', 'salt', '2000-01-01', 'player', 'USA'),
+    -- Blue Team Players
+    ('Alex', 'Forward', 'p_blue1@example.com', 'hash', 'salt', '1998-05-01', 'player', 'UK'),
+    ('Ben', 'Winger', 'p_blue2@example.com', 'hash', 'salt', '1999-05-01', 'player', 'UK'),
+    ('Chris', 'Back', 'p_blue3@example.com', 'hash', 'salt', '1997-05-01', 'player', 'UK'),
+    ('Dan', 'Keeper', 'p_blue4@example.com', 'hash', 'salt', '1996-05-01', 'player', 'UK'),
+    ('Eric', 'Sub', 'p_blue5@example.com', 'hash', 'salt', '2000-05-01', 'player', 'UK')
+    RETURNING UsersID, Email
+),
+-- Insert into Player Subtype
+player_subtype AS (
+    INSERT INTO Player (UsersID, Height, Weight, Overall, Position, IsEligible)
+    SELECT UsersID, 180, 75, '80', 'Midfielder', 'Yes' FROM new_players
+    RETURNING UsersID
+),
+-- Insert into Employee Subtype and Assign Team
+employee_assign AS (
+    INSERT INTO Employee (UsersID, TeamID)
+    SELECT 
+        np.UsersID, 
+        CASE 
+            WHEN np.Email LIKE '%red%' THEN (SELECT TeamID FROM Team WHERE TeamName = 'Red Dragons')
+            ELSE (SELECT TeamID FROM Team WHERE TeamName = 'Blue Knights')
+        END
+    FROM new_players np
+    RETURNING UsersID, TeamID
+),
+-- Create Employment Contract (Must be active NOW for trigger to work)
+employment_contract AS (
+    INSERT INTO Employment (StartDate, EndDate, Salary)
+    SELECT '2023-01-01', '2030-12-31', 100000
+    FROM new_players
+    RETURNING EmploymentID
+),
+-- Link Employment to Employee
+employed_link AS (
+    INSERT INTO Employed (EmploymentID, UsersID, TeamID)
+    SELECT 
+        ec.EmploymentID, 
+        ea.UsersID, 
+        ea.TeamID
+    FROM 
+        (SELECT EmploymentID, ROW_NUMBER() OVER () as rn FROM employment_contract) ec
+    JOIN 
+        (SELECT UsersID, TeamID, ROW_NUMBER() OVER () as rn FROM employee_assign) ea
+    ON ec.rn = ea.rn
+)
+SELECT count(*) as players_created FROM new_players;
+
+-- 5. Create League and Season
+INSERT INTO League (Name) VALUES ('Premier Test League') ON CONFLICT DO NOTHING;
+
+INSERT INTO Season (LeagueID, SeasonNo, SeasonYear, StartDate, EndDate, PrizePool)
+VALUES (
+    (SELECT LeagueID FROM League WHERE Name = 'Premier Test League'),
+    1,
+    '2025-01-01',
+    '2025-01-01',
+    '2025-12-31',
+    1000000
+) ON CONFLICT DO NOTHING;
+
+-- 6. Create the MATCH
+-- IMPORTANT: Because the players are already inserted and have active Employment records,
+-- the trigger 'trg_auto_create_plays_on_match_insert' will fire immediately after this INSERT.
+-- It will populate the 'Play' table for the 10 players created above.
+
+INSERT INTO Match (
+    HomeTeamID, AwayTeamID, MatchStartDatetime, MatchEndDatetime, 
+    VenuePlayed, HomeTeamName, AwayTeamName, 
+    HomeTeamScore, AwayTeamScore, WinnerTeam, IsLocked
+)
+VALUES (
+    (SELECT TeamID FROM Team WHERE TeamName = 'Red Dragons'),
+    (SELECT TeamID FROM Team WHERE TeamName = 'Blue Knights'),
+    NOW(),
+    NOW() + INTERVAL '2 hours',
+    'Dragon Pit',
+    'Red Dragons',
+    'Blue Knights',
+    0, 0, NULL, FALSE
+);
+
+-- Link Match to Season
+INSERT INTO SeasonalMatch (MatchID, LeagueID, SeasonNo, SeasonYear)
+VALUES (
+    (SELECT MAX(MatchID) FROM Match),
+    (SELECT LeagueID FROM League WHERE Name = 'Premier Test League'),
+    1,
+    '2025-01-01'
+);
+
+-- 7. Assign Referee to Match
+-- This allows the UI to filter "My Matches" for the logged-in referee
+INSERT INTO RefereeMatchAttendance (MatchID, RefereeID)
+VALUES (
+    (SELECT MAX(MatchID) FROM Match),
+    (SELECT UsersID FROM Users WHERE Email = 'ref_test@example.com'));
+
+-- Players without teams (no employment records)
+-- These players exist as Users, Employees (with NULL TeamID), and Players, but have no Employment records
+INSERT INTO Users (
+  FirstName,
+  LastName,
+  Email,
+  HashedPassword,
+  Salt,
+  PasswordDate,
+  PhoneNumber,
+  BirthDate,
+  Role,
+  Nationality
+) VALUES
+  ('Jake', 'Freeman', 'free1@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-2001', TO_DATE('1995-03-15','YYYY-MM-DD'), 'player', 'USA'),
+  ('Marcus', 'Wilder', 'free2@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-2002', TO_DATE('1996-07-22','YYYY-MM-DD'), 'player', 'Canada'),
+  ('Oscar', 'Mitchell', 'free3@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-2003', TO_DATE('1994-11-08','YYYY-MM-DD'), 'player', 'UK'),
+  ('Ryan', 'Bennett', 'free4@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-2004', TO_DATE('1997-02-14','YYYY-MM-DD'), 'player', 'Australia'),
+  ('Victor', 'Garcia', 'free5@gmail.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e','2025-11-28 15:05:59.408963','555-2005', TO_DATE('1993-09-30','YYYY-MM-DD'), 'player', 'Spain');
+
+-- Insert these players as Employees with NULL TeamID (no team assignment)
+INSERT INTO Employee (UsersID, TeamID)
+SELECT u.UsersID, NULL
+FROM Users u
+WHERE u.Email IN ('free1@gmail.com', 'free2@gmail.com', 'free3@gmail.com', 'free4@gmail.com', 'free5@gmail.com');
+
+-- Insert these players into the Player table
+INSERT INTO Player (UsersID, Height, Weight, Overall, Position, IsEligible)
+SELECT 
+  u.UsersID,
+  CASE u.Email
+    WHEN 'free1@gmail.com' THEN 182
+    WHEN 'free2@gmail.com' THEN 185
+    WHEN 'free3@gmail.com' THEN 178
+    WHEN 'free4@gmail.com' THEN 188
+    ELSE 192
+  END,
+  CASE u.Email
+    WHEN 'free1@gmail.com' THEN 76
+    WHEN 'free2@gmail.com' THEN 79
+    WHEN 'free3@gmail.com' THEN 74
+    WHEN 'free4@gmail.com' THEN 82
+    ELSE 85
+  END,
+  '82',
+  CASE u.Email
+    WHEN 'free1@gmail.com' THEN 'Forward'
+    WHEN 'free2@gmail.com' THEN 'Midfielder'
+    WHEN 'free3@gmail.com' THEN 'Defender'
+    WHEN 'free4@gmail.com' THEN 'Midfielder'
+    ELSE 'Goalkeeper'
+  END,
+  'eligible'
+FROM Users u
+WHERE u.Email IN ('free1@gmail.com', 'free2@gmail.com', 'free3@gmail.com', 'free4@gmail.com', 'free5@gmail.com');

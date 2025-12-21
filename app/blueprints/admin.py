@@ -321,12 +321,13 @@ def assign_match_referee(match_id, referee_id=None):
         abort(403)
     
     ref_id = referee_id or request.form.get("referee_id")
+    league_id = request.form.get("league_id") or request.args.get("league_id")
     try:
         assign_referee_to_match(match_id, int(ref_id))
     except psycopg2.Error:
         pass  # Silent fail if already assigned
     
-    return redirect(url_for("admin.match_referee_assignment", match_id=match_id))
+    return redirect(url_for("admin.match_referee_assignment", match_id=match_id, league_id=league_id))
 
 
 @admin_bp.route("/matches/<int:match_id>/referees/<int:referee_id>/remove", methods=["POST"])
@@ -342,7 +343,8 @@ def remove_match_referee(match_id, referee_id):
         abort(403)
     
     remove_referee_from_match(match_id, referee_id)
-    return redirect(url_for("admin.match_referee_assignment", match_id=match_id))
+    league_id = request.form.get("league_id") or request.args.get("league_id")
+    return redirect(url_for("admin.match_referee_assignment", match_id=match_id, league_id=league_id))
 
 
 @admin_bp.route("/leagues/<int:league_id>/teams/add", methods=["GET", "POST"])
@@ -394,6 +396,7 @@ def create_season_match_form(league_id, season_no, season_year):
             abort(404)
         league_name = league[0]["name"] if league else "Unknown League"
         teams = fetch_league_teams(league_id)
+        season_start, season_end = fetch_season_dates(league_id, season_no, season_year)
         return render_template(
             "admin_create_season_match.html",
             league_id=league_id,
@@ -403,6 +406,8 @@ def create_season_match_form(league_id, season_no, season_year):
             teams=teams,
             error_message=error_message,
             form_data=request.form,
+            season_start=season_start,
+            season_end=season_end,
         )
 
     if request.method == "GET":
@@ -413,7 +418,6 @@ def create_season_match_form(league_id, season_no, season_year):
     home_team_id = request.form.get("home_team_id")
     away_team_id = request.form.get("away_team_id")
     start_dt_raw = request.form.get("start_datetime")
-    venue = request.form.get("venue") or None
 
     missing_bits = []
     if not home_team_id:
@@ -442,6 +446,19 @@ def create_season_match_form(league_id, season_no, season_year):
                 f"Cannot create match: the {', '.join(conflicts)} already has a match on {match_date}."
             )
 
+    # Validate match date is within season start/end dates
+    season_start, season_end = fetch_season_dates(league_id, season_no, season_year)
+    if season_start and season_end and normalized_start:
+        match_datetime = datetime.strptime(normalized_start, "%Y-%m-%d %H:%M:%S")
+        if match_datetime < season_start:
+            return _render_form(
+                f"Match date cannot be before season start date ({season_start.strftime('%Y-%m-%d %H:%M')})."
+            )
+        if match_datetime > season_end:
+            return _render_form(
+                f"Match date cannot be after season end date ({season_end.strftime('%Y-%m-%d %H:%M')})."
+            )
+
     try:
         create_season_match(
             league_id,
@@ -450,7 +467,6 @@ def create_season_match_form(league_id, season_no, season_year):
             int(home_team_id),
             int(away_team_id),
             normalized_start,
-            venue,
         )
     except ValueError as exc:
         return _render_form(str(exc))
@@ -564,6 +580,72 @@ def unlock_match(match_id):
     return redirect(url_for("admin.view_seasonal_matches_lock"))
 
 
+@admin_bp.route("/rankings/teams")
+def team_rankings():
+    """Display team rankings with optional filters."""
+    admin_id = session.get("user_id")
+    if not admin_id:
+        return redirect(url_for("login"))
+    
+    # Get filter parameters
+    league_id = request.args.get("league_id")
+    league_id = int(league_id) if league_id else None
+    season_no = request.args.get("season_no")
+    season_no = int(season_no) if season_no else None
+    season_year = request.args.get("season_year")
+    season_year = datetime.strptime(season_year, "%Y-%m-%d").date() if season_year else None
+    
+    # Fetch rankings
+    rankings = fetch_team_rankings(league_id, season_no, season_year)
+    
+    # Fetch filter options
+    leagues = fetch_leagues_for_dropdown()
+    seasons = fetch_all_seasons_for_dropdown()
+    
+    return render_template(
+        "admin_team_rankings.html",
+        rankings=rankings,
+        leagues=leagues,
+        seasons=seasons,
+        selected_league_id=league_id,
+        selected_season_no=season_no,
+        selected_season_year=season_year,
+    )
+
+
+@admin_bp.route("/rankings/players")
+def player_rankings():
+    """Display player rankings with optional filters."""
+    admin_id = session.get("user_id")
+    if not admin_id:
+        return redirect(url_for("login"))
+    
+    # Get filter parameters
+    league_id = request.args.get("league_id")
+    league_id = int(league_id) if league_id else None
+    season_no = request.args.get("season_no")
+    season_no = int(season_no) if season_no else None
+    season_year = request.args.get("season_year")
+    season_year = datetime.strptime(season_year, "%Y-%m-%d").date() if season_year else None
+    
+    # Fetch rankings
+    rankings = fetch_player_rankings(league_id, season_no, season_year)
+    
+    # Fetch filter options
+    leagues = fetch_leagues_for_dropdown()
+    seasons = fetch_all_seasons_for_dropdown()
+    
+    return render_template(
+        "admin_player_rankings.html",
+        rankings=rankings,
+        leagues=leagues,
+        seasons=seasons,
+        selected_league_id=league_id,
+        selected_season_no=season_no,
+        selected_season_year=season_year,
+    )
+
+
 @admin_bp.route("/reports", methods=["GET", "POST"])
 def reports():
     admin_id = session.get("user_id")
@@ -579,33 +661,43 @@ def reports():
         report_type = request.form.get("report_type")
         try:
             if report_type == "players":
+                player_ids = request.form.getlist("player_id")
+                player_ids = [_to_int(pid, "Player ID") for pid in player_ids if pid] if player_ids else None
                 players_report = report_players({
-                    "player_id": _to_int(request.form.get("player_id"), "Player ID") if request.form.get("player_id") else None,
+                    "player_ids": player_ids,
                     "currently_employed": bool(request.form.get("currently_employed")),
                     "employed_before": request.form.get("employed_before"),
                     "employed_after": request.form.get("employed_after"),
                     "ended_before": request.form.get("ended_before"),
                     "ended_after": request.form.get("ended_after"),
+                    "min_goals": _to_int(request.form.get("min_goals"), "Min Goals") if request.form.get("min_goals") else None,
+                    "min_assists": _to_int(request.form.get("min_assists"), "Min Assists") if request.form.get("min_assists") else None,
+                    "min_appearances": _to_int(request.form.get("min_appearances"), "Min Appearances") if request.form.get("min_appearances") else None,
+                    "min_yellow_cards": _to_int(request.form.get("min_yellow_cards"), "Min Yellow Cards") if request.form.get("min_yellow_cards") else None,
+                    "min_red_cards": _to_int(request.form.get("min_red_cards"), "Min Red Cards") if request.form.get("min_red_cards") else None,
+                    "min_saves": _to_int(request.form.get("min_saves"), "Min Saves") if request.form.get("min_saves") else None,
                 })
             elif report_type == "standings":
                 league_id = _to_int(request.form.get("league_id"), "League ID", required=True)
-                season_no = _to_int(request.form.get("season_no"), "Season No", required=True)
-                season_year = request.form.get("season_year")
-                if not season_year:
-                    raise ValueError("Season year is required.")
+                season_no = _to_int(request.form.get("season_no"), "Season No") if request.form.get("season_no") else None
+                season_year = request.form.get("season_year") or None
                 standings_report = report_league_standings(league_id, season_no, season_year)
             elif report_type == "attendance":
                 date_from = request.form.get("date_from") or None
                 date_to = request.form.get("date_to") or None
-                player_id = _to_int(request.form.get("player_id"), "Player ID") if request.form.get("player_id") else None
+                player_ids = request.form.getlist("player_id")
+                player_ids = [_to_int(pid, "Player ID") for pid in player_ids if pid] if player_ids else None
+                session_ids = request.form.getlist("session_id")
+                session_ids = [_to_int(sid, "Session ID") for sid in session_ids if sid] if session_ids else None
                 team_id = _to_int(request.form.get("team_id"), "Team ID") if request.form.get("team_id") else None
-                all_teams = bool(request.form.get("all_teams"))
-                attendance_report = report_player_attendance(date_from, date_to, player_id, team_id, all_teams)
+                attendance_report = report_player_attendance(date_from, date_to, player_ids, session_ids, team_id, False)
         except ValueError as exc:
             error_message = str(exc)
 
     leagues = fetch_all_leagues()
     teams = fetch_all_teams()
+    players = fetch_all_players()
+    training_sessions = fetch_all_training_sessions()
     return render_template(
         "admin_reports.html",
         error_message=error_message,
@@ -614,6 +706,8 @@ def reports():
         attendance_report=attendance_report,
         leagues=leagues,
         teams=teams,
+        players=players,
+        training_sessions=training_sessions,
     )
 
 
@@ -628,15 +722,22 @@ def download_report_pdf():
     
     try:
         if report_type == "players":
-            player_id = request.form.get("player_id")
+            player_ids = request.form.getlist("player_id")
+            player_ids = [_to_int(pid, "Player ID") for pid in player_ids if pid] if player_ids else None
             currently_employed = request.form.get("currently_employed")
             employed_before = request.form.get("employed_before")
             employed_after = request.form.get("employed_after")
             ended_before = request.form.get("ended_before")
             ended_after = request.form.get("ended_after")
+            min_goals = request.form.get("min_goals")
+            min_assists = request.form.get("min_assists")
+            min_appearances = request.form.get("min_appearances")
+            min_yellow_cards = request.form.get("min_yellow_cards")
+            min_red_cards = request.form.get("min_red_cards")
+            min_saves = request.form.get("min_saves")
             
-            if player_id:
-                filter_info.append(f"Player ID: {player_id}")
+            if player_ids:
+                filter_info.append(f"Player IDs: {', '.join(map(str, player_ids))}")
             if currently_employed:
                 filter_info.append("Currently Employed: Yes")
             if employed_before:
@@ -647,17 +748,35 @@ def download_report_pdf():
                 filter_info.append(f"Ended Before: {ended_before}")
             if ended_after:
                 filter_info.append(f"Ended After: {ended_after}")
+            if min_goals:
+                filter_info.append(f"Min Goals: {min_goals}")
+            if min_assists:
+                filter_info.append(f"Min Assists: {min_assists}")
+            if min_appearances:
+                filter_info.append(f"Min Appearances: {min_appearances}")
+            if min_yellow_cards:
+                filter_info.append(f"Min Yellow Cards: {min_yellow_cards}")
+            if min_red_cards:
+                filter_info.append(f"Min Red Cards: {min_red_cards}")
+            if min_saves:
+                filter_info.append(f"Min Saves: {min_saves}")
             
             data = report_players({
-                "player_id": _to_int(player_id, "Player ID") if player_id else None,
+                "player_ids": player_ids,
                 "currently_employed": bool(currently_employed),
                 "employed_before": employed_before,
                 "employed_after": employed_after,
                 "ended_before": ended_before,
                 "ended_after": ended_after,
+                "min_goals": _to_int(min_goals, "Min Goals") if min_goals else None,
+                "min_assists": _to_int(min_assists, "Min Assists") if min_assists else None,
+                "min_appearances": _to_int(min_appearances, "Min Appearances") if min_appearances else None,
+                "min_yellow_cards": _to_int(min_yellow_cards, "Min Yellow Cards") if min_yellow_cards else None,
+                "min_red_cards": _to_int(min_red_cards, "Min Red Cards") if min_red_cards else None,
+                "min_saves": _to_int(min_saves, "Min Saves") if min_saves else None,
             })
             title = "Player Report"
-            headers = ["Name", "Email", "Position", "Team", "Start", "End"]
+            headers = ["Name", "Email", "Position", "Team", "Start", "End", "Goals", "Assists", "Apps", "YC", "RC", "Saves"]
             rows = [
                 [
                     f"{row['firstname']} {row['lastname']}",
@@ -666,20 +785,26 @@ def download_report_pdf():
                     row["teamname"] or "Unassigned",
                     row["startdate"].strftime("%Y-%m-%d") if row["startdate"] else "",
                     row["enddate"].strftime("%Y-%m-%d") if row["enddate"] else "",
+                    row["total_goals"] or 0,
+                    row["total_assists"] or 0,
+                    row["total_appearances"] or 0,
+                    row["total_yellowcards"] or 0,
+                    row["total_redcards"] or 0,
+                    row["total_saves"] or 0,
                 ]
                 for row in data
             ]
             filename = "player-report.pdf"
         elif report_type == "standings":
             league_id = _to_int(request.form.get("league_id"), "League ID", required=True)
-            season_no = _to_int(request.form.get("season_no"), "Season No", required=True)
-            season_year = request.form.get("season_year")
-            if not season_year:
-                raise ValueError("Season year is required.")
+            season_no = _to_int(request.form.get("season_no"), "Season No") if request.form.get("season_no") else None
+            season_year = request.form.get("season_year") or None
             
             filter_info.append(f"League ID: {league_id}")
-            filter_info.append(f"Season No: {season_no}")
-            filter_info.append(f"Season Year: {season_year}")
+            if season_no is not None:
+                filter_info.append(f"Season No: {season_no}")
+            if season_year is not None:
+                filter_info.append(f"Season Year: {season_year}")
             
             data = report_league_standings(league_id, season_no, season_year)
             title = f"League Standings"
@@ -701,29 +826,32 @@ def download_report_pdf():
         elif report_type == "attendance":
             date_from = request.form.get("date_from") or None
             date_to = request.form.get("date_to") or None
-            player_id = request.form.get("player_id")
+            player_ids = request.form.getlist("player_id")
+            player_ids = [_to_int(pid, "Player ID") for pid in player_ids if pid] if player_ids else None
+            session_ids = request.form.getlist("session_id")
+            session_ids = [_to_int(sid, "Session ID") for sid in session_ids if sid] if session_ids else None
             team_id = request.form.get("team_id")
-            all_teams = request.form.get("all_teams")
             
             if date_from:
                 filter_info.append(f"Date From: {date_from}")
             if date_to:
                 filter_info.append(f"Date To: {date_to}")
-            if player_id:
-                filter_info.append(f"Player ID: {player_id}")
+            if player_ids:
+                filter_info.append(f"Player IDs: {', '.join(map(str, player_ids))}")
+            if session_ids:
+                filter_info.append(f"Session IDs: {', '.join(map(str, session_ids))}")
             if team_id:
                 filter_info.append(f"Team ID: {team_id}")
-            if all_teams:
-                filter_info.append("All Teams: Yes")
             if not filter_info:
                 filter_info.append("All Trainings")
             
             data = report_player_attendance(
                 date_from,
                 date_to,
-                _to_int(player_id, "Player ID") if player_id else None,
+                player_ids,
+                session_ids,
                 _to_int(team_id, "Team ID") if team_id else None,
-                bool(all_teams)
+                False
             )
             title = "Training Attendance Report"
             headers = ["Player", "Appearances"]
