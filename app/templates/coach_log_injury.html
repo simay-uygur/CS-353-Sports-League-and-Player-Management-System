@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Log Injury</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="dashboard-body">
+    {% include "_banner.html" %}
+    <main class="dashboard-container">
+        <header class="admin-header">
+            <h1>Log Injury: {{ player.firstname }} {{ player.lastname }}</h1>
+            <a href="{{ url_for('coach.view_team') }}" class="back-link">Cancel</a>
+        </header>
+        <div class="card">
+            <form method="POST">
+                <div class="form-group">
+                    <label>Injury Type</label>
+                    <select name="injury_type" class="form-control">
+                        <option value="Muscle Strain">Muscle Strain</option>
+                        <option value="Ligament Damage">Ligament Damage</option>
+                        <option value="Fracture">Fracture</option>
+                        <option value="Concussion">Concussion</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea name="description" rows="3" class="form-control"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Expected Recovery Date</label>
+                    <input type="date" name="recovery_date" required class="form-control">
+                </div>
+                <div class="alert warning">
+                    Note: Submitting this will mark the player as <strong>Ineligible</strong>.
+                </div>
+                <button type="submit" class="btn solid destructive">Report Injury</button>
+            </form>
+        </div>
+    </main>
+</body>
+</html>
