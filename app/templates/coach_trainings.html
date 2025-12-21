@@ -12,6 +12,20 @@
             <h1>Scheduled Trainings</h1>
             <a href="{{ url_for('coach.create_training') }}" class="btn solid">New Training</a>
         </header>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <div class="flash-messages" style="margin-bottom: 20px;">
+              {% for category, message in messages %}
+                <div class="alert {{ category }}" style="padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; font-weight: bold;
+                     background-color: {{ '#fee2e2' if category == 'error' else '#dcfce7' }}; 
+                     color: {{ '#991b1b' if category == 'error' else '#166534' }};
+                     border: 1px solid {{ '#f87171' if category == 'error' else '#86efac' }};">
+                  {{ message }}
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
         <div class="table-card">
             <table class="simple-table">
                 <thead>

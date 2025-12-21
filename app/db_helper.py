@@ -3340,10 +3340,10 @@ def create_training_session(coach_id, session_date, location, focus):
             # Fetch the generated ID
             session_id = cur.fetchone()[0]
             
+            conn.commit()
             # 2. Automatically create attendance records for the team
             init_session_attendance(session_id, coach_id)
 
-            conn.commit()
             return session_id
     finally:
         conn.close()
@@ -3352,8 +3352,8 @@ def create_training_session(coach_id, session_date, location, focus):
 def init_session_attendance(session_id, coach_id):
     """
     Called immediately after a training session is created.
-    Finds all players belonging to the coach's team and inserts 
-    a default attendance record (Status=0, Absent) for them.
+    Finds all PLAYERS in the coach's team by joining with the Player table
+    and inserts a default attendance record (Status=0) for them.
     """
     conn = get_connection()
     try:
@@ -3362,11 +3362,11 @@ def init_session_attendance(session_id, coach_id):
                 cur.execute(
                     """
                     INSERT INTO TrainingAttendance (SessionID, PlayerID, Status)
-                    SELECT %s, e.UsersID, 0
+                    SELECT %s, p.UsersID, 0
                     FROM Employee e
-                    JOIN Employee c ON c.TeamID = e.TeamID
-                    WHERE c.UsersID = %s       
-                    AND e.Role = 'Player'      
+                    JOIN Employee c ON c.TeamID = e.TeamID    
+                    JOIN Player p ON p.UsersID = e.UsersID     
+                    WHERE c.UsersID = %s                       
                     ON CONFLICT (SessionID, PlayerID) DO NOTHING;
                     """,
                     (session_id, coach_id),
