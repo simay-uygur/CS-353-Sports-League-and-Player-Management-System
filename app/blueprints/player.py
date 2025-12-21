@@ -89,7 +89,7 @@ def update_training_attendance(session_id):
     player_id = session.get("user_id")
     status = request.form.get("status")
 
-    if status not in ("0", "1"):
+    if status not in ("0", "1", "2"):
         return redirect(url_for("player.view_trainings"))
 
     # SADECE JOIN (1) DURUMUNDA KONTROL YAP
