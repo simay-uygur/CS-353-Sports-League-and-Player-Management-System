@@ -57,31 +57,30 @@
                         <td>{{ training.focus }}</td>
                         <td>{{ training.coachfirstname }} {{ training.coachlastname }}</td>
                         <td>{{ training.teamname }}</td>
+                        
                         <td>
-                            {% if training.attendancestatus is not none %}
-                                {% if training.attendancestatus == 1 %}
-                                    <span class="status-badge eligible">Attended</span>
-                                {% elif training.attendancestatus == 0 %}
-                                    <span class="status-badge ineligible">Absent</span>
-                                {% else %}
-                                    <span class="status-badge" style="background: #fef3c7; color: #92400e;">Pending</span>
-                                {% endif %}
+                            {% if training.attendancestatus == 1 %}
+                                <span class="status-badge eligible" style="background-color: #dcfce7; color: #166534;">Joined</span>
+                            {% elif training.attendancestatus == 2 %}
+                                <span class="status-badge ineligible" style="background-color: #fee2e2; color: #991b1b;">Skipped</span>
                             {% else %}
-                                <span class="subtle">Not registered</span>
+                                <span class="status-badge" style="background: #fef3c7; color: #92400e;">Pending</span>
                             {% endif %}
                         </td>
+
                         <td>
-                            {% if training.sessiondate > now and training.attendancestatus is none %}
+                            {% if training.sessiondate > now and (training.attendancestatus is none or training.attendancestatus == 0) %}
                                 
                                 <form method="POST" action="{{ url_for('player.update_training_attendance', session_id=training.sessionid) }}" style="display: inline-block; margin: 0;">
                                     <input type="hidden" name="status" value="1">
-                                    <button type="submit" class="btn small solid" style="margin-right: 0.5rem;">Join</button>
+                                    <button type="submit" class="btn small solid" style="margin-right: 0.5rem; background-color: #166534; border-color: #166534;">Join</button>
                                 </form>
                                 
                                 <form method="POST" action="{{ url_for('player.update_training_attendance', session_id=training.sessionid) }}" style="display: inline-block; margin: 0;">
-                                    <input type="hidden" name="status" value="0">
-                                    <button type="submit" class="btn small ghost">Skip</button>
+                                    <input type="hidden" name="status" value="2">
+                                    <button type="submit" class="btn small ghost" style="color: #991b1b; border-color: #991b1b;">Skip</button>
                                 </form>
+
                             {% endif %}
                         </td>
                     </tr>
