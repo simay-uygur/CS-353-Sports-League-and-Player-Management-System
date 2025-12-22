@@ -1,4 +1,4 @@
-# this is a mediator file that talks with the database and does common database tasks 
+# this is a mediator file that talks with the database and does common database tasks
 import math
 import random
 from datetime import date, datetime, timedelta
@@ -9,6 +9,7 @@ from collections import defaultdict
 import os
 
 from db import get_connection
+
 
 def execute_query(query, params=None):
     conn = None
@@ -33,7 +34,8 @@ def execute_query(query, params=None):
             cursor.close()
         if conn:
             conn.close()
-            
+
+
 def fetch_one(query, params=None):
     conn = None
     cursor = None
@@ -53,9 +55,8 @@ def fetch_one(query, params=None):
             cursor.close()
         if conn:
             conn.close()
-            
-            
-            
+
+
 def fetch_all_teams():
     conn = get_connection()
     try:
@@ -71,8 +72,8 @@ def fetch_all_teams():
             return cur.fetchall()
     finally:
         conn.close()
-        
-        
+
+
 def fetch_all_players():
     conn = get_connection()
     try:
@@ -119,6 +120,7 @@ def fetch_all_training_sessions():
     finally:
         conn.close()
 
+
 def fetch_filtered_players(filters):
     conn = get_connection()
     try:
@@ -126,9 +128,9 @@ def fetch_filtered_players(filters):
         nationality = filters.get("nationality")
         min_age = filters.get("min_age")
         max_age = filters.get("max_age")
-        current_team = filters.get("team") 
+        current_team = filters.get("team")
         position = filters.get("position")
-        
+
         min_birthdate = None
         max_birthdate = None
         if min_age and max_age:
@@ -166,7 +168,7 @@ def fetch_filtered_players(filters):
             params.append(position)
 
         where_clause = " AND ".join(conditions) if conditions else "1=1"
-        
+
         query = f"""
             SELECT u.usersid,
                    u.firstname,
@@ -186,14 +188,15 @@ def fetch_filtered_players(filters):
             LEFT JOIN Team t ON e.teamid = t.teamid
             WHERE {where_clause}
             ORDER BY u.lastname, u.firstname;
-        """ # Does not have salary information, which should exist
+        """  # Does not have salary information, which should exist
         # TODO: Make a view in init.sql that returns a player and their current employment
-        
+
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(query, params)
             return cur.fetchall()
     finally:
         conn.close()
+
 
 def fetch_player_by_id(playerid):
     conn = get_connection()
@@ -203,16 +206,28 @@ def fetch_player_by_id(playerid):
                 """
                 SELECT u.firstname,
                        u.lastname,
+                       u.email,
                        p.position,
                        aei.salary,
                        aei.enddate,
-                       aei.teamname
+                       COALESCE(aei.teamname, t.teamname) AS teamname,
+                       COALESCE(aei.teamid, e.teamid) AS teamid,
+                       (
+                           SELECT string_agg(uc.email, ', ')
+                           FROM Coach c
+                           JOIN Employee ec ON c.usersid = ec.usersid
+                           JOIN Users uc ON c.usersid = uc.usersid
+                           WHERE ec.teamid = COALESCE(aei.teamid, e.teamid)
+                       ) AS coach_emails
                 FROM Player p
                 JOIN Users u ON p.usersid = u.usersid
                 LEFT JOIN Employee e ON p.usersid = e.usersid
-                LEFT JOIN AllEmploymentInfo aei ON p.usersid = aei.usersid
+                LEFT JOIN Team t ON e.teamid = t.teamid
+                LEFT JOIN AllEmploymentInfo aei ON p.usersid = aei.usersid AND aei.enddate > NOW()
                 WHERE u.usersid = %s
-                """, (playerid,))
+                """,
+                (playerid,),
+            )
             return cur.fetchone()
     finally:
         conn.close()
@@ -234,6 +249,7 @@ def fetch_all_nationalities():
     finally:
         conn.close()
 
+
 def fetch_all_positions():
     conn = get_connection()
     try:
@@ -246,10 +262,9 @@ def fetch_all_positions():
             )
             return cur.fetchall()
     finally:
-        conn.close()    
+        conn.close()
 
-        
-        
+
 def report_players(filters):
     """
     filters: {
@@ -444,7 +459,9 @@ def report_league_standings(league_id, season_no, season_year):
             stats[home_id]["points"] += 1
             stats[away_id]["points"] += 1
 
-    return sorted(stats.values(), key=lambda s: (-s["points"], -(s["gf"] - s["ga"]), -s["wins"]))
+    return sorted(
+        stats.values(), key=lambda s: (-s["points"], -(s["gf"] - s["ga"]), -s["wins"])
+    )
 
 
 def report_player_attendance(date_from=None, date_to=None, player_ids=None, session_ids=None, team_id=None, all_teams=False):
@@ -475,12 +492,12 @@ def report_player_attendance(date_from=None, date_to=None, player_ids=None, sess
                 WHERE ta.Status = 1
                   AND ts.SessionDate BETWEEN aei.StartDate AND aei.EndDate
             """
-            
+
             # Filter by training session date range
             if date_from:
                 clauses.append("ts.SessionDate >= %s")
                 params.append(date_from)
-            
+
             if date_to:
                 clauses.append("ts.SessionDate <= %s")
                 params.append(date_to)
@@ -499,34 +516,28 @@ def report_player_attendance(date_from=None, date_to=None, player_ids=None, sess
             if not all_teams and team_id:
                 clauses.append("t.TeamID = %s")
                 params.append(team_id)
-            
+
             if clauses:
                 query += " AND " + " AND ".join(clauses)
-            
+
             query += """
                 GROUP BY u.UsersID, u.FirstName, u.LastName
                 ORDER BY appearances DESC, u.LastName, u.FirstName;
             """
-            
+
             cur.execute(query, tuple(params))
             return cur.fetchall()
     finally:
         conn.close()
 
-        
-        
+
 def fetch_matches_grouped(tournament_id):
     """
     Fetch tournament bracket with all rounds (including those without matches).
     Returns rounds grouped by level (for display).
+    Levels increase as teams advance: first round = level 1, final = highest level.
     """
     
-    
-    def _round_level(round_no):
-        if round_no <= 0:
-            return 1
-        return math.floor(math.log2(round_no)) + 1
-  
     conn = get_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -553,26 +564,46 @@ def fetch_matches_grouped(tournament_id):
     finally:
         conn.close()
 
+    # Find the maximum depth (level) in the tournament
+    # The round_no follows: level 0 = 1 (final/root), level 1 = 2-3, level 2 = 4-7, etc.
+    # Leaves (first round matches) are at the highest internal level
+    if not rows:
+        return {}
+    
+    max_round_no = max(row["roundno"] for row in rows)
+    max_internal_level = math.floor(math.log2(max_round_no)) if max_round_no > 0 else 0
+    
+    def _round_level(round_no):
+        """Calculate display level: first round (leaves) = 1, final (root) = highest level"""
+        if round_no <= 0:
+            return max_internal_level + 1  # Root (final) is the highest display level
+        # Calculate the internal level (0-based from root, where root=0)
+        internal_level = math.floor(math.log2(round_no)) if round_no > 0 else 0
+        # Convert to display level: leaves (highest internal) = 1, root (0) = max_internal_level + 1
+        return max_internal_level - internal_level + 1
+
     grouped = defaultdict(list)
     for row in rows:
         level = _round_level(row["roundno"])
         grouped[level].append(row)
 
+    # Return sorted by level (1, 2, 3, ...) so first round appears first (left side)
     return dict(sorted(grouped.items()))
+
 
 def fetch_transferable_players(filters, coachid):
     conn = get_connection()
     try:
         name = filters.get("name")
         nationality = filters.get("nationality")
-        
+
         min_age = None
         max_age = None
         if filters.get("min_age"):
             min_age = int(filters.get("min_age"))
         if filters.get("max_age"):
             max_age = int(filters.get("max_age"))
-        current_team = filters.get("team") 
+        current_team = filters.get("team")
         position = filters.get("position")
         contact_expiration_date = filters.get("contact_expiration_date")
 
@@ -580,7 +611,7 @@ def fetch_transferable_players(filters, coachid):
         max_birthdate = None
         today = date.today()
         if max_age:
-            max_birthdate= date(today.year - max_age, today.month, today.day)
+            max_birthdate = date(today.year - max_age, today.month, today.day)
         if min_age:
             min_birthdate = date(today.year - min_age, today.month, today.day)
 
@@ -652,6 +683,7 @@ def fetch_transferable_players(filters, coachid):
     finally:
         conn.close()
 
+
 def fetch_player_transfer_offers(playerid):
     conn = get_connection()
     try:
@@ -671,13 +703,14 @@ def fetch_player_transfer_offers(playerid):
     finally:
         conn.close()
 
+
 def fetch_team_transfer_offers(coachid):
     """
     Fetch transfer offers for players on the coach's team.
     Returns a tuple: (pending_offers, past_offers)
     - pending_offers: offers with status NULL and AvailableUntil > NOW()
     - past_offers: accepted, rejected, or expired offers
-    
+
     Uses PlayerTeamAtOfferTime to show offers based on which team the player was on
     when the offer was created. This ensures offers stay with the original team
     even if the player transfers to another team.
@@ -693,10 +726,10 @@ def fetch_team_transfer_offers(coachid):
                 (coachid,),
             )
             coach_team_result = cur.fetchone()
-            if not coach_team_result or not coach_team_result.get('teamid'):
+            if not coach_team_result or not coach_team_result.get("teamid"):
                 return ([], [])
-            coach_team_id = coach_team_result['teamid']
-            
+            coach_team_id = coach_team_result["teamid"]
+
             # Fetch all offers for this team (using PlayerTeamAtOfferTime)
             cur.execute(
                 """
@@ -736,24 +769,25 @@ def fetch_team_transfer_offers(coachid):
                 (coach_team_id,),
             )
             all_offers = cur.fetchall()
-            
+
             # Split into pending and past
             now = datetime.now()
             pending = []
             past = []
-            
+
             for offer in all_offers:
-                is_expired = offer['availableuntil'] < now
-                is_pending = offer['offerstatus'] is None and not is_expired
-                
+                is_expired = offer["availableuntil"] < now
+                is_pending = offer["offerstatus"] is None and not is_expired
+
                 if is_pending:
                     pending.append(offer)
                 else:
                     past.append(offer)
-            
+
             return (pending, past)
     finally:
         conn.close()
+
 
 def fetch_sent_transfer_offers(coachid):
     """
@@ -773,10 +807,10 @@ def fetch_sent_transfer_offers(coachid):
                 (coachid,),
             )
             coach_team_result = cur.fetchone()
-            if not coach_team_result or not coach_team_result.get('teamid'):
+            if not coach_team_result or not coach_team_result.get("teamid"):
                 return []
-            coach_team_id = coach_team_result['teamid']
-            
+            coach_team_id = coach_team_result["teamid"]
+
             # Fetch all offers sent by coaches from this team (using RequestingTeamAtOfferTime)
             cur.execute(
                 """
@@ -820,6 +854,7 @@ def fetch_sent_transfer_offers(coachid):
     finally:
         conn.close()
 
+
 def make_transfer_offer(playerid, coachid, amount, available_until, contract_end_date):
     """
     Create a transfer offer for a player.
@@ -837,7 +872,7 @@ def make_transfer_offer(playerid, coachid, amount, available_until, contract_end
             )
             team_result = cur.fetchone()
             player_team_id = team_result[0] if team_result else None
-            
+
             # Get the coach's current team
             cur.execute(
                 """
@@ -847,17 +882,26 @@ def make_transfer_offer(playerid, coachid, amount, available_until, contract_end
             )
             coach_team_result = cur.fetchone()
             coach_team_id = coach_team_result[0] if coach_team_result else None
-            
+
             cur.execute(
                 """
                 INSERT INTO Offer (RequestedPlayer, RequestingCoach, OfferAmount, AvailableUntil, OfferedEndDate, PlayerTeamAtOfferTime, RequestingTeamAtOfferTime)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """,
-                (playerid, coachid, amount, available_until, contract_end_date, player_team_id, coach_team_id),
+                (
+                    playerid,
+                    coachid,
+                    amount,
+                    available_until,
+                    contract_end_date,
+                    player_team_id,
+                    coach_team_id,
+                ),
             )
             conn.commit()
     finally:
         conn.close()
+
 
 def finalize_transfer_offer(offerid, decision):
     conn = get_connection()
@@ -869,11 +913,15 @@ def finalize_transfer_offer(offerid, decision):
                 SET OfferStatus = %s
                 WHERE OfferId = %s
                 """,
-                (decision, offerid,),
+                (
+                    decision,
+                    offerid,
+                ),
             )
             conn.commit()
     finally:
         conn.close()
+
 
 def create_tournament_with_bracket(form_data, admin_id, moderator_ids=None):
     if not admin_id:
@@ -886,7 +934,7 @@ def create_tournament_with_bracket(form_data, admin_id, moderator_ids=None):
     start_date_str = (form_data.get("tournament_start_date") or "").strip()
     if not start_date_str:
         raise ValueError("Tournament start date is required.")
-    
+
     try:
         start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
     except ValueError:
@@ -900,7 +948,9 @@ def create_tournament_with_bracket(form_data, admin_id, moderator_ids=None):
 
     # Check if size is power of 2
     if (size & (size - 1)) != 0:
-        raise ValueError("Please select a power of 2 number of teams (2, 4, 8, 16, etc.).")
+        raise ValueError(
+            "Please select a power of 2 number of teams (2, 4, 8, 16, etc.)."
+        )
 
     if len(set(team_ids)) != len(team_ids):
         raise ValueError("Each team can only be selected once.")
@@ -936,7 +986,9 @@ def create_tournament_with_bracket(form_data, admin_id, moderator_ids=None):
                         (tournament_id, moderator_id),
                     )
 
-                leaf_match_ids = _build_bracket_tree(cur, tournament_id, team_ids, start_date)
+                leaf_match_ids = _build_bracket_tree(
+                    cur, tournament_id, team_ids, start_date
+                )
 
         # NOTE: Play rows are now created automatically via the database trigger
         # trg_auto_create_plays_on_match_insert when matches are inserted.
@@ -946,13 +998,13 @@ def create_tournament_with_bracket(form_data, admin_id, moderator_ids=None):
 
         return {"tournament_id": tournament_id, "match_ids": leaf_match_ids}
     finally:
-        conn.close()        
-        
-        
+        conn.close()
+
+
 def _build_bracket_tree(cur, tournament_id, team_ids, start_date):
     """
     Build complete binary bracket tree in memory, then INSERT all at once.
-    
+
     Steps:
     1. Validate team_count is power of 2
     2. Calculate tree depth (leaf level)
@@ -960,7 +1012,7 @@ def _build_bracket_tree(cur, tournament_id, team_ids, start_date):
     4. INSERT all rounds into DB (single transaction)
     5. CREATE matches ONLY for leaf rounds
     6. UPDATE leaf rounds with MatchID
-    
+
     Tree structure:
     - Root: RoundNo=1, ParentRoundNo=NULL
     - Level L: 2^L nodes, RoundNo from 2^L to 2^L + (2^L - 1)
@@ -968,22 +1020,22 @@ def _build_bracket_tree(cur, tournament_id, team_ids, start_date):
     - Each leaf has exactly 1 match
     """
     team_count = len(team_ids)
-    
+
     # Validate power of 2 (already done in _create_tournament_with_bracket, but be safe)
     if (team_count & (team_count - 1)) != 0:
         raise ValueError("Team count must be a power of 2.")
-    
+
     # Calculate depth
     # depth = level of leaves
     # leaf count = 2^depth = team_count / 2
     # So depth = log2(team_count) - 1
     depth = int(math.log2(team_count)) - 1
-    
+
     # Helper functions
     def get_round_no(level, index):
         """Convert (level, index) to RoundNo. RoundNo = 2^level + index."""
         return (1 << level) + index
-    
+
     def get_children(level, index):
         """Get (child1_round_no, child2_round_no) for node at (level, index)."""
         if level == depth:
@@ -993,7 +1045,7 @@ def _build_bracket_tree(cur, tournament_id, team_ids, start_date):
         child1_no = get_round_no(child_level, index * 2)
         child2_no = get_round_no(child_level, index * 2 + 1)
         return child1_no, child2_no
-    
+
     def get_parent(level, index):
         """Get parent_round_no for node at (level, index)."""
         if level == 0:
@@ -1002,21 +1054,29 @@ def _build_bracket_tree(cur, tournament_id, team_ids, start_date):
         parent_level = level - 1
         parent_index = index // 2
         return get_round_no(parent_level, parent_index)
-    
+
     # Generate all rounds in memory (no DB access yet)
-    rounds_to_insert = []  # List of tuples: (tournament_id, round_no, child1_no, child2_no, parent_no)
-    
+    rounds_to_insert = (
+        []
+    )  # List of tuples: (tournament_id, round_no, child1_no, child2_no, parent_no)
+
     for level in range(depth + 1):
         nodes_at_level = 1 << level  # 2^level
         for index in range(nodes_at_level):
             round_no = get_round_no(level, index)
             child1, child2 = get_children(level, index)
             parent = get_parent(level, index)
-            
+
             rounds_to_insert.append((tournament_id, round_no, child1, child2, parent))
-    
+
     # INSERT all rounds with links left NULL, then set them after all rows exist
-    for tournament_id_val, round_no, child1_no, child2_no, parent_no in rounds_to_insert:
+    for (
+        tournament_id_val,
+        round_no,
+        child1_no,
+        child2_no,
+        parent_no,
+    ) in rounds_to_insert:
         cur.execute(
             """
             INSERT INTO Round (TournamentID, RoundNo, T_MatchID, Child1RoundNo, Child2RoundNo, ParentRoundNo)
@@ -1025,7 +1085,13 @@ def _build_bracket_tree(cur, tournament_id, team_ids, start_date):
             (tournament_id_val, round_no),
         )
 
-    for tournament_id_val, round_no, child1_no, child2_no, parent_no in rounds_to_insert:
+    for (
+        tournament_id_val,
+        round_no,
+        child1_no,
+        child2_no,
+        parent_no,
+    ) in rounds_to_insert:
         cur.execute(
             """
             UPDATE Round
@@ -1036,33 +1102,32 @@ def _build_bracket_tree(cur, tournament_id, team_ids, start_date):
             """,
             (child1_no, child2_no, parent_no, tournament_id_val, round_no),
         )
-    
+
     # CREATE matches for leaf rounds only
     # Shuffle teams and pair them
     shuffled_ids = team_ids[:]
     random.shuffle(shuffled_ids)
     team_names = lookup_team_names(cur, team_ids)
-    
+
     # Create pairs: (team0, team1), (team2, team3), ...
     leaf_pairs = [
-        (shuffled_ids[i], shuffled_ids[i + 1])
-        for i in range(0, len(shuffled_ids), 2)
+        (shuffled_ids[i], shuffled_ids[i + 1]) for i in range(0, len(shuffled_ids), 2)
     ]
-    
+
     created_match_ids = []
-    
+
     for leaf_index, (home_team_id, away_team_id) in enumerate(leaf_pairs):
         leaf_round_no = get_round_no(depth, leaf_index)
-        
+
         home_team_name = team_names.get(home_team_id)
         away_team_name = team_names.get(away_team_id)
         if not home_team_name or not away_team_name:
             raise ValueError("One or more selected teams no longer exist.")
-        
+
         # Match datetime: start_date + (leaf_index * 1 day), 19:00
         match_datetime = start_date + timedelta(days=leaf_index)
         match_datetime = match_datetime.replace(hour=19, minute=0, second=0)
-        
+
         # INSERT Match
         cur.execute(
             """
@@ -1082,17 +1147,23 @@ def _build_bracket_tree(cur, tournament_id, team_ids, start_date):
             VALUES (%s, %s, %s, NULL, NULL, %s, %s, NULL, NULL, NULL, FALSE)
             RETURNING MatchID;
             """,
-            (home_team_id, away_team_id, match_datetime, home_team_name, away_team_name),
+            (
+                home_team_id,
+                away_team_id,
+                match_datetime,
+                home_team_name,
+                away_team_name,
+            ),
         )
         match_id = cur.fetchone()[0]
         created_match_ids.append(match_id)
-        
+
         # INSERT into TournamentMatch
         cur.execute(
             "INSERT INTO TournamentMatch (MatchID) VALUES (%s);",
             (match_id,),
         )
-        
+
         # UPDATE leaf round with match ID
         cur.execute(
             """
@@ -1105,11 +1176,10 @@ def _build_bracket_tree(cur, tournament_id, team_ids, start_date):
 
         # Seed Play rows for the tournament match (uses employment at match start)
         create_plays_for_match_players_on_insert(match_id)
-    
-    return created_match_ids        
-  
-  
-  
+
+    return created_match_ids
+
+
 def lookup_team_names(cur, team_ids):
     if not team_ids:
         return {}
@@ -1122,8 +1192,8 @@ def lookup_team_names(cur, team_ids):
         (team_ids,),
     )
     return {row[0]: row[1] for row in cur.fetchall()}
-  
-  
+
+
 def fetch_tournaments(admin_id):
     conn = get_connection()
     try:
@@ -1186,7 +1256,7 @@ def delete_tournament_and_matches(tournament_id):
     finally:
         conn.close()
 
-        
+
 def _insert_play_rows_for_match(match_id, include_tournament_matches=False):
     """
     Shared insertion logic to add Play rows for a match.
@@ -1218,7 +1288,7 @@ def _insert_play_rows_for_match(match_id, include_tournament_matches=False):
                     if cur.fetchone():
                         return 0
 
-                #checks also whether player is eligible _ _ _ at that date? or now  - i can delete is eligible 
+                # checks also whether player is eligible _ _ _ at that date? or now  - i can delete is eligible
                 cur.execute(
                     """
                     WITH active_players AS (
@@ -1614,27 +1684,28 @@ def fetch_league_matches(league_id):
     finally:
         conn.close()
 
+
 def create_league_with_seasons(league_name, seasons_data, team_ids=None):
     """
     Create a league and its seasons in a single transaction.
-    
+
     seasons_data: List of dicts with keys:
         - start_date: Start date (YYYY-MM-DD format)
         - start_time: Start time (HH:MM format)
         - end_date: End date (YYYY-MM-DD format)
         - end_time: End time (HH:MM format)
         - prize_pool: Prize pool amount (int)
-    
+
     team_ids: List of team IDs to associate with this league (optional)
-    
+
     Returns: {'league_id': int}
     """
     if not league_name or not league_name.strip():
         raise ValueError("League name is required.")
-    
+
     if not seasons_data:
         raise ValueError("At least one season is required.")
-    
+
     validated_seasons = []
     for i, season in enumerate(seasons_data):
         season_no = i + 1
@@ -1643,29 +1714,41 @@ def create_league_with_seasons(league_name, seasons_data, team_ids=None):
         end_date_str = season.get("end_date", "").strip()
         end_time_str = season.get("end_time", "23:59").strip()
         prize_pool = season.get("prize_pool", 0)
-        
+
         if not start_date_str or not end_date_str:
-            raise ValueError(f"Season {season_no}: Start date and end date are required.")
-        
+            raise ValueError(
+                f"Season {season_no}: Start date and end date are required."
+            )
+
         try:
-            start_datetime = datetime.strptime(f"{start_date_str} {start_time_str}", "%Y-%m-%d %H:%M")
-            end_datetime = datetime.strptime(f"{end_date_str} {end_time_str}", "%Y-%m-%d %H:%M")
+            start_datetime = datetime.strptime(
+                f"{start_date_str} {start_time_str}", "%Y-%m-%d %H:%M"
+            )
+            end_datetime = datetime.strptime(
+                f"{end_date_str} {end_time_str}", "%Y-%m-%d %H:%M"
+            )
         except ValueError:
-            raise ValueError(f"Season {season_no}: Invalid date or time format. Use YYYY-MM-DD for dates and HH:MM for times.")
-        
+            raise ValueError(
+                f"Season {season_no}: Invalid date or time format. Use YYYY-MM-DD for dates and HH:MM for times."
+            )
+
         if start_datetime >= end_datetime:
-            raise ValueError(f"Season {season_no}: Start datetime must be before end datetime.")
-        
+            raise ValueError(
+                f"Season {season_no}: Start datetime must be before end datetime."
+            )
+
         if int(prize_pool) <= 0:
             raise ValueError(f"Season {season_no}: Prize pool must be greater than 0.")
-        
-        validated_seasons.append({
-            "season_no": season_no,
-            "season_year": start_datetime.date(),
-            "start_datetime": start_datetime,
-            "end_datetime": end_datetime,
-            "prize_pool": int(prize_pool),
-        })
+
+        validated_seasons.append(
+            {
+                "season_no": season_no,
+                "season_year": start_datetime.date(),
+                "start_datetime": start_datetime,
+                "end_datetime": end_datetime,
+                "prize_pool": int(prize_pool),
+            }
+        )
 
     # Ensure seasons do not overlap
     sorted_seasons = sorted(validated_seasons, key=lambda s: s["start_datetime"])
@@ -1677,7 +1760,7 @@ def create_league_with_seasons(league_name, seasons_data, team_ids=None):
                 f"Season {current['season_no']} and Season {nxt['season_no']} overlap. "
                 "Please adjust the start/end dates and times."
             )
-    
+
     conn = get_connection()
     try:
         with conn:
@@ -1692,7 +1775,7 @@ def create_league_with_seasons(league_name, seasons_data, team_ids=None):
                     (league_name.strip(),),
                 )
                 league_id = cur.fetchone()[0]
-                
+
                 # Insert seasons using validated data
                 for season in validated_seasons:
                     cur.execute(
@@ -1709,7 +1792,7 @@ def create_league_with_seasons(league_name, seasons_data, team_ids=None):
                             season["prize_pool"],
                         ),
                     )
-                
+
                 # Insert team-league associations if provided
                 if team_ids:
                     for team_id in team_ids:
@@ -1720,7 +1803,7 @@ def create_league_with_seasons(league_name, seasons_data, team_ids=None):
                             """,
                             (league_id, int(team_id)),
                         )
-        
+
         return {"league_id": league_id}
     finally:
         conn.close()
@@ -1730,15 +1813,15 @@ def assign_admins_to_season(league_id, season_no, season_year, admin_ids):
     """
     Assign admins to a specific season.
     Replaces all existing admin assignments for that season.
-    
+
     admin_ids: List of admin user IDs
     """
     if not admin_ids:
         raise ValueError("At least one admin must be assigned.")
-    
+
     admin_ids = [int(aid) for aid in admin_ids if aid]
     admin_ids = list(dict.fromkeys(admin_ids))  # Remove duplicates
-    
+
     conn = get_connection()
     try:
         with conn:
@@ -1746,7 +1829,7 @@ def assign_admins_to_season(league_id, season_no, season_year, admin_ids):
                 # Ensure all admins exist in Admin table
                 for admin_id in admin_ids:
                     _ensure_admin_record(cur, admin_id)
-                
+
                 # Delete existing assignments for this season
                 cur.execute(
                     """
@@ -1755,7 +1838,7 @@ def assign_admins_to_season(league_id, season_no, season_year, admin_ids):
                     """,
                     (league_id, season_no, season_year),
                 )
-                
+
                 # Insert new assignments
                 for admin_id in admin_ids:
                     cur.execute(
@@ -1776,10 +1859,10 @@ def assign_same_admins_to_all_seasons(league_id, admin_ids):
     """
     if not admin_ids:
         raise ValueError("At least one admin must be assigned.")
-    
+
     admin_ids = [int(aid) for aid in admin_ids if aid]
     admin_ids = list(dict.fromkeys(admin_ids))  # Remove duplicates
-    
+
     conn = get_connection()
     try:
         with conn:
@@ -1787,7 +1870,7 @@ def assign_same_admins_to_all_seasons(league_id, admin_ids):
                 # Ensure all admins exist in Admin table
                 for admin_id in admin_ids:
                     _ensure_admin_record(cur, admin_id)
-                
+
                 # Get all seasons for this league
                 cur.execute(
                     """
@@ -1798,10 +1881,10 @@ def assign_same_admins_to_all_seasons(league_id, admin_ids):
                     (league_id,),
                 )
                 seasons = cur.fetchall()
-                
+
                 if not seasons:
                     raise ValueError("League has no seasons.")
-                
+
                 # Delete existing assignments for this league
                 cur.execute(
                     """
@@ -1810,7 +1893,7 @@ def assign_same_admins_to_all_seasons(league_id, admin_ids):
                     """,
                     (league_id,),
                 )
-                
+
                 # Insert new assignments for all seasons
                 for season in seasons:
                     for admin_id in admin_ids:
@@ -1819,7 +1902,12 @@ def assign_same_admins_to_all_seasons(league_id, admin_ids):
                             INSERT INTO SeasonModeration (LeagueID, SeasonNo, SeasonYear, AdminID)
                             VALUES (%s, %s, %s, %s);
                             """,
-                            (league_id, season["seasonno"], season["seasonyear"], admin_id),
+                            (
+                                league_id,
+                                season["seasonno"],
+                                season["seasonyear"],
+                                admin_id,
+                            ),
                         )
     finally:
         conn.close()
@@ -1900,7 +1988,7 @@ def employ_coach_to_team(coach_id, team_id, owner_id):
                 )
                 if not cur.fetchone():
                     raise ValueError("Team does not belong to you.")
-                
+
                 # Verify coach exists
                 cur.execute(
                     """
@@ -1914,7 +2002,7 @@ def employ_coach_to_team(coach_id, team_id, owner_id):
                 coach_row = cur.fetchone()
                 if not coach_row:
                     raise ValueError("Coach not found.")
-                
+
                 # End new coach's current active employment if they have one (switching teams)
                 cur.execute(
                     """
@@ -1929,8 +2017,10 @@ def employ_coach_to_team(coach_id, team_id, owner_id):
                     (coach_id,),
                 )
                 current_employment = cur.fetchone()
-                current_salary = current_employment[1] if current_employment else 80000  # Default coach salary
-                
+                current_salary = (
+                    current_employment[1] if current_employment else 80000
+                )  # Default coach salary
+
                 if current_employment:
                     cur.execute(
                         """
@@ -1940,11 +2030,11 @@ def employ_coach_to_team(coach_id, team_id, owner_id):
                         """,
                         (current_employment[0],),
                     )
-                
+
                 # Create new employment record (1 year contract)
                 start_date = datetime.now()
                 end_date = start_date + timedelta(days=365)
-                
+
                 cur.execute(
                     """
                     INSERT INTO Employment (StartDate, EndDate, Salary)
@@ -1954,7 +2044,7 @@ def employ_coach_to_team(coach_id, team_id, owner_id):
                     (start_date, end_date, current_salary),
                 )
                 new_employment_id = cur.fetchone()[0]
-                
+
                 # Create new employed record
                 cur.execute(
                     """
@@ -1963,7 +2053,7 @@ def employ_coach_to_team(coach_id, team_id, owner_id):
                     """,
                     (new_employment_id, coach_id, team_id),
                 )
-                
+
                 # Update Employee table for backward compatibility (shows latest team)
                 # Note: Multiple coaches per team are supported via the teamCoaches view
                 cur.execute(
@@ -1974,7 +2064,7 @@ def employ_coach_to_team(coach_id, team_id, owner_id):
                     """,
                     (team_id, coach_id),
                 )
-                
+
                 if cur.rowcount == 0:
                     raise ValueError("Failed to assign coach to team.")
     finally:
@@ -2003,7 +2093,7 @@ def remove_coach_from_team(coach_id, team_id, owner_id):
                 )
                 if not cur.fetchone():
                     raise ValueError("Team does not belong to you.")
-                
+
                 # Verify coach exists and is on this team
                 cur.execute(
                     """
@@ -2017,7 +2107,7 @@ def remove_coach_from_team(coach_id, team_id, owner_id):
                 coach_row = cur.fetchone()
                 if not coach_row:
                     raise ValueError("Coach not found.")
-                
+
                 # Find and end the coach's active employment for this team
                 cur.execute(
                     """
@@ -2033,7 +2123,7 @@ def remove_coach_from_team(coach_id, team_id, owner_id):
                     (coach_id, team_id),
                 )
                 active_employment = cur.fetchone()
-                
+
                 if active_employment:
                     cur.execute(
                         """
@@ -2043,7 +2133,7 @@ def remove_coach_from_team(coach_id, team_id, owner_id):
                         """,
                         (active_employment[0],),
                     )
-                
+
                 # Update Employee table to remove team assignment
                 # Only set to NULL if they're currently on this team
                 cur.execute(
@@ -2054,7 +2144,7 @@ def remove_coach_from_team(coach_id, team_id, owner_id):
                     """,
                     (coach_id, team_id),
                 )
-                
+
                 if cur.rowcount == 0:
                     raise ValueError("Coach is not currently assigned to this team.")
     finally:
@@ -2087,6 +2177,7 @@ def fetch_team_players(team_id):
     conn = get_connection()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # SQL SORGUSUNU GÜNCELLİYORUZ: IsEligible ve RecoveryDate eklendi
             cur.execute(
                 """
                 SELECT 
@@ -2097,7 +2188,11 @@ def fetch_team_players(team_id):
                     p.Position,
                     p.Height,
                     p.Weight,
-                    p.Overall
+                    p.Overall,
+                    p.IsEligible,
+                    (SELECT RecoveryDate FROM Injury 
+                     WHERE PlayerID = u.UsersID 
+                     ORDER BY InjuryDate DESC LIMIT 1) as RecoveryDate
                 FROM TeamPlayers tp
                 JOIN Player p ON tp.PlayerID = p.UsersID
                 JOIN Users u ON tp.PlayerID = u.UsersID
@@ -2250,8 +2345,10 @@ def transfer_team_owner(team_id, current_owner_id, new_owner_id):
                     (team_id, current_owner_id),
                 )
                 if not cur.fetchone():
-                    raise ValueError("Transfer failed; team not owned by current owner.")
-                
+                    raise ValueError(
+                        "Transfer failed; team not owned by current owner."
+                    )
+
                 # Check if new owner already has a team
                 cur.execute(
                     """
@@ -2261,8 +2358,10 @@ def transfer_team_owner(team_id, current_owner_id, new_owner_id):
                 )
                 existing_team = cur.fetchone()
                 if existing_team:
-                    raise ValueError(f"Transfer failed; the new owner already owns a team ({existing_team[1]}). Each owner can only own one team.")
-                
+                    raise ValueError(
+                        f"Transfer failed; the new owner already owns a team ({existing_team[1]}). Each owner can only own one team."
+                    )
+
                 # Perform the transfer
                 cur.execute(
                     """
@@ -2273,9 +2372,12 @@ def transfer_team_owner(team_id, current_owner_id, new_owner_id):
                     (new_owner_id, team_id, current_owner_id),
                 )
                 if cur.rowcount == 0:
-                    raise ValueError("Transfer failed; team not owned by current owner.")
+                    raise ValueError(
+                        "Transfer failed; team not owned by current owner."
+                    )
     finally:
         conn.close()
+
 
 def fetch_admin_tournament_matches(admin_id):
     """
@@ -2356,10 +2458,10 @@ def fetch_match_with_referees(match_id):
                 (match_id,),
             )
             match = cur.fetchone()
-            
+
             if not match:
                 return None
-            
+
             # Fetch assigned referees for this match
             cur.execute(
                 """
@@ -2752,7 +2854,9 @@ def fetch_tournaments_for_dropdown():
         conn.close()
 
 
-def fetch_all_matches_with_filters(admin_id, season_year=None, league_id=None, tournament_id=None):
+def fetch_all_matches_with_filters(
+    admin_id, season_year=None, league_id=None, tournament_id=None
+):
     """
     Fetch all matches (league and tournament) that the admin can manage,
     with optional filters for season year, league, or tournament.
@@ -2790,15 +2894,15 @@ def fetch_all_matches_with_filters(admin_id, season_year=None, league_id=None, t
                 WHERE smod.adminid = %s
             """
             params = [admin_id]
-            
+
             if season_year:
                 query += " AND EXTRACT(YEAR FROM s.seasonyear) = %s"
                 params.append(season_year)
-            
+
             if league_id:
                 query += " AND l.leagueid = %s"
                 params.append(int(league_id))
-            
+
             query += """
                 UNION ALL
                 
@@ -2826,13 +2930,13 @@ def fetch_all_matches_with_filters(admin_id, season_year=None, league_id=None, t
                 WHERE tmod.adminid = %s
             """
             params.append(admin_id)
-            
+
             if tournament_id:
                 query += " AND t.tournamentid = %s"
                 params.append(int(tournament_id))
-            
+
             query += " ORDER BY matchstartdatetime DESC;"
-            
+
             cur.execute(query, params)
             return cur.fetchall()
     finally:
@@ -2995,21 +3099,21 @@ def fetch_player_season_stats(player_id, league_id=None, season_no=None, season_
                 WHERE UsersID = %s
             """
             params = [player_id]
-            
+
             if league_id is not None:
                 query += " AND LeagueID = %s"
                 params.append(league_id)
-            
+
             if season_no is not None:
                 query += " AND SeasonNo = %s"
                 params.append(season_no)
-            
+
             if season_year is not None:
                 query += " AND SeasonYear = %s"
                 params.append(season_year)
-            
+
             query += " ORDER BY SeasonYear DESC, SeasonNo DESC, Name;"
-            
+
             cur.execute(query, params)
             return cur.fetchall()
     finally:
@@ -3187,7 +3291,6 @@ def update_training_attendance(player_id, session_id, status):
     try:
         with conn:
             with conn.cursor() as cur:
-                # Check if training session exists and is in the future
                 cur.execute(
                     """
                     SELECT SessionDate FROM TrainingSession WHERE SessionID = %s;
@@ -3197,8 +3300,7 @@ def update_training_attendance(player_id, session_id, status):
                 session_row = cur.fetchone()
                 if not session_row:
                     raise ValueError("Training session not found.")
-                
-                # Verify player is on the same team as the coach
+
                 cur.execute(
                     """
                     SELECT 1
@@ -3212,9 +3314,10 @@ def update_training_attendance(player_id, session_id, status):
                     (player_id, session_id),
                 )
                 if not cur.fetchone():
-                    raise ValueError("You are not on the same team as this training's coach.")
-                
-                # Insert or update attendance
+                    raise ValueError(
+                        "You are not on the same team as this training's coach."
+                    )
+
                 cur.execute(
                     """
                     INSERT INTO TrainingAttendance (SessionID, PlayerID, Status)
@@ -3226,4 +3329,279 @@ def update_training_attendance(player_id, session_id, status):
                 )
     finally:
         conn.close()
-        
+
+
+from psycopg2.extras import RealDictCursor
+
+
+def create_training_session(coach_id, session_date, location, focus):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            # 1. Insert the session and get the new ID back
+            cur.execute(
+                """
+                INSERT INTO TrainingSession (CoachID, SessionDate, Location, Focus)
+                VALUES (%s, %s, %s, %s)
+                RETURNING SessionID;
+                """,
+                (coach_id, session_date, location, focus),
+            )
+            # Fetch the generated ID
+            session_id = cur.fetchone()[0]
+            
+            conn.commit()
+            # 2. Automatically create attendance records for the team
+            init_session_attendance(session_id, coach_id)
+
+            return session_id
+    finally:
+        conn.close()
+
+
+def init_session_attendance(session_id, coach_id):
+    """
+    Called immediately after a training session is created.
+    Finds all PLAYERS in the coach's team and inserts a default attendance record (Status=NULL) for each player.
+    """
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                # First, get the coach's team ID
+                cur.execute(
+                    """
+                    SELECT TeamID FROM Employee WHERE UsersID = %s;
+                    """,
+                    (coach_id,),
+                )
+                team_result = cur.fetchone()
+                
+                if not team_result or not team_result[0]:
+                    print(f"Coach {coach_id} is not assigned to a team")
+                    return
+                
+                team_id = team_result[0]
+                print(f"Found team {team_id} for coach {coach_id}")
+                
+                # Check how many players are on the team
+                cur.execute(
+                    """
+                    SELECT COUNT(*) 
+                    FROM Employee e
+                    JOIN Player p ON p.UsersID = e.UsersID
+                    WHERE e.TeamID = %s;
+                    """,
+                    (team_id,),
+                )
+                player_count = cur.fetchone()[0]
+                print(f"Found {player_count} players on team {team_id}")
+                
+                # Insert attendance records for all players on that team with NULL status
+                cur.execute(
+                    """
+                    INSERT INTO TrainingAttendance (SessionID, PlayerID, Status)
+                    SELECT %s, p.UsersID, NULL
+                    FROM Employee e
+                    JOIN Player p ON p.UsersID = e.UsersID
+                    WHERE e.TeamID = %s
+                    ON CONFLICT (SessionID, PlayerID) DO NOTHING;
+                    """,
+                    (session_id, team_id),
+                )
+                
+                rows_inserted = cur.rowcount
+                print(f"Created {rows_inserted} attendance records for session {session_id} (Status=NULL)")
+    except Exception as e:
+        print(f"Error initializing attendance: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        conn.close()
+
+
+def fetch_coach_sessions(coach_id):
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT * FROM TrainingSession 
+                WHERE CoachID = %s 
+                ORDER BY SessionDate ASC
+            """,
+                (coach_id,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def fetch_session_details(session_id):
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT 
+                    ts.*, 
+                    p.FirstName, p.LastName, p.Position,
+                    ta.Status
+                FROM TrainingSession ts
+                LEFT JOIN TrainingAttendance ta ON ts.SessionID = ta.SessionID
+                LEFT JOIN Users p ON ta.PlayerID = p.UsersID
+                WHERE ts.SessionID = %s
+            """,
+                (session_id,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+def log_player_injury_db(
+    player_id,
+    match_id,
+    training_id,
+    injury_date,
+    injury_type,
+    description,
+    recovery_date,
+):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO Injury (PlayerID, MatchID, TrainingID, InjuryDate, InjuryType, Description, RecoveryDate)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+                (
+                    player_id,
+                    match_id,
+                    training_id,
+                    injury_date,
+                    injury_type,
+                    description,
+                    recovery_date,
+                ),
+            )
+
+            cur.execute(
+                """
+                UPDATE Player 
+                SET IsEligible = 'Injured' 
+                WHERE UsersID = %s
+            """,
+                (player_id,),
+            )
+
+            conn.commit()
+    finally:
+        conn.close()
+
+
+def is_player_eligible(player_id):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT IsEligible FROM Player WHERE UsersID = %s", (player_id,)
+            )
+            result = cur.fetchone()
+
+            if result and str(result[0]).lower() == "eligible":
+                return True
+            return False
+    finally:
+        conn.close()
+
+
+def get_player_injury_status(player_id):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT 
+                    p.IsEligible,
+                    (SELECT RecoveryDate FROM Injury i 
+                     WHERE i.PlayerID = p.UsersID 
+                     ORDER BY i.InjuryDate DESC LIMIT 1) as RecoveryDate
+                FROM Player p
+                WHERE p.UsersID = %s
+            """,
+                (player_id,),
+            )
+            row = cur.fetchone()
+
+            if not row:
+                return (False, None)
+
+            is_eligible_str = str(row[0]).lower() if row[0] else ""
+            is_currently_eligible = is_eligible_str == "eligible"
+            recovery_date = row[1]
+
+            return (is_currently_eligible, recovery_date)
+    finally:
+        conn.close()
+
+
+def fetch_session_date(session_id):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT SessionDate FROM TrainingSession WHERE SessionID = %s",
+                (session_id,),
+            )
+            row = cur.fetchone()
+            return row[0] if row else None
+    finally:
+        conn.close()
+
+
+def clear_player_injury_db(player_id):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            # Update player's eligibility status
+            cur.execute(
+                "UPDATE Player SET IsEligible = 'Eligible' WHERE UsersID = %s",
+                (player_id,),
+            )
+            # Delete all injury records for this player
+            cur.execute(
+                "DELETE FROM Injury WHERE PlayerID = %s",
+                (player_id,),
+            )
+            conn.commit()
+    finally:
+        conn.close()
+
+
+def update_expired_injuries():
+
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE Player p
+                    SET IsEligible = 'Eligible'
+                    WHERE (p.IsEligible IS NULL OR LOWER(p.IsEligible) != 'eligible')
+                    AND EXISTS (
+                        SELECT 1 FROM Injury i
+                        WHERE i.PlayerID = p.UsersID
+                        -- En son girilen sakatlık kaydına bakıyoruz
+                        AND i.InjuryDate = (
+                            SELECT MAX(InjuryDate) FROM Injury sub_i WHERE sub_i.PlayerID = p.UsersID
+                        )
+                        -- İyileşme tarihi bugün veya geçmiş mi?
+                        AND i.RecoveryDate <= CURRENT_DATE
+                    );
+                """
+                )
+    finally:
+        conn.close()

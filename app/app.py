@@ -60,10 +60,10 @@ def strftime_filter(value, format_string='%Y-%m-%d %H:%M:%S'):
         return ""
     if isinstance(value, str):
         try:
-            value = datetime.fromisoformat(value.replace(' ', 'T'))
+            value = datetime.fromisoformat(value.replace(" ", "T"))
         except (ValueError, TypeError, AttributeError):
             return value
-    if hasattr(value, 'strftime'):
+    if hasattr(value, "strftime"):
         return value.strftime(format_string)
     return value
 
@@ -136,7 +136,7 @@ def _set_default_banner():
         g.banner_statistics_endpoint = None
         g.banner_transfer_market_endpoint = "coach.view_transfer_market"
         g.banner_view_team_offers_endpoint = "coach.view_team_offers"
-        g.banner_assign_training_endpoint = "coach.assign_training"
+        g.banner_assign_training_endpoint = "coach.view_trainings"
     elif role == "player":
         g.banner_view_endpoint = None
         g.banner_league_endpoint = None
@@ -184,8 +184,6 @@ ROLE_HOME_ENDPOINTS = {
 @app.route("/")
 def home():
     return render_template("home.html")
-
-
 
 
 @app.route("/home/coach")
@@ -260,6 +258,7 @@ def login():
     # GET request - check for remembered email
     remembered_email = request.cookies.get("remembered_email", "")
     return render_template("login.html", remembered_email=remembered_email)
+
 
 
 @app.route("/register/player", methods=["GET", "POST"])
@@ -552,9 +551,7 @@ def _insert_admin(cur, user_id):
 
 
 def _assign_league_moderation(cur, admin_id):
-    cur.execute(
-        "SELECT LeagueID, SeasonNo, SeasonYear FROM Season;"
-    )
+    cur.execute("SELECT LeagueID, SeasonNo, SeasonYear FROM Season;")
     seasons = cur.fetchall()
     for league_id, season_no, season_year in seasons:
         cur.execute(

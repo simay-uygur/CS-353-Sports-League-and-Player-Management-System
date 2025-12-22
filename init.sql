@@ -284,7 +284,7 @@ CREATE TABLE Employed (
 CREATE TABLE TrainingAttendance (
   SessionID SERIAL,
   PlayerID INT,
-  Status INT NOT NULL,
+  Status INT,
   PRIMARY KEY (SessionID, PlayerID),
   FOREIGN KEY (SessionID) REFERENCES TrainingSession(SessionID) ON DELETE CASCADE,
   FOREIGN KEY (PlayerID) REFERENCES Player(UsersID) ON DELETE CASCADE
@@ -1093,6 +1093,122 @@ AFTER INSERT ON Employed
 FOR EACH ROW
 EXECUTE FUNCTION handle_employment_start();
 
+-- ===== TRIGGER: Set training attendance to Status=2 (Injured) when injury is added =====
+CREATE OR REPLACE FUNCTION set_training_status_on_injury_insert()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_team_id INT;
+BEGIN
+    -- Get the player's team
+    SELECT TeamID INTO v_team_id
+    FROM Employee
+    WHERE UsersID = NEW.PlayerID;
+    
+    -- If player has no team, nothing to do
+    IF v_team_id IS NULL THEN
+        RETURN NEW;
+    END IF;
+    
+    -- Insert or update TrainingAttendance for all training sessions
+    -- that fall within the injury period (InjuryDate to RecoveryDate)
+    INSERT INTO TrainingAttendance (SessionID, PlayerID, Status)
+    SELECT ts.SessionID, NEW.PlayerID, 2
+    FROM TrainingSession ts
+    JOIN Coach c ON ts.CoachID = c.UsersID
+    JOIN Employee ec ON c.UsersID = ec.UsersID
+    WHERE ec.TeamID = v_team_id
+      AND ts.SessionDate >= NEW.InjuryDate
+      AND ts.SessionDate <= NEW.RecoveryDate
+    ON CONFLICT (SessionID, PlayerID) 
+    DO UPDATE SET Status = 2;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_injury_insert_set_training_status
+AFTER INSERT ON Injury
+FOR EACH ROW
+EXECUTE FUNCTION set_training_status_on_injury_insert();
+
+-- ===== TRIGGER: Update training attendance when injury recovery date is updated =====
+CREATE OR REPLACE FUNCTION update_training_status_on_injury_update()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_team_id INT;
+BEGIN
+    -- Only proceed if RecoveryDate changed
+    IF OLD.RecoveryDate = NEW.RecoveryDate THEN
+        RETURN NEW;
+    END IF;
+    
+    -- Get the player's team
+    SELECT TeamID INTO v_team_id
+    FROM Employee
+    WHERE UsersID = NEW.PlayerID;
+    
+    IF v_team_id IS NULL THEN
+        RETURN NEW;
+    END IF;
+    
+    -- If recovery date was EXTENDED: Mark additional trainings as Status=2
+    IF NEW.RecoveryDate > OLD.RecoveryDate THEN
+        INSERT INTO TrainingAttendance (SessionID, PlayerID, Status)
+        SELECT ts.SessionID, NEW.PlayerID, 2
+        FROM TrainingSession ts
+        JOIN Coach c ON ts.CoachID = c.UsersID
+        JOIN Employee ec ON c.UsersID = ec.UsersID
+        WHERE ec.TeamID = v_team_id
+          AND ts.SessionDate > OLD.RecoveryDate
+          AND ts.SessionDate <= NEW.RecoveryDate
+        ON CONFLICT (SessionID, PlayerID) 
+        DO UPDATE SET Status = 2;
+    END IF;
+    
+    -- If recovery date was SHORTENED: Reset trainings outside the new period to NULL (only future ones)
+    IF NEW.RecoveryDate < OLD.RecoveryDate THEN
+        UPDATE TrainingAttendance ta
+        SET Status = NULL
+        FROM TrainingSession ts
+        WHERE ta.SessionID = ts.SessionID
+          AND ta.PlayerID = NEW.PlayerID
+          AND ta.Status = 2
+          AND ts.SessionDate > NEW.RecoveryDate
+          AND ts.SessionDate <= OLD.RecoveryDate
+          AND ts.SessionDate > NOW();  -- Only future trainings
+    END IF;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_injury_update_training_status
+AFTER UPDATE OF RecoveryDate ON Injury
+FOR EACH ROW
+EXECUTE FUNCTION update_training_status_on_injury_update();
+
+-- ===== TRIGGER: Reset training attendance when injury is deleted =====
+CREATE OR REPLACE FUNCTION reset_training_status_on_injury_delete()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Reset Status to NULL for future trainings that were marked as injured (Status=2)
+    UPDATE TrainingAttendance ta
+    SET Status = NULL
+    FROM TrainingSession ts
+    WHERE ta.SessionID = ts.SessionID
+      AND ta.PlayerID = OLD.PlayerID
+      AND ta.Status = 2
+      AND ts.SessionDate > NOW();  -- Only future trainings
+    
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_injury_delete_reset_training_status
+AFTER DELETE ON Injury
+FOR EACH ROW
+EXECUTE FUNCTION reset_training_status_on_injury_delete();
+
 -- sample data ---------------------------------------------------------------
 INSERT INTO Users (
   FirstName,
@@ -1399,7 +1515,7 @@ INSERT INTO Player (UsersID, Height, Weight, Overall, Position, IsEligible)
 SELECT pwi.UsersID, pwi.height_cm, pwi.weight_kg, '85', pwi.position, 'eligible'
 FROM players_with_ids pwi;
 
--- Trigger to auto-mark training attendance as skipped when training time arrives
+-- Trigger to auto-mark training attendance as NULL when training time arrives
 CREATE OR REPLACE FUNCTION auto_mark_training_skipped()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -1408,7 +1524,7 @@ BEGIN
     SELECT 
         NEW.SessionID,
         e_player.UsersID,
-        0  -- Status 0 = Skipped
+        NULL  -- Status NULL = Not set yet
     FROM Employee e_coach
     JOIN Employee e_player ON e_coach.TeamID = e_player.TeamID
     JOIN Player p ON e_player.UsersID = p.UsersID
@@ -1436,12 +1552,12 @@ EXECUTE FUNCTION auto_mark_training_skipped();
 CREATE OR REPLACE FUNCTION process_past_trainings()
 RETURNS void AS $$
 BEGIN
-    -- Mark all players as skipped for trainings that have passed and don't have attendance records
+    -- Mark all players as NULL for trainings that have passed and don't have attendance records
     INSERT INTO TrainingAttendance (SessionID, PlayerID, Status)
     SELECT DISTINCT
         ts.SessionID,
         e_player.UsersID,
-        0  -- Status 0 = Skipped
+        NULL  -- Status NULL = Not set yet
     FROM TrainingSession ts
     JOIN Employee e_coach ON ts.CoachID = e_coach.UsersID
     JOIN Employee e_player ON e_coach.TeamID = e_player.TeamID

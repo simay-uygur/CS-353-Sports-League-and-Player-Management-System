@@ -60,7 +60,7 @@
                 <div class="empty-bracket">No bracket has been created for {{ selected_tournament.name }}.</div>
                 {% else %}
                 <div class="bracket-card">
-                    {% for level, rounds in matches_by_round.items() %}
+                    {% for level, rounds in matches_by_round.items()|sort %}
                     <div class="bracket-level">
                         <h3>Level {{ level }}{% if level == 1 %} (Root){% endif %}</h3>
                         <div class="level-rounds">
