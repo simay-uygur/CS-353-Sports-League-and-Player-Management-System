@@ -3565,8 +3565,14 @@ def clear_player_injury_db(player_id):
     conn = get_connection()
     try:
         with conn.cursor() as cur:
+            # Update player's eligibility status
             cur.execute(
                 "UPDATE Player SET IsEligible = 'Eligible' WHERE UsersID = %s",
+                (player_id,),
+            )
+            # Delete all injury records for this player
+            cur.execute(
+                "DELETE FROM Injury WHERE PlayerID = %s",
                 (player_id,),
             )
             conn.commit()

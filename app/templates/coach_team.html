@@ -110,13 +110,6 @@
                                     <td>{{ player.height }} cm</td>
                                     <td>{{ player.weight }} kg</td>
                                     <td>
-                                        {% if player.overall %}
-                                            <strong style="color: #059669;">{{ player.overall }}</strong>
-                                        {% else %}
-                                            <span class="subtle">N/A</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
                                         {% if player.iseligible and player.iseligible|lower != 'eligible' %}
                                             <div style="text-align: center;">
                                                 <span class="status-badge error" style="color: #ef4444; font-weight: bold; font-size: 1.2rem;">
