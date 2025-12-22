@@ -330,6 +330,11 @@ button:hover {
     z-index: 1;
 }
 
+.training-create-container {
+    width: min(750px, 100%);
+    margin: 0 auto;
+}
+
 .admin-header {
     display: flex;
     align-items: center;
@@ -1334,6 +1339,10 @@ button:hover {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+}
+
+.training-form-card {
+    width: 100%;
 }
 
 .report-table {

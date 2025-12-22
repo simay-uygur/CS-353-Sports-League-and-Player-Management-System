@@ -24,43 +24,6 @@
             </div>
         </header>
 
-        <!-- Overview Section -->
-        <section class="dashboard-card" style="margin-bottom: 2rem;">
-            <h2 style="font-size: 1.5rem; margin-bottom: 1.5rem; color: #0f172a;">Overview</h2>
-            
-            <!-- Quick Access Cards -->
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem;">
-                <!-- Upcoming Trainings -->
-                <section class="dashboard-card">
-                    <div class="card-header-with-link">
-                        <h2>Upcoming Trainings</h2>
-                        <a href="{{ url_for('player.view_trainings') }}" class="view-all-link">See All →</a>
-                    </div>
-                    <div class="training-list">
-                        <p class="subtle">No upcoming trainings scheduled.</p>
-                    </div>
-                </section>
-
-                <!-- Offers and Invites -->
-                <section class="dashboard-card">
-                    <div class="card-header-with-link">
-                        <h2>Offers and Invites</h2>
-                        <a href="{{ url_for('player.view_offers') }}" class="view-all-link">See All →</a>
-                    </div>
-                    <p class="subtle">See your pending offers and invites.</p>
-                </section>
-
-                <!-- My Team -->
-                <section class="dashboard-card">
-                    <div class="card-header-with-link">
-                        <h2>My Team</h2>
-                        <a href="{{ url_for('player.view_team') }}" class="view-all-link">View Team →</a>
-                    </div>
-                    <p class="subtle">View your team information and teammates.</p>
-                </section>
-            </div>
-        </section>
-
         <!-- Statistics Section -->
         <div>
             <section class="dashboard-card">

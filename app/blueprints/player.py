@@ -80,7 +80,25 @@ def view_trainings():
     player_id = session.get("user_id")
     trainings = fetch_player_trainings(player_id)
     now = datetime.now()
-
+    
+    # Add flags for easier template logic
+    for training in trainings:
+        session_date = training.get('sessiondate')
+        
+        # Calculate is_past flag
+        if session_date:
+            # Handle timezone-aware datetimes
+            if hasattr(session_date, 'tzinfo') and session_date.tzinfo:
+                session_date = session_date.replace(tzinfo=None)
+            # Session is in the past if it's before or at current time
+            training['is_past'] = session_date <= now
+        else:
+            training['is_past'] = True  # No date means treat as past
+        
+        # Check if player has already responded (status is 0 or 1, not None)
+        attendance = training.get('attendancestatus')
+        training['has_responded'] = attendance is not None
+    
     return render_template("player_trainings.html", trainings=trainings, now=now)
 
 
@@ -91,6 +109,17 @@ def update_training_attendance(session_id):
 
     if status not in ("0", "1"):
         return redirect(url_for("player.view_trainings"))
+
+    # Check if session is in the past
+    session_date = fetch_session_date(session_id)
+    if session_date:
+        now = datetime.now()
+        # Handle timezone-aware datetimes
+        if hasattr(session_date, 'tzinfo') and session_date.tzinfo:
+            session_date = session_date.replace(tzinfo=None)
+        if session_date <= now:
+            flash("You cannot respond to a training session that has already passed.", "error")
+            return redirect(url_for("player.view_trainings"))
 
     # SADECE JOIN (1) DURUMUNDA KONTROL YAP
     if status == "1":

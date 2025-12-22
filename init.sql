@@ -284,7 +284,7 @@ CREATE TABLE Employed (
 CREATE TABLE TrainingAttendance (
   SessionID SERIAL,
   PlayerID INT,
-  Status INT NOT NULL,
+  Status INT,
   PRIMARY KEY (SessionID, PlayerID),
   FOREIGN KEY (SessionID) REFERENCES TrainingSession(SessionID) ON DELETE CASCADE,
   FOREIGN KEY (PlayerID) REFERENCES Player(UsersID) ON DELETE CASCADE
@@ -1399,7 +1399,7 @@ INSERT INTO Player (UsersID, Height, Weight, Overall, Position, IsEligible)
 SELECT pwi.UsersID, pwi.height_cm, pwi.weight_kg, '85', pwi.position, 'eligible'
 FROM players_with_ids pwi;
 
--- Trigger to auto-mark training attendance as skipped when training time arrives
+-- Trigger to auto-mark training attendance as NULL when training time arrives
 CREATE OR REPLACE FUNCTION auto_mark_training_skipped()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -1408,7 +1408,7 @@ BEGIN
     SELECT 
         NEW.SessionID,
         e_player.UsersID,
-        0  -- Status 0 = Skipped
+        NULL  -- Status NULL = Not set yet
     FROM Employee e_coach
     JOIN Employee e_player ON e_coach.TeamID = e_player.TeamID
     JOIN Player p ON e_player.UsersID = p.UsersID
@@ -1436,12 +1436,12 @@ EXECUTE FUNCTION auto_mark_training_skipped();
 CREATE OR REPLACE FUNCTION process_past_trainings()
 RETURNS void AS $$
 BEGIN
-    -- Mark all players as skipped for trainings that have passed and don't have attendance records
+    -- Mark all players as NULL for trainings that have passed and don't have attendance records
     INSERT INTO TrainingAttendance (SessionID, PlayerID, Status)
     SELECT DISTINCT
         ts.SessionID,
         e_player.UsersID,
-        0  -- Status 0 = Skipped
+        NULL  -- Status NULL = Not set yet
     FROM TrainingSession ts
     JOIN Employee e_coach ON ts.CoachID = e_coach.UsersID
     JOIN Employee e_player ON e_coach.TeamID = e_player.TeamID
