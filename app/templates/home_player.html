@@ -12,15 +12,6 @@
         <header class="player-header">
             <div class="player-header__left">
                 <h1>{{ player_info.firstname }} {{ player_info.lastname }}</h1>
-                {% if player_info.iseligible and player_info.iseligible|lower == 'eligible' %}
-                    <span class="status-badge eligible">
-                        Status: Eligible
-                    </span>
-                {% else %}
-                    <span class="status-badge ineligible" style="background-color: #fee2e2; color: #991b1b;">
-                        Status: {{ player_info.iseligible or 'Unknown' }}
-                    </span>
-                {% endif %}
             </div>
         </header>
 
