@@ -48,7 +48,7 @@
                 </thead>
                 <tbody>
                     {% for training in trainings %}
-                    <tr>
+                    <tr data-session-datetime="{{ training.sessiondate.strftime('%Y-%m-%dT%H:%M:%S') if training.sessiondate else '' }}">
                         <td>
                             <strong>{{ training.sessiondate|strftime('%Y-%m-%d') }}</strong><br>
                             <span class="subtle">{{ training.sessiondate|strftime('%H:%M') }}</span>
@@ -57,30 +57,44 @@
                         <td>{{ training.focus }}</td>
                         <td>{{ training.coachfirstname }} {{ training.coachlastname }}</td>
                         <td>{{ training.teamname }}</td>
-                        
-                        <td>
-                            {% if training.attendancestatus == 1 %}
-                                <span class="status-badge eligible" style="background-color: #dcfce7; color: #166534;">Joined</span>
-                            {% elif training.attendancestatus == 2 %}
-                                <span class="status-badge ineligible" style="background-color: #fee2e2; color: #991b1b;">Skipped</span>
+                        <td class="status-cell">
+                            {% if training.attendancestatus is not none %}
+                                {% if training.attendancestatus == 1 %}
+                                    <span class="status-badge eligible">Attended</span>
+                                {% elif training.attendancestatus == 0 %}
+                                    <span class="status-badge ineligible">Absent</span>
+                                {% elif training.attendancestatus == 2 %}
+                                    {% if training.sessiondate > now %}
+                                        <span class="status-badge" style="background: #fef3c7; color: #92400e;">Injured</span>
+                                    {% else %}
+                                        <span class="status-badge ineligible">Absent</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="status-badge" style="background: #fef3c7; color: #92400e;">Pending</span>
+                                {% endif %}
                             {% else %}
-                                <span class="status-badge" style="background: #fef3c7; color: #92400e;">Pending</span>
+                                <span class="status-not-registered subtle">Not registered</span>
+                                <span class="status-not-attended status-badge ineligible" style="display: none;">Not Attended</span>
                             {% endif %}
                         </td>
-
-                        <td>
-                            {% if training.sessiondate > now and (training.attendancestatus is none or training.attendancestatus == 0) %}
-                                
-                                <form method="POST" action="{{ url_for('player.update_training_attendance', session_id=training.sessionid) }}" style="display: inline-block; margin: 0;">
-                                    <input type="hidden" name="status" value="1">
-                                    <button type="submit" class="btn small solid" style="margin-right: 0.5rem; background-color: #166534; border-color: #166534;">Join</button>
-                                </form>
-                                
-                                <form method="POST" action="{{ url_for('player.update_training_attendance', session_id=training.sessionid) }}" style="display: inline-block; margin: 0;">
-                                    <input type="hidden" name="status" value="2">
-                                    <button type="submit" class="btn small ghost" style="color: #991b1b; border-color: #991b1b;">Skip</button>
-                                </form>
-
+                        <td class="actions-cell">
+                            {% if training.attendancestatus is none %}
+                                <div class="action-buttons">
+                                    <form method="POST" action="{{ url_for('player.update_training_attendance', session_id=training.sessionid) }}" style="display: inline-block; margin: 0;">
+                                        <input type="hidden" name="status" value="1">
+                                        <button type="submit" class="btn small solid" style="margin-right: 0.5rem;">Join</button>
+                                    </form>
+                                    
+                                    <form method="POST" action="{{ url_for('player.update_training_attendance', session_id=training.sessionid) }}" style="display: inline-block; margin: 0;">
+                                        <input type="hidden" name="status" value="0">
+                                        <button type="submit" class="btn small ghost">Skip</button>
+                                    </form>
+                                </div>
+                                <span class="no-action subtle" style="display: none;">-</span>
+                            {% elif training.attendancestatus == 2 and training.sessiondate > now %}
+                                <span class="subtle">Cannot attend (Injured)</span>
+                            {% else %}
+                                <span class="subtle">-</span>
                             {% endif %}
                         </td>
                     </tr>
@@ -94,5 +108,44 @@
         </div>
         {% endif %}
     </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const now = new Date();
+            const rows = document.querySelectorAll('tr[data-session-datetime]');
+            
+            rows.forEach(function(row) {
+                const sessionDatetime = row.getAttribute('data-session-datetime');
+                if (!sessionDatetime) return;
+                
+                const sessionDate = new Date(sessionDatetime);
+                const isPast = sessionDate <= now;
+                
+                if (isPast) {
+                    // Hide action buttons
+                    const actionButtons = row.querySelector('.action-buttons');
+                    const noAction = row.querySelector('.no-action');
+                    
+                    if (actionButtons) {
+                        actionButtons.style.display = 'none';
+                    }
+                    if (noAction) {
+                        noAction.style.display = 'inline';
+                    }
+                    
+                    // Update status from "Not registered" to "Not Attended"
+                    const notRegistered = row.querySelector('.status-not-registered');
+                    const notAttended = row.querySelector('.status-not-attended');
+                    
+                    if (notRegistered) {
+                        notRegistered.style.display = 'none';
+                    }
+                    if (notAttended) {
+                        notAttended.style.display = 'inline';
+                    }
+                }
+            });
+        });
+    </script>
 </body>
 </html>

@@ -19,9 +19,13 @@
         <h2 style="margin: 0 0 1rem; font-size: 1.1rem;">Player Information</h2>
         <div style="font-size: 0.95rem; line-height: 1.8;">
           <div><strong>Name:</strong> {{ player['firstname'] }} {{ player['lastname']}}</div>
+          <div><strong>Email:</strong> {{ player['email'] if player['email'] else '-' }}</div>
           <div><strong>Position:</strong> {{ player['position'] }}</div>
-          <div><strong>Current Team:</strong> {{ player['teamname'] if 'teamname' in player else '-' }}</div>
-          <div><strong>Current Salary:</strong> {{ player['salary'] if 'salary' in player else '-' }}</div>
+          <div><strong>Current Team:</strong> {{ player['teamname'] if player['teamname'] else '-' }}</div>
+          <div><strong>Current Salary:</strong> {{ player['salary'] if player['salary'] else '-' }}</div>
+          {% if player['teamname'] and player['coach_emails'] %}
+          <div><strong>Team Coach(es):</strong> {{ player['coach_emails'] }}</div>
+          {% endif %}
         </div>
       </div>
 

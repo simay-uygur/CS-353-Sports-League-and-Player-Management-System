@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from db_helper import (
     fetch_transferable_players,
@@ -200,18 +200,28 @@ def create_training():
         focus = request.form.get("focus")
         coach_id = session.get("user_id")
 
-        try:
+        # Validate date and time are provided
+        if not date_str or not time_str:
+            flash("Please provide both date and time.", "error")
+            return redirect(url_for("coach.create_training"))
 
+        try:
+            # Parse the datetime string
             session_datetime = datetime.strptime(
                 f"{date_str} {time_str}", "%Y-%m-%d %H:%M"
             )
-
-            if session_datetime < datetime.now():
-                flash("You cannot schedule a training session in the past.", "error")
+            
+            # Get current time (naive datetime for comparison)
+            now = datetime.now()
+            
+            # Check if the session datetime is in the past
+            # Compare full datetime including minutes
+            if session_datetime <= now:
+                flash("You cannot schedule a training session in the past. Please select a future date and time.", "error")
                 return redirect(url_for("coach.create_training"))
 
-        except ValueError:
-            flash("Invalid date or time format.", "error")
+        except ValueError as e:
+            flash(f"Invalid date or time format: {str(e)}", "error")
             return redirect(url_for("coach.create_training"))
 
         team_data = fetch_team_by_coach(coach_id)

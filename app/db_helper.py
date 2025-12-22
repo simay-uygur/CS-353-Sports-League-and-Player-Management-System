@@ -206,14 +206,24 @@ def fetch_player_by_id(playerid):
                 """
                 SELECT u.firstname,
                        u.lastname,
+                       u.email,
                        p.position,
                        aei.salary,
                        aei.enddate,
-                       aei.teamname
+                       COALESCE(aei.teamname, t.teamname) AS teamname,
+                       COALESCE(aei.teamid, e.teamid) AS teamid,
+                       (
+                           SELECT string_agg(uc.email, ', ')
+                           FROM Coach c
+                           JOIN Employee ec ON c.usersid = ec.usersid
+                           JOIN Users uc ON c.usersid = uc.usersid
+                           WHERE ec.teamid = COALESCE(aei.teamid, e.teamid)
+                       ) AS coach_emails
                 FROM Player p
                 JOIN Users u ON p.usersid = u.usersid
                 LEFT JOIN Employee e ON p.usersid = e.usersid
-                LEFT JOIN AllEmploymentInfo aei ON p.usersid = aei.usersid
+                LEFT JOIN Team t ON e.teamid = t.teamid
+                LEFT JOIN AllEmploymentInfo aei ON p.usersid = aei.usersid AND aei.enddate > NOW()
                 WHERE u.usersid = %s
                 """,
                 (playerid,),
@@ -3352,27 +3362,60 @@ def create_training_session(coach_id, session_date, location, focus):
 def init_session_attendance(session_id, coach_id):
     """
     Called immediately after a training session is created.
-    Finds all PLAYERS in the coach's team by joining with the Player table
-    and inserts a default attendance record (Status=0) for them.
+    Finds all PLAYERS in the coach's team and inserts a default attendance record (Status=NULL) for each player.
     """
     conn = get_connection()
     try:
         with conn:
             with conn.cursor() as cur:
+                # First, get the coach's team ID
+                cur.execute(
+                    """
+                    SELECT TeamID FROM Employee WHERE UsersID = %s;
+                    """,
+                    (coach_id,),
+                )
+                team_result = cur.fetchone()
+                
+                if not team_result or not team_result[0]:
+                    print(f"Coach {coach_id} is not assigned to a team")
+                    return
+                
+                team_id = team_result[0]
+                print(f"Found team {team_id} for coach {coach_id}")
+                
+                # Check how many players are on the team
+                cur.execute(
+                    """
+                    SELECT COUNT(*) 
+                    FROM Employee e
+                    JOIN Player p ON p.UsersID = e.UsersID
+                    WHERE e.TeamID = %s;
+                    """,
+                    (team_id,),
+                )
+                player_count = cur.fetchone()[0]
+                print(f"Found {player_count} players on team {team_id}")
+                
+                # Insert attendance records for all players on that team with NULL status
                 cur.execute(
                     """
                     INSERT INTO TrainingAttendance (SessionID, PlayerID, Status)
-                    SELECT %s, p.UsersID, 0
+                    SELECT %s, p.UsersID, NULL
                     FROM Employee e
-                    JOIN Employee c ON c.TeamID = e.TeamID    
-                    JOIN Player p ON p.UsersID = e.UsersID     
-                    WHERE c.UsersID = %s                       
+                    JOIN Player p ON p.UsersID = e.UsersID
+                    WHERE e.TeamID = %s
                     ON CONFLICT (SessionID, PlayerID) DO NOTHING;
                     """,
-                    (session_id, coach_id),
+                    (session_id, team_id),
                 )
+                
+                rows_inserted = cur.rowcount
+                print(f"Created {rows_inserted} attendance records for session {session_id} (Status=NULL)")
     except Exception as e:
         print(f"Error initializing attendance: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
         conn.close()
 
@@ -3522,8 +3565,14 @@ def clear_player_injury_db(player_id):
     conn = get_connection()
     try:
         with conn.cursor() as cur:
+            # Update player's eligibility status
             cur.execute(
                 "UPDATE Player SET IsEligible = 'Eligible' WHERE UsersID = %s",
+                (player_id,),
+            )
+            # Delete all injury records for this player
+            cur.execute(
+                "DELETE FROM Injury WHERE PlayerID = %s",
                 (player_id,),
             )
             conn.commit()
