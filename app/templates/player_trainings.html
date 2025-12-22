@@ -63,12 +63,18 @@
                                     <span class="status-badge eligible">Attended</span>
                                 {% elif training.attendancestatus == 0 %}
                                     <span class="status-badge ineligible">Absent</span>
+                                {% elif training.attendancestatus == 2 %}
+                                    {% if training.sessiondate > now %}
+                                        <span class="status-badge" style="background: #fef3c7; color: #92400e;">Injured</span>
+                                    {% else %}
+                                        <span class="status-badge ineligible">Absent</span>
+                                    {% endif %}
                                 {% else %}
                                     <span class="status-badge" style="background: #fef3c7; color: #92400e;">Pending</span>
                                 {% endif %}
                             {% else %}
                                 <span class="status-not-registered subtle">Not registered</span>
-                                <span class="status-not-attended status-badge ineligible" style="display: none;">Absent</span>
+                                <span class="status-not-attended status-badge ineligible" style="display: none;">Not Attended</span>
                             {% endif %}
                         </td>
                         <td class="actions-cell">
@@ -85,6 +91,8 @@
                                     </form>
                                 </div>
                                 <span class="no-action subtle" style="display: none;">-</span>
+                            {% elif training.attendancestatus == 2 and training.sessiondate > now %}
+                                <span class="subtle">Cannot attend (Injured)</span>
                             {% else %}
                                 <span class="subtle">-</span>
                             {% endif %}

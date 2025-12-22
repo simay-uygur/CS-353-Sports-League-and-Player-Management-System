@@ -107,6 +107,8 @@ def update_training_attendance(session_id):
     player_id = session.get("user_id")
     status = request.form.get("status")
 
+    # Only allow status 0 (Skip) and 1 (Join) from user input
+    # Status 2 (Injured) is set automatically by database triggers
     if status not in ("0", "1"):
         return redirect(url_for("player.view_trainings"))
 
