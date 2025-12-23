@@ -57,44 +57,31 @@
                         <td>{{ training.focus }}</td>
                         <td>{{ training.coachfirstname }} {{ training.coachlastname }}</td>
                         <td>{{ training.teamname }}</td>
-                        <td class="status-cell">
+                        <td>
                             {% if training.attendancestatus is not none %}
                                 {% if training.attendancestatus == 1 %}
                                     <span class="status-badge eligible">Attended</span>
                                 {% elif training.attendancestatus == 0 %}
                                     <span class="status-badge ineligible">Absent</span>
-                                {% elif training.attendancestatus == 2 %}
-                                    {% if training.sessiondate > now %}
-                                        <span class="status-badge" style="background: #fef3c7; color: #92400e;">Injured</span>
-                                    {% else %}
-                                        <span class="status-badge ineligible">Absent</span>
-                                    {% endif %}
                                 {% else %}
                                     <span class="status-badge" style="background: #fef3c7; color: #92400e;">Pending</span>
                                 {% endif %}
                             {% else %}
-                                <span class="status-not-registered subtle">Not registered</span>
-                                <span class="status-not-attended status-badge ineligible" style="display: none;">Not Attended</span>
+                                <span class="subtle">Not registered</span>
                             {% endif %}
                         </td>
-                        <td class="actions-cell">
-                            {% if training.attendancestatus is none %}
-                                <div class="action-buttons">
-                                    <form method="POST" action="{{ url_for('player.update_training_attendance', session_id=training.sessionid) }}" style="display: inline-block; margin: 0;">
-                                        <input type="hidden" name="status" value="1">
-                                        <button type="submit" class="btn small solid" style="margin-right: 0.5rem;">Join</button>
-                                    </form>
-                                    
-                                    <form method="POST" action="{{ url_for('player.update_training_attendance', session_id=training.sessionid) }}" style="display: inline-block; margin: 0;">
-                                        <input type="hidden" name="status" value="0">
-                                        <button type="submit" class="btn small ghost">Skip</button>
-                                    </form>
-                                </div>
-                                <span class="no-action subtle" style="display: none;">-</span>
-                            {% elif training.attendancestatus == 2 and training.sessiondate > now %}
-                                <span class="subtle">Cannot attend (Injured)</span>
-                            {% else %}
-                                <span class="subtle">-</span>
+                        <td>
+                            {% if training.sessiondate > now and training.attendancestatus is none %}
+                                
+                                <form method="POST" action="{{ url_for('player.update_training_attendance', session_id=training.sessionid) }}" style="display: inline-block; margin: 0;">
+                                    <input type="hidden" name="status" value="1">
+                                    <button type="submit" class="btn small solid" style="margin-right: 0.5rem;">Join</button>
+                                </form>
+                                
+                                <form method="POST" action="{{ url_for('player.update_training_attendance', session_id=training.sessionid) }}" style="display: inline-block; margin: 0;">
+                                    <input type="hidden" name="status" value="0">
+                                    <button type="submit" class="btn small ghost">Skip</button>
+                                </form>
                             {% endif %}
                         </td>
                     </tr>
