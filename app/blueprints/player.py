@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash
 from psycopg2.extras import RealDictCursor
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 from db import get_connection
 from db_helper import (
@@ -79,7 +79,8 @@ def home():
 def view_trainings():
     player_id = session.get("user_id")
     trainings = fetch_player_trainings(player_id)
-    now = datetime.now()
+    now = datetime.now(timezone.utc)  # Use UTC for proper comparison with TIMESTAMPTZ
+    turkey_tz = timezone(timedelta(hours=3))  # Turkey timezone for display
     
     # Add flags for easier template logic
     for training in trainings:
@@ -87,11 +88,13 @@ def view_trainings():
         
         # Calculate is_past flag
         if session_date:
-            # Handle timezone-aware datetimes
-            if hasattr(session_date, 'tzinfo') and session_date.tzinfo:
-                session_date = session_date.replace(tzinfo=None)
+            # If session_date is naive, assume it's UTC
+            if session_date.tzinfo is None:
+                session_date = session_date.replace(tzinfo=timezone.utc)
             # Session is in the past if it's before or at current time
             training['is_past'] = session_date <= now
+            # Convert to Turkey time for display
+            training['sessiondate'] = session_date.astimezone(turkey_tz)
         else:
             training['is_past'] = True  # No date means treat as past
         
@@ -107,18 +110,16 @@ def update_training_attendance(session_id):
     player_id = session.get("user_id")
     status = request.form.get("status")
 
-    # Only allow status 0 (Skip) and 1 (Join) from user input
-    # Status 2 (Injured) is set automatically by database triggers
-    if status not in ("0", "1"):
+    if status not in ("0", "1", "2"):
         return redirect(url_for("player.view_trainings"))
 
     # Check if session is in the past
     session_date = fetch_session_date(session_id)
     if session_date:
-        now = datetime.now()
-        # Handle timezone-aware datetimes
-        if hasattr(session_date, 'tzinfo') and session_date.tzinfo:
-            session_date = session_date.replace(tzinfo=None)
+        now = datetime.now(timezone.utc)
+        # If session_date is naive, assume it's UTC
+        if session_date.tzinfo is None:
+            session_date = session_date.replace(tzinfo=timezone.utc)
         if session_date <= now:
             flash("You cannot respond to a training session that has already passed.", "error")
             return redirect(url_for("player.view_trainings"))

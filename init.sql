@@ -88,7 +88,7 @@ CREATE TABLE Player (
 CREATE TABLE TrainingSession (
   SessionID SERIAL,
   CoachID INT NOT NULL,
-  SessionDate TIMESTAMP NOT NULL,
+  SessionDate TIMESTAMPTZ NOT NULL,
   Location VARCHAR(255) NOT NULL,
   Focus VARCHAR(255) NOT NULL,
   PRIMARY KEY (SessionID),
@@ -1103,12 +1103,12 @@ BEGIN
     SELECT TeamID INTO v_team_id
     FROM Employee
     WHERE UsersID = NEW.PlayerID;
-    
+
     -- If player has no team, nothing to do
     IF v_team_id IS NULL THEN
         RETURN NEW;
     END IF;
-    
+
     -- Insert or update TrainingAttendance for all training sessions
     -- that fall within the injury period (InjuryDate to RecoveryDate)
     INSERT INTO TrainingAttendance (SessionID, PlayerID, Status)
@@ -1121,7 +1121,7 @@ BEGIN
       AND ts.SessionDate <= NEW.RecoveryDate
     ON CONFLICT (SessionID, PlayerID) 
     DO UPDATE SET Status = 2;
-    
+
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -1141,16 +1141,16 @@ BEGIN
     IF OLD.RecoveryDate = NEW.RecoveryDate THEN
         RETURN NEW;
     END IF;
-    
+
     -- Get the player's team
     SELECT TeamID INTO v_team_id
     FROM Employee
     WHERE UsersID = NEW.PlayerID;
-    
+
     IF v_team_id IS NULL THEN
         RETURN NEW;
     END IF;
-    
+
     -- If recovery date was EXTENDED: Mark additional trainings as Status=2
     IF NEW.RecoveryDate > OLD.RecoveryDate THEN
         INSERT INTO TrainingAttendance (SessionID, PlayerID, Status)
@@ -1164,7 +1164,7 @@ BEGIN
         ON CONFLICT (SessionID, PlayerID) 
         DO UPDATE SET Status = 2;
     END IF;
-    
+
     -- If recovery date was SHORTENED: Reset trainings outside the new period to NULL (only future ones)
     IF NEW.RecoveryDate < OLD.RecoveryDate THEN
         UPDATE TrainingAttendance ta
@@ -1177,7 +1177,7 @@ BEGIN
           AND ts.SessionDate <= OLD.RecoveryDate
           AND ts.SessionDate > NOW();  -- Only future trainings
     END IF;
-    
+
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -1199,7 +1199,7 @@ BEGIN
       AND ta.PlayerID = OLD.PlayerID
       AND ta.Status = 2
       AND ts.SessionDate > NOW();  -- Only future trainings
-    
+
     RETURN OLD;
 END;
 $$ LANGUAGE plpgsql;
@@ -1208,6 +1208,67 @@ CREATE TRIGGER trg_injury_delete_reset_training_status
 AFTER DELETE ON Injury
 FOR EACH ROW
 EXECUTE FUNCTION reset_training_status_on_injury_delete();
+
+-- Trigger to auto-mark training attendance as NULL when training time arrives
+CREATE OR REPLACE FUNCTION auto_mark_training_skipped()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- For each player on the coach's team who doesn't have a TrainingAttendance record
+    INSERT INTO TrainingAttendance (SessionID, PlayerID, Status)
+    SELECT 
+        NEW.SessionID,
+        e_player.UsersID,
+        NULL  -- Status NULL = Not set yet
+    FROM Employee e_coach
+    JOIN Employee e_player ON e_coach.TeamID = e_player.TeamID
+    JOIN Player p ON e_player.UsersID = p.UsersID
+    WHERE e_coach.UsersID = NEW.CoachID
+      AND e_player.UsersID != e_coach.UsersID  -- Don't include the coach
+      AND NOT EXISTS (
+          SELECT 1 
+          FROM TrainingAttendance ta 
+          WHERE ta.SessionID = NEW.SessionID 
+          AND ta.PlayerID = e_player.UsersID
+      )
+    ON CONFLICT (SessionID, PlayerID) DO NOTHING;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_auto_mark_training_skipped
+AFTER INSERT OR UPDATE OF SessionDate ON TrainingSession
+FOR EACH ROW
+WHEN (NEW.SessionDate <= NOW())
+EXECUTE FUNCTION auto_mark_training_skipped();
+
+
+
+-- Function to process existing trainings that have passed
+CREATE OR REPLACE FUNCTION process_past_trainings()
+RETURNS void AS $$
+BEGIN
+    -- Mark all players as NULL for trainings that have passed and don't have attendance records
+    INSERT INTO TrainingAttendance (SessionID, PlayerID, Status)
+    SELECT DISTINCT
+        ts.SessionID,
+        e_player.UsersID,
+        NULL  -- Status NULL = Not set yet
+    FROM TrainingSession ts
+    JOIN Employee e_coach ON ts.CoachID = e_coach.UsersID
+    JOIN Employee e_player ON e_coach.TeamID = e_player.TeamID
+    JOIN Player p ON e_player.UsersID = p.UsersID
+    WHERE ts.SessionDate <= NOW()
+      AND e_player.UsersID != e_coach.UsersID
+      AND NOT EXISTS (
+          SELECT 1 
+          FROM TrainingAttendance ta 
+          WHERE ta.SessionID = ts.SessionID 
+          AND ta.PlayerID = e_player.UsersID
+      )
+    ON CONFLICT (SessionID, PlayerID) DO NOTHING;
+END;
+$$ LANGUAGE plpgsql;
 
 -- sample data ---------------------------------------------------------------
 INSERT INTO Users (
@@ -1515,70 +1576,6 @@ INSERT INTO Player (UsersID, Height, Weight, Overall, Position, IsEligible)
 SELECT pwi.UsersID, pwi.height_cm, pwi.weight_kg, '85', pwi.position, 'eligible'
 FROM players_with_ids pwi;
 
--- Trigger to auto-mark training attendance as NULL when training time arrives
-CREATE OR REPLACE FUNCTION auto_mark_training_skipped()
-RETURNS TRIGGER AS $$
-BEGIN
-    -- For each player on the coach's team who doesn't have a TrainingAttendance record
-    INSERT INTO TrainingAttendance (SessionID, PlayerID, Status)
-    SELECT 
-        NEW.SessionID,
-        e_player.UsersID,
-        NULL  -- Status NULL = Not set yet
-    FROM Employee e_coach
-    JOIN Employee e_player ON e_coach.TeamID = e_player.TeamID
-    JOIN Player p ON e_player.UsersID = p.UsersID
-    WHERE e_coach.UsersID = NEW.CoachID
-      AND e_player.UsersID != e_coach.UsersID  -- Don't include the coach
-      AND NOT EXISTS (
-          SELECT 1 
-          FROM TrainingAttendance ta 
-          WHERE ta.SessionID = NEW.SessionID 
-          AND ta.PlayerID = e_player.UsersID
-      )
-    ON CONFLICT (SessionID, PlayerID) DO NOTHING;
-    
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trg_auto_mark_training_skipped
-AFTER INSERT OR UPDATE OF SessionDate ON TrainingSession
-FOR EACH ROW
-WHEN (NEW.SessionDate <= NOW())
-EXECUTE FUNCTION auto_mark_training_skipped();
-
--- Function to process existing trainings that have passed
-CREATE OR REPLACE FUNCTION process_past_trainings()
-RETURNS void AS $$
-BEGIN
-    -- Mark all players as NULL for trainings that have passed and don't have attendance records
-    INSERT INTO TrainingAttendance (SessionID, PlayerID, Status)
-    SELECT DISTINCT
-        ts.SessionID,
-        e_player.UsersID,
-        NULL  -- Status NULL = Not set yet
-    FROM TrainingSession ts
-    JOIN Employee e_coach ON ts.CoachID = e_coach.UsersID
-    JOIN Employee e_player ON e_coach.TeamID = e_player.TeamID
-    JOIN Player p ON e_player.UsersID = p.UsersID
-    WHERE ts.SessionDate <= NOW()
-      AND e_player.UsersID != e_coach.UsersID
-      AND NOT EXISTS (
-          SELECT 1 
-          FROM TrainingAttendance ta 
-          WHERE ta.SessionID = ts.SessionID 
-          AND ta.PlayerID = e_player.UsersID
-      )
-    ON CONFLICT (SessionID, PlayerID) DO NOTHING;
-END;
-$$ LANGUAGE plpgsql;
-
--- Migrate password storage away from CHAR padding
-ALTER TABLE Users ALTER COLUMN HashedPassword TYPE TEXT;
-ALTER TABLE Users ALTER COLUMN Salt TYPE TEXT;
-UPDATE Users SET HashedPassword = RTRIM(HashedPassword);
-UPDATE Users SET Salt = RTRIM(Salt);
 
 
 
