@@ -84,6 +84,14 @@
                         </div>
                     </div>
 
+                    <!-- Filter for today's matches-->
+                    <div class="toggle-today">
+                      <label>
+                        <input type="checkbox" id="date-toggle" name="subscribe" value="newsletter">
+                        Today's matches
+                      </label>
+                    </div>
+
                     <!-- Action Buttons -->
                     <div class="filters-actions">
                         <button type="button" class="btn small" onclick="fetchMatches()">Apply Filters</button>
@@ -146,6 +154,8 @@
             document.getElementById('team_all').checked = true;
             document.querySelectorAll('.team-checkbox-list input[type="checkbox"]:not([value=""])').forEach(cb => cb.checked = false);
             
+            document.getElementById('date-toggle').checked = true;
+
             // Clear search inputs
             document.getElementById('league_search').value = '';
             document.getElementById('tournament_search').value = '';
@@ -350,6 +360,11 @@
             // Add all selected tournaments (comma-separated)
             if (selectedTournaments.length > 0) {
                 url += `&tournament_ids=${selectedTournaments.join(',')}`;
+            }
+
+            const checkbox = document.getElementById('date-toggle')
+            if (checkbox.checked){
+                url +=`&today=true`;
             }
 
             // Debug logging
