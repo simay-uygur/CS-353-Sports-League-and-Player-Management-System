@@ -110,9 +110,9 @@
                 <form method="POST">
                     <input type="hidden" name="report_type" value="attendance">
                     <label>Date From (optional)</label>
-                    <input type="date" name="date_from" value="{{ request.form.get('date_from','') }}">
+                    <input type="date" name="date_from" id="attendance_date_from" value="{{ request.form.get('date_from','') }}">
                     <label>Date To (optional)</label>
-                    <input type="date" name="date_to" value="{{ request.form.get('date_to','') }}">
+                    <input type="date" name="date_to" id="attendance_date_to" value="{{ request.form.get('date_to','') }}">
                     <div class="filter-group-complete">
                         <label for="attendance_player_search">Players (optional)</label>
                         <input type="search"
@@ -390,6 +390,13 @@
                     });
                 });
             }
+
+            // Restrict attendance date inputs to today or past (no future dates)
+            const today = new Date().toISOString().split('T')[0];
+            const dateFrom = document.getElementById('attendance_date_from');
+            const dateTo = document.getElementById('attendance_date_to');
+            if (dateFrom) dateFrom.setAttribute('max', today);
+            if (dateTo) dateTo.setAttribute('max', today);
 
         });
     </script>
