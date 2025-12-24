@@ -88,7 +88,7 @@ CREATE TABLE Player (
 CREATE TABLE TrainingSession (
   SessionID SERIAL,
   CoachID INT NOT NULL,
-  SessionDate TIMESTAMP NOT NULL,
+  SessionDate TIMESTAMPTZ NOT NULL,
   Location VARCHAR(255) NOT NULL,
   Focus VARCHAR(255) NOT NULL,
   PRIMARY KEY (SessionID),

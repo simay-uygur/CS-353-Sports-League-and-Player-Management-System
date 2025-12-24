@@ -467,9 +467,13 @@ def report_league_standings(league_id, season_no, season_year):
 def report_player_attendance(date_from=None, date_to=None, player_ids=None, session_ids=None, team_id=None, all_teams=False):
     """
     Counts training attendance per player from TrainingAttendance table.
-    Uses historical employment data (AllEmploymentInfo) to correctly attribute sessions to teams
-    based on which team the coach was employed with when the session was created.
+    Returns both attended and absent counts for past trainings only.
+    When filtering by team, uses the player's current team assignment.
     Filters by training session dates, optionally by player_ids (list), session_ids (list), team_id, or all teams.
+    
+    Status meanings:
+    - Status = 1: Attended
+    - Status IS NULL, 0, or 2: Absent   (2-injured, 0-skipped, NULL-no response)
     """
     conn = get_connection()
     try:
@@ -477,21 +481,39 @@ def report_player_attendance(date_from=None, date_to=None, player_ids=None, sess
             clauses = []
             params = []
             
-            # Base query uses AllEmploymentInfo to get the team the coach was on when session was created
-            query = """
-                SELECT 
-                    u.UsersID AS PlayerID,
-                    u.FirstName,
-                    u.LastName,
-                    COUNT(*) AS appearances
-                FROM TrainingAttendance ta
-                JOIN TrainingSession ts ON ta.SessionID = ts.SessionID
-                JOIN AllEmploymentInfo aei ON ts.CoachID = aei.UsersID
-                JOIN Team t ON aei.TeamID = t.TeamID
-                JOIN Users u ON ta.PlayerID = u.UsersID
-                WHERE ta.Status = 1
-                  AND ts.SessionDate BETWEEN aei.StartDate AND aei.EndDate
-            """
+            # Base query - counts attendance for past trainings
+            # Only count past trainings (SessionDate <= NOW())
+            if team_id and not all_teams:
+                # When filtering by team, join with player's employment to get their team
+                query = """
+                    SELECT 
+                        u.UsersID AS PlayerID,
+                        u.FirstName,
+                        u.LastName,
+                        COUNT(*) FILTER (WHERE ta.Status = 1) AS attended,
+                        COUNT(*) FILTER (WHERE ta.Status IS NULL OR ta.Status = 0 OR ta.Status = 2) AS absent
+                    FROM TrainingAttendance ta
+                    JOIN TrainingSession ts ON ta.SessionID = ts.SessionID
+                    JOIN Users u ON ta.PlayerID = u.UsersID
+                    JOIN Employee e ON e.UsersID = ta.PlayerID
+                    WHERE ts.SessionDate <= NOW()
+                      AND e.TeamID = %s
+                """
+                params.append(team_id)
+            else:
+                # No team filter - simple query without employment join
+                query = """
+                    SELECT 
+                        u.UsersID AS PlayerID,
+                        u.FirstName,
+                        u.LastName,
+                        COUNT(*) FILTER (WHERE ta.Status = 1) AS attended,
+                        COUNT(*) FILTER (WHERE ta.Status IS NULL OR ta.Status = 0 OR ta.Status = 2) AS absent
+                    FROM TrainingAttendance ta
+                    JOIN TrainingSession ts ON ta.SessionID = ts.SessionID
+                    JOIN Users u ON ta.PlayerID = u.UsersID
+                    WHERE ts.SessionDate <= NOW()
+                """
 
             # Filter by training session date range
             if date_from:
@@ -511,18 +533,13 @@ def report_player_attendance(date_from=None, date_to=None, player_ids=None, sess
             if session_ids and len(session_ids) > 0:
                 clauses.append("ta.SessionID = ANY(%s)")
                 params.append(session_ids)
-            
-            # Filter by team (unless all_teams is True)
-            if not all_teams and team_id:
-                clauses.append("t.TeamID = %s")
-                params.append(team_id)
 
             if clauses:
                 query += " AND " + " AND ".join(clauses)
 
             query += """
                 GROUP BY u.UsersID, u.FirstName, u.LastName
-                ORDER BY appearances DESC, u.LastName, u.FirstName;
+                ORDER BY attended DESC, absent ASC, u.LastName, u.FirstName;
             """
 
             cur.execute(query, tuple(params))
@@ -3378,11 +3395,11 @@ def init_session_attendance(session_id, coach_id):
                 team_result = cur.fetchone()
                 
                 if not team_result or not team_result[0]:
-                    print(f"Coach {coach_id} is not assigned to a team")
+                    print(f"ERROR: Coach {coach_id} is not assigned to a team")
                     return
                 
                 team_id = team_result[0]
-                print(f"Found team {team_id} for coach {coach_id}")
+                print(f"INFO: Found team {team_id} for coach {coach_id}")
                 
                 # Check how many players are on the team
                 cur.execute(
@@ -3395,25 +3412,35 @@ def init_session_attendance(session_id, coach_id):
                     (team_id,),
                 )
                 player_count = cur.fetchone()[0]
-                print(f"Found {player_count} players on team {team_id}")
+                print(f"INFO: Found {player_count} players on team {team_id}")
+                
+                if player_count == 0:
+                    print(f"WARNING: No players found on team {team_id}")
+                    return
                 
                 # Insert attendance records for all players on that team with NULL status
-                cur.execute(
-                    """
-                    INSERT INTO TrainingAttendance (SessionID, PlayerID, Status)
-                    SELECT %s, p.UsersID, NULL
-                    FROM Employee e
-                    JOIN Player p ON p.UsersID = e.UsersID
-                    WHERE e.TeamID = %s
-                    ON CONFLICT (SessionID, PlayerID) DO NOTHING;
-                    """,
-                    (session_id, team_id),
-                )
-                
-                rows_inserted = cur.rowcount
-                print(f"Created {rows_inserted} attendance records for session {session_id} (Status=NULL)")
+                try:
+                    cur.execute(
+                        """
+                        INSERT INTO TrainingAttendance (SessionID, PlayerID, Status)
+                        SELECT %s, p.UsersID, NULL
+                        FROM Employee e
+                        JOIN Player p ON p.UsersID = e.UsersID
+                        WHERE e.TeamID = %s
+                        ON CONFLICT (SessionID, PlayerID) DO NOTHING;
+                        """,
+                        (session_id, team_id),
+                    )
+                    
+                    rows_inserted = cur.rowcount
+                    print(f"SUCCESS: Created {rows_inserted} attendance records for session {session_id} (Status=NULL)")
+                except Exception as insert_error:
+                    print(f"ERROR inserting attendance records: {insert_error}")
+                    import traceback
+                    traceback.print_exc()
+                    raise
     except Exception as e:
-        print(f"Error initializing attendance: {e}")
+        print(f"ERROR initializing attendance: {e}")
         import traceback
         traceback.print_exc()
     finally:
