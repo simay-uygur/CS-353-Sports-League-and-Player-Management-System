@@ -357,6 +357,8 @@
       document.getElementById('penalties').disabled = false;
       document.getElementById('substituteDropdown').disabled = false;
       document.getElementById('playSave').disabled = false;
+      document.getElementById('removeInjury').style.pointerEvents = 'auto';
+      document.getElementById('removeInjury').style.opacity = '0';
 
       if (play.disciplinarilypunished == true || play.wasinjured == true || play.islocked){
         document.getElementById('goals').disabled = true;
@@ -414,8 +416,18 @@
 
       document.getElementById('injuryplayerid').value = player.usersid || '';
       document.getElementById('injurydate').value = dateFormatter(player.matchstartdatetime);
+
+      document.getElementById('injuryid').disabled = false;
+      document.getElementById('injurytype').disabled = false;
+      document.getElementById('recoverydate').disabled = false;
+      document.getElementById('description').disabled = false;
       document.getElementById('saveInjury').disabled = false;
+      document.getElementById('saveInjury').disabled = false;
+      document.getElementById('saveInjury').style.pointerEvents = 'auto';
+      document.getElementById('saveInjury').style.opacity = '0';
       document.getElementById('removeInjury').disabled = false;
+      document.getElementById('removeInjury').style.pointerEvents = 'auto';
+      document.getElementById('removeInjury').style.opacity = '0';
 
       // Disabled if match locked
       if (player.disciplinarilypunished == true || player.wasinjured == true || player.islocked){
@@ -460,10 +472,14 @@
 
       document.getElementById('banplayerid').value = player.usersid || '';
       document.getElementById('banstartdate').value = startDate;
-      document.getElementById('saveBan').disabled = false;
-      document.getElementById('removeBan').disabled = false;
       
       document.getElementById('banenddate').disabled = false;
+      document.getElementById('saveBan').disabled = false;
+      document.getElementById('saveBan').style.pointerEvents = 'auto';
+      document.getElementById('saveBan').style.opacity = '0';
+      document.getElementById('removeBan').disabled = false;
+      document.getElementById('removeBan').style.pointerEvents = 'auto';
+      document.getElementById('removeBan').style.opacity = '0';
 
       // Disable fields if the match is locked
       if (player.disciplinarilypunished == true || player.wasinjured == true || player.islocked){
