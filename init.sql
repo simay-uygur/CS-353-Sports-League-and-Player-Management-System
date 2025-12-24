@@ -1583,7 +1583,7 @@ UPDATE Users SET Salt = RTRIM(Salt);
 
 
 ---------------------------------------------------------------------------------------------------------------------------
-
+-- Test referees
 -- 1. Create a Test Referee
 -- Email: ref_test@example.com, Password: (Matches your hashed sample)
 INSERT INTO Users (FirstName, LastName, Email, HashedPassword, Salt, BirthDate, Role, Nationality)
@@ -1717,6 +1717,7 @@ VALUES (
     (SELECT MAX(MatchID) FROM Match),
     (SELECT UsersID FROM Users WHERE Email = 'ref_test@example.com'));
 
+
 -- Players without teams (no employment records)
 -- These players exist as Users, Employees (with NULL TeamID), and Players, but have no Employment records
 INSERT INTO Users (
@@ -1772,3 +1773,174 @@ SELECT
   'eligible'
 FROM Users u
 WHERE u.Email IN ('free1@gmail.com', 'free2@gmail.com', 'free3@gmail.com', 'free4@gmail.com', 'free5@gmail.com');
+
+
+
+-- Artun match with injured and banned player seeding
+-- ==================================================================
+-- 1. SETUP OWNERS AND TEAMS
+-- ==================================================================
+
+BEGIN;
+
+INSERT INTO Users (FirstName, LastName, Email, HashedPassword, Salt, BirthDate, Role, Nationality)
+VALUES 
+('Leonidas', 'Sparta', 'owner.sparta@test.com', 'hash', 'salt', '1980-01-01', 'team_owner', 'Greece'),
+('Priam', 'Troy', 'owner.troy@test.com', 'hash', 'salt', '1980-01-01', 'team_owner', 'Turkey')
+ON CONFLICT (Email) DO NOTHING;
+
+INSERT INTO TeamOwner (UsersID, NetWorth)
+VALUES 
+((SELECT UsersID FROM Users WHERE Email='owner.sparta@test.com'), 5000000),
+((SELECT UsersID FROM Users WHERE Email='owner.troy@test.com'), 5000000)
+ON CONFLICT (UsersID) DO NOTHING;
+
+INSERT INTO Team (OwnerID, TeamName, EstablishedDate, HomeVenue)
+VALUES 
+((SELECT UsersID FROM Users WHERE Email='owner.sparta@test.com'), 'Spartans FC', '1950-01-01', 'Thermopylae Arena'),
+((SELECT UsersID FROM Users WHERE Email='owner.troy@test.com'), 'Trojans United', '1950-01-01', 'Wall Stadium')
+ON CONFLICT (TeamName) DO NOTHING;
+
+-- ==================================================================
+-- 2. CREATE FULL ROSTERS (11 Players per team)
+-- ==================================================================
+
+-- --- SPARTANS (Home) ---
+INSERT INTO Users (FirstName, LastName, Email, HashedPassword, Salt, BirthDate, Role, Nationality) VALUES 
+('Achilles', 'Hero', 'achilles@sparta.com', 'hash', 'salt', '1998-01-01', 'player', 'Greece'),
+('Odysseus', 'Tactician', 'odysseus@sparta.com', 'hash', 'salt', '1998-01-01', 'player', 'Greece'),
+('Ajax', 'Greater', 'ajax1@sparta.com', 'hash', 'salt', '1995-01-01', 'player', 'Greece'),
+('Menelaus', 'King', 'menelaus@sparta.com', 'hash', 'salt', '1994-01-01', 'player', 'Greece'),
+('Agamemnon', 'Commander', 'agamemnon@sparta.com', 'hash', 'salt', '1993-01-01', 'player', 'Greece'),
+('Patroclus', 'Loyal', 'patroclus@sparta.com', 'hash', 'salt', '1996-01-01', 'player', 'Greece'),
+('Diomedes', 'Strong', 'diomedes@sparta.com', 'hash', 'salt', '1997-01-01', 'player', 'Greece'),
+('Nestor', 'Elder', 'nestor@sparta.com', 'hash', 'salt', '1980-01-01', 'player', 'Greece'),
+('Teucer', 'Archer', 'teucer@sparta.com', 'hash', 'salt', '1998-01-01', 'player', 'Greece'),
+('Antilochus', 'Swift', 'antilochus@sparta.com', 'hash', 'salt', '1999-01-01', 'player', 'Greece'),
+('Idomeneus', 'Spear', 'idomeneus@sparta.com', 'hash', 'salt', '1992-01-01', 'player', 'Greece');
+
+-- --- TROJANS (Away) ---
+INSERT INTO Users (FirstName, LastName, Email, HashedPassword, Salt, BirthDate, Role, Nationality) VALUES 
+('Hector', 'Prince', 'hector@troy.com', 'hash', 'salt', '1998-01-01', 'player', 'Turkey'),
+('Paris', 'Archer', 'paris@troy.com', 'hash', 'salt', '1998-01-01', 'player', 'Turkey'),
+('Aeneas', 'Founder', 'aeneas@troy.com', 'hash', 'salt', '1995-01-01', 'player', 'Turkey'),
+('Sarpedon', 'Leader', 'sarpedon@troy.com', 'hash', 'salt', '1994-01-01', 'player', 'Turkey'),
+('Glaucus', 'Noble', 'glaucus@troy.com', 'hash', 'salt', '1997-01-01', 'player', 'Turkey'),
+('Pandarus', 'Bowman', 'pandarus@troy.com', 'hash', 'salt', '1998-01-01', 'player', 'Turkey'),
+('Helenus', 'Seer', 'helenus@troy.com', 'hash', 'salt', '1990-01-01', 'player', 'Turkey'),
+('Deiphobus', 'Warrior', 'deiphobus@troy.com', 'hash', 'salt', '1993-01-01', 'player', 'Turkey'),
+('Polydamas', 'Wise', 'polydamas@troy.com', 'hash', 'salt', '1996-01-01', 'player', 'Turkey'),
+('Agenor', 'Stout', 'agenor@troy.com', 'hash', 'salt', '1997-01-01', 'player', 'Turkey'),
+('Dolon', 'Spy', 'dolon@troy.com', 'hash', 'salt', '1999-01-01', 'player', 'Turkey');
+
+-- Link all to Employee and Team
+INSERT INTO Employee (UsersID, TeamID) 
+SELECT UsersID, (SELECT TeamID FROM Team WHERE TeamName='Spartans FC') FROM Users WHERE Email LIKE '%@sparta.com' AND Role='player';
+
+INSERT INTO Employee (UsersID, TeamID) 
+SELECT UsersID, (SELECT TeamID FROM Team WHERE TeamName='Trojans United') FROM Users WHERE Email LIKE '%@troy.com' AND Role='player';
+
+-- Link all to Player
+INSERT INTO Player (UsersID, Height, Weight, Overall, Position, IsEligible)
+SELECT UsersID, 180, 75, '85', 'Midfielder', 'eligible' FROM Users WHERE (Email LIKE '%@sparta.com' OR Email LIKE '%@troy.com') AND Role='player';
+
+-- ==================================================================
+-- 3. EMPLOYMENT CONTRACTS (22 total)
+-- ==================================================================
+
+-- Create 22 active contracts
+INSERT INTO Employment (StartDate, EndDate, Salary)
+SELECT '2024-01-01', '2026-01-01', 1000000 FROM generate_series(1, 22);
+
+-- Link them manually to the players
+-- Spartans
+INSERT INTO Employed (EmploymentID, UsersID, TeamID)
+SELECT 
+    (SELECT MIN(EmploymentID) + rn - 1 FROM Employment WHERE StartDate = '2024-01-01'),
+    u.UsersID,
+    (SELECT TeamID FROM Team WHERE TeamName='Spartans FC')
+FROM (SELECT UsersID, ROW_NUMBER() OVER (ORDER BY UsersID) as rn FROM Users WHERE Email LIKE '%@sparta.com' AND Role='player') u;
+
+-- Trojans
+INSERT INTO Employed (EmploymentID, UsersID, TeamID)
+SELECT 
+    (SELECT MIN(EmploymentID) + 11 + rn - 1 FROM Employment WHERE StartDate = '2024-01-01'),
+    u.UsersID,
+    (SELECT TeamID FROM Team WHERE TeamName='Trojans United')
+FROM (SELECT UsersID, ROW_NUMBER() OVER (ORDER BY UsersID) as rn FROM Users WHERE Email LIKE '%@troy.com' AND Role='player') u;
+
+-- ==================================================================
+-- 4. CREATE MATCH (Date: 2025-06-15)
+-- ==================================================================
+
+INSERT INTO Match (
+    HomeTeamID, AwayTeamID, MatchStartDatetime, MatchEndDatetime, 
+    VenuePlayed, HomeTeamName, AwayTeamName, 
+    HomeTeamScore, AwayTeamScore, WinnerTeam, IsLocked
+)
+VALUES (
+    (SELECT TeamID FROM Team WHERE TeamName='Spartans FC'),
+    (SELECT TeamID FROM Team WHERE TeamName='Trojans United'),
+    '2025-06-15 20:00:00',
+    '2025-06-15 22:00:00',
+    'Thermopylae Arena',
+    'Spartans FC',
+    'Trojans United',
+    0, 0, NULL, FALSE
+);
+
+-- Link to Season
+INSERT INTO League (Name) VALUES ('Ancient League') ON CONFLICT DO NOTHING;
+INSERT INTO Season (LeagueID, SeasonNo, SeasonYear, StartDate, EndDate, PrizePool)
+VALUES ((SELECT LeagueID FROM League WHERE Name='Ancient League' LIMIT 1), 1, '2025-01-01', '2025-01-01', '2025-12-31', 1000000)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO SeasonalMatch (MatchID, LeagueID, SeasonNo, SeasonYear)
+VALUES (
+    (SELECT MAX(MatchID) FROM Match),
+    (SELECT LeagueID FROM League WHERE Name='Ancient League' LIMIT 1),
+    1,
+    '2025-01-01'
+);
+
+-- ==================================================================
+-- 5. INJECT OVERLAPPING INJURIES AND BANS
+-- ==================================================================
+
+-- Spartans: Achilles Injured, Odysseus Banned
+INSERT INTO Injury (PlayerID, MatchID, InjuryDate, InjuryType, Description, RecoveryDate)
+VALUES ((SELECT UsersID FROM Users WHERE Email='achilles@sparta.com'), NULL, '2025-06-10', 'Heel Strain', 'Classic weak point injury', '2025-07-01');
+
+INSERT INTO Ban (PlayerID, BanStartDate, BanEndDate)
+VALUES ((SELECT UsersID FROM Users WHERE Email='odysseus@sparta.com'), '2025-06-01', '2025-06-30');
+
+-- Trojans: Hector Injured, Paris Banned
+INSERT INTO Injury (PlayerID, MatchID, InjuryDate, InjuryType, Description, RecoveryDate)
+VALUES ((SELECT UsersID FROM Users WHERE Email='hector@troy.com'), NULL, '2025-06-14', 'Concussion', 'Collision with chariot', '2025-06-20');
+
+INSERT INTO Ban (PlayerID, BanStartDate, BanEndDate)
+VALUES ((SELECT UsersID FROM Users WHERE Email='paris@troy.com'), '2025-06-15', '2025-06-22');
+
+-- ==================================================================
+-- 6. SETUP REFEREE
+-- ==================================================================
+INSERT INTO Users (FirstName, LastName, Email, HashedPassword, Salt, BirthDate, Role, Nationality)
+VALUES ('Homer', 'Referee', 'ref.ancient@test.com', 'hash', 'salt', '1985-05-20', 'referee', 'Ionia')
+ON CONFLICT (Email) DO NOTHING;
+
+INSERT INTO Referee (UsersID, Certification)
+SELECT UsersID, 'Legendary' FROM Users WHERE Email='ref.ancient@test.com'
+ON CONFLICT (UsersID) DO NOTHING;
+
+INSERT INTO RefereeMatchAttendance (MatchID, RefereeID)
+VALUES (
+    (SELECT MAX(MatchID) FROM Match),
+    (SELECT UsersID FROM Users WHERE Email='ref.ancient@test.com')
+);
+INSERT INTO RefereeMatchAttendance (MatchID, RefereeID)
+VALUES (
+    (SELECT MAX(MatchID) FROM Match),
+    (SELECT UsersID FROM Users WHERE Email='ref_test@example.com')
+);
+
+COMMIT;
