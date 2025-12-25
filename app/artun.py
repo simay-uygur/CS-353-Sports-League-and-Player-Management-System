@@ -75,9 +75,11 @@ def get_referee_matches():
     query = """
         SELECT *
         FROM RefereeMatchView
-        WHERE matchstartdatetime::date = CURRENT_DATE
-        AND refereeid = %s
+        WHERE refereeid = %s
     """
+
+    if 'today' in request.args:
+        query += "AND matchstartdatetime::date = CURRENT_DATE"
 
     params = [ref_id]
 
@@ -173,6 +175,7 @@ def get_home_roster(match_id):
             U2.usersid as sub_usersid, U2.firstname as sub_firstname, U2.lastname as sub_lastname,
             M1.winnerteam, M1.hometeamscore, M1.awayteamscore,
             M1.hometeamname, M1.awayteamname, M1.matchstartdatetime,
+            M1.IsLocked,
             A1.teamid
         FROM Match M1
             JOIN AllEmploymentInfo A1 ON (M1.hometeamid = A1.teamid)
@@ -213,6 +216,7 @@ def get_away_roster(match_id):
             U2.usersid as sub_usersid, U2.firstname as sub_firstname, U2.lastname as sub_lastname,
             M1.winnerteam, M1.hometeamscore, M1.awayteamscore,
             M1.hometeamname, M1.awayteamname, M1.matchstartdatetime,
+            M1.IsLocked,
             A1.teamid
         FROM Match M1
             JOIN AllEmploymentInfo A1 ON (M1.awayteamid = A1.teamid)
@@ -468,7 +472,7 @@ def get_admin_filter_options():
     return jsonify({'seasons': seasons, 'leagues': leagues, 'tournaments': tournaments})
 
 
-@artunsPart.route('/admin/match/lock', methods=['POST'])
+@artunsPart.route('/match/lock', methods=['POST'])
 def lock_match():
     """
     Corresponds to Source [1386-1406].
@@ -476,46 +480,68 @@ def lock_match():
     """
     data = request.json
     mid = data.get('matchid')
-    aid = data.get('adminid')
 
-    # 1. Attempt lock/unlock for Seasonal Match (Source 1386)
-    query_season = """
-        UPDATE Match M1
-        SET IsLocked = NOT IsLocked
-        WHERE EXISTS (
-            SELECT 1
-            FROM SeasonModeration SMo1
-            JOIN Season S1 USING (LeagueID, SeasonNo, SeasonYear)
-            JOIN SeasonalMatch SMa1 USING (LeagueID, SeasonNo, SeasonYear)
-            WHERE SMa1.MatchID = %s
-            AND M1.MatchID = SMa1.MatchID
-            AND SMo1.AdminID = %s
-        ) RETURNING MatchID;
-    """
-    result = execute_query(query_season, (mid, aid), commit=True)
+    if 'adminid' in data:
+        aid = data.get('adminid')
 
-    if result:
-        return jsonify({'status': 'success', 'type': 'season', 'matchid': result['matchid']})
+        # 1. Attempt lock/unlock for Seasonal Match (Source 1386)
+        query_season = """
+            UPDATE Match M1
+            SET IsLocked = NOT IsLocked
+            WHERE EXISTS (
+                SELECT 1
+                FROM SeasonModeration SMo1
+                JOIN Season S1 USING (LeagueID, SeasonNo, SeasonYear)
+                JOIN SeasonalMatch SMa1 USING (LeagueID, SeasonNo, SeasonYear)
+                WHERE SMa1.MatchID = %s
+                AND M1.MatchID = SMa1.MatchID
+                AND SMo1.AdminID = %s
+            ) RETURNING MatchID;
+        """
+        result = execute_query(query_season, (mid, aid), commit=True)
 
-    # 2. Attempt lock/unlock for Tournament Match (Source 1397)
-    query_tournament = """
-        UPDATE Match M1
-        SET IsLocked = NOT IsLocked
-        WHERE EXISTS (
-            SELECT 1
-            FROM TournamentModeration TMOD
-            JOIN Tournament T ON TMOD.T_ID = T.TournamentID
-            JOIN Round R ON T.TournamentID = R.TournamentID
-            JOIN TournamentMatch TM ON R.T_MatchID = TM.MatchID
-            WHERE TM.MatchID = %s
-            AND M1.MatchID = TM.MatchID
-            AND TMOD.AdminID = %s
-        ) RETURNING MatchID;
-    """
-    result = execute_query(query_tournament, (mid, aid), commit=True)
+        if result:
+            return jsonify({'status': 'success', 'type': 'season', 'matchid': result['matchid']})
 
-    if result:
-        return jsonify({'status': 'success', 'type': 'tournament', 'matchid': result['matchid']})
+        # 2. Attempt lock/unlock for Tournament Match (Source 1397)
+        query_tournament = """
+            UPDATE Match M1
+            SET IsLocked = NOT IsLocked
+            WHERE EXISTS (
+                SELECT 1
+                FROM TournamentModeration TMOD
+                JOIN Tournament T ON TMOD.T_ID = T.TournamentID
+                JOIN Round R ON T.TournamentID = R.TournamentID
+                JOIN TournamentMatch TM ON R.T_MatchID = TM.MatchID
+                WHERE TM.MatchID = %s
+                AND M1.MatchID = TM.MatchID
+                AND TMOD.AdminID = %s
+            ) RETURNING MatchID;
+        """
+        result = execute_query(query_tournament, (mid, aid), commit=True)
+
+        if result:
+            return jsonify({'status': 'success', 'type': 'tournament', 'matchid': result['matchid']})
+
+    if 'refereeid' in data:
+        rid = data.get('refereeid')
+
+        # 1. Attempt lock/unlock for Seasonal Match (Source 1386)
+        query_season = """
+            UPDATE Match M1
+            SET IsLocked = TRUE
+            WHERE EXISTS (
+                SELECT 1
+                FROM RefereeMatchAttendance RMa1
+                JOIN Match M1 USING (MatchID)
+                WHERE M1.MatchID = %s
+                AND RMa1.RefereeID = %s
+            ) RETURNING MatchID;
+        """
+        result = execute_query(query_season, (mid, rid), commit=True)
+
+        if result:
+            return jsonify({'status': 'success', 'type': 'season', 'matchid': result['matchid']})
 
     return jsonify({'status': 'failed', 'message': 'Match not found or Admin unauthorized'}), 403
 

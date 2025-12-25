@@ -110,9 +110,9 @@
                 <form method="POST">
                     <input type="hidden" name="report_type" value="attendance">
                     <label>Date From (optional)</label>
-                    <input type="date" name="date_from" value="{{ request.form.get('date_from','') }}">
+                    <input type="date" name="date_from" id="attendance_date_from" value="{{ request.form.get('date_from','') }}">
                     <label>Date To (optional)</label>
-                    <input type="date" name="date_to" value="{{ request.form.get('date_to','') }}">
+                    <input type="date" name="date_to" id="attendance_date_to" value="{{ request.form.get('date_to','') }}">
                     <div class="filter-group-complete">
                         <label for="attendance_player_search">Players (optional)</label>
                         <input type="search"
@@ -128,26 +128,6 @@
                                            value="{{ player.playerid }}"
                                            {% if request.form.getlist('player_id') and player.playerid|string in request.form.getlist('player_id') %}checked{% endif %}>
                                     <span>{{ player.firstname }} {{ player.lastname }}</span>
-                                </label>
-                            {% endfor %}
-                        </div>
-                    </div>
-                    <div class="filter-group-complete">
-                        <label for="training_session_search">Training Sessions (optional)</label>
-                        <input type="search"
-                               id="training_session_search"
-                               class="training-session-search"
-                               placeholder="Search training sessions"
-                               aria-label="Search training sessions">
-                        <div class="checkbox-list training-session-checkbox-list">
-                            {% for session in training_sessions %}
-                                {% set session_label = session.sessiondate|strftime('%Y-%m-%d') ~ ' - ' ~ session.location ~ ' (' ~ session.teamname ~ ')' %}
-                                <label class="checkbox-line" data-training-session-search="{{ session_label|lower }}">
-                                    <input type="checkbox"
-                                           name="session_id"
-                                           value="{{ session.sessionid }}"
-                                           {% if request.form.getlist('session_id') and session.sessionid|string in request.form.getlist('session_id') %}checked{% endif %}>
-                                    <span>{{ session_label }}</span>
                                 </label>
                             {% endfor %}
                         </div>
@@ -305,14 +285,16 @@
                     <thead>
                         <tr>
                             <th>Player</th>
-                            <th>Training Appearances</th>
+                            <th>Attended</th>
+                            <th>Absent</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for row in attendance_report %}
                         <tr>
                             <td>{{ row.firstname }} {{ row.lastname }}</td>
-                            <td>{{ row.appearances }}</td>
+                            <td>{{ row.attended }}</td>
+                            <td>{{ row.absent }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -409,19 +391,13 @@
                 });
             }
 
-            // Training session search for Training Attendance Report
-            const trainingSessionSearch = document.querySelector(".training-session-search");
-            const trainingSessionRows = document.querySelectorAll(".training-session-checkbox-list .checkbox-line");
-            if (trainingSessionSearch) {
-                trainingSessionSearch.addEventListener("input", function (event) {
-                    const query = (event.target.value || "").toLowerCase().trim();
-                    trainingSessionRows.forEach(row => {
-                        const haystack = (row.dataset.trainingSessionSearch || row.innerText || "").toLowerCase();
-                        const match = !query || haystack.includes(query);
-                        row.classList.toggle("is-hidden", !match);
-                    });
-                });
-            }
+            // Restrict attendance date inputs to today or past (no future dates)
+            const today = new Date().toISOString().split('T')[0];
+            const dateFrom = document.getElementById('attendance_date_from');
+            const dateTo = document.getElementById('attendance_date_to');
+            if (dateFrom) dateFrom.setAttribute('max', today);
+            if (dateTo) dateTo.setAttribute('max', today);
+
         });
     </script>
 </body>

@@ -854,11 +854,12 @@ def download_report_pdf():
                 False
             )
             title = "Training Attendance Report"
-            headers = ["Player", "Appearances"]
+            headers = ["Player", "Attended", "Absent"]
             rows = [
                 [
                     f"{row['firstname']} {row['lastname']}",
-                    row["appearances"],
+                    row["attended"],
+                    row["absent"],
                 ]
                 for row in data
             ]

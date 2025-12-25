@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import psycopg2
 
 from db_helper import (
@@ -209,6 +209,16 @@ def assign_training():
 def view_trainings():
     coach_id = session.get("user_id")
     sessions = fetch_coach_sessions(coach_id)
+    turkey_tz = timezone(timedelta(hours=3))  # Turkey timezone for display
+
+    # Convert session dates to Turkey time for display
+    for sess in sessions:
+        session_date = sess.get('sessiondate')
+        if session_date:
+            if session_date.tzinfo is None:
+                session_date = session_date.replace(tzinfo=timezone.utc)
+            sess['sessiondate'] = session_date.astimezone(turkey_tz)
+
     return render_template("coach_trainings.html", sessions=sessions)
 
 
@@ -232,8 +242,12 @@ def create_training():
                 f"{date_str} {time_str}", "%Y-%m-%d %H:%M"
             )
             
-            # Get current time (naive datetime for comparison)
-            now = datetime.now()
+            # Make it timezone-aware (Turkey is UTC+3)
+            turkey_tz = timezone(timedelta(hours=3))
+            session_datetime = session_datetime.replace(tzinfo=turkey_tz)
+
+            # Get current time in Turkey timezone for comparison
+            now = datetime.now(turkey_tz)
             
             # Check if the session datetime is in the past
             # Compare full datetime including minutes
@@ -258,8 +272,8 @@ def create_training():
             flash(f"Cannot schedule training on {date_str}. Your team has a MATCH on this date!", "error")
             return redirect(url_for("coach.create_training"))
 
-        full_datetime = f"{date_str} {time_str}"
-        create_training_session(coach_id, full_datetime, location, focus)
+        # Pass timezone-aware datetime to database
+        create_training_session(coach_id, session_datetime, location, focus)
 
         flash("Training session created successfully!", "success")
         return redirect(url_for("coach.view_trainings"))
