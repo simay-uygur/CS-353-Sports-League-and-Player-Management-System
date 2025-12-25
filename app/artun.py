@@ -526,15 +526,15 @@ def lock_match():
     if 'refereeid' in data:
         rid = data.get('refereeid')
 
-        # 1. Attempt lock/unlock for Seasonal Match (Source 1386)
+        # 1. Attempt lock for Seasonal Match (Source 1386)
         query_season = """
             UPDATE Match M1
             SET IsLocked = TRUE
-            WHERE EXISTS (
+            WHERE M1.MatchID = %s
+            AND EXISTS (
                 SELECT 1
                 FROM RefereeMatchAttendance RMa1
-                JOIN Match M1 USING (MatchID)
-                WHERE M1.MatchID = %s
+                WHERE RMa1.MatchID = M1.MatchID
                 AND RMa1.RefereeID = %s
             ) RETURNING MatchID;
         """
