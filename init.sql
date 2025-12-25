@@ -912,30 +912,6 @@ FOR EACH ROW
 EXECUTE FUNCTION update_all_after_play_update();
 
 -- trigger to update match winner when scores change, excluding tournament matches
--- CREATE OR REPLACE FUNCTION update_match_winner()
--- RETURNS TRIGGER AS $$
--- BEGIN
---     IF EXISTS (SELECT 1 FROM TournamentMatch WHERE MatchID = NEW.MatchID) THEN
---         RETURN NULL;
---     END IF;
--- 
---     IF NEW.HomeTeamScore IS NULL OR NEW.AwayTeamScore IS NULL THEN
---         RETURN NULL;
---     END IF;
--- 
---     IF NEW.HomeTeamScore <> OLD.HomeTeamScore OR NEW.AwayTeamScore <> OLD.AwayTeamScore THEN
---         UPDATE Match M
---         SET WinnerTeam = CASE
---             WHEN NEW.HomeTeamScore > NEW.AwayTeamScore THEN NEW.HomeTeamName
---             WHEN NEW.HomeTeamScore < NEW.AwayTeamScore THEN NEW.AwayTeamName
---             ELSE NULL
---         END
---         WHERE M.MatchID = NEW.MatchID;
---     END IF;
--- 
---     RETURN NULL;
--- END;
--- $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION update_match_winner()
 RETURNS TRIGGER AS $$
@@ -2017,3 +1993,12 @@ VALUES (
 );
 
 COMMIT;
+
+
+-- Inser teams into their leagues (for both matches and teams)
+INSERT INTO LeagueTeam (LeagueID, TeamID)
+VALUES
+((SELECT LeagueID FROM League WHERE Name = 'Premier Test League'), (SELECT TeamID FROM Team WHERE TeamName = 'Red Dragons')),
+((SELECT LeagueID FROM League WHERE Name = 'Premier Test League'), (SELECT TeamID FROM Team WHERE TeamName = 'Blue Knights')),
+((SELECT LeagueID FROM League WHERE Name = 'Ancient League'), (SELECT TeamID FROM Team WHERE TeamName = 'Spartans FC')),
+((SELECT LeagueID FROM League WHERE Name = 'Ancient League'), (SELECT TeamID FROM Team WHERE TeamName = 'Trojans United'));

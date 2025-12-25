@@ -327,15 +327,15 @@
       document.getElementById('selectedPlayID').value = play.playid;
 
       // Populate fields (Source 1187 logic + New Fields)
-      document.getElementById('goals').value = play.goalsscored || '';
-      document.getElementById('assists').value = play.assistsmade || '';
-      document.getElementById('saves').value = play.saves ||  '';
-      document.getElementById('passes').value = play.totalpasses ||  '';
-      document.getElementById('startTime').value = play.starttime || '';
-      document.getElementById('stopTime').value = play.stoptime || '';
-      document.getElementById('yellow').value = play.yellowcards || '';
-      document.getElementById('red').value = play.redcards || '';
-      document.getElementById('penalties').value = play.penaltiesscored || '';
+      document.getElementById('goals').value = play.goalsscored ?? '';
+      document.getElementById('assists').value = play.assistsmade ?? '';
+      document.getElementById('saves').value = play.saves ?? '';
+      document.getElementById('passes').value = play.totalpasses ??  '';
+      document.getElementById('startTime').value = play.starttime ?? '';
+      document.getElementById('stopTime').value = play.stoptime ?? '';
+      document.getElementById('yellow').value = play.yellowcards ?? '';
+      document.getElementById('red').value = play.redcards ?? '';
+      document.getElementById('penalties').value = play.penaltiesscored ?? '';
 
       if (play.substitutionid) document.getElementById('substituteDropdown').value = play.substitutionid;
 
@@ -424,10 +424,10 @@
       document.getElementById('saveInjury').disabled = false;
       document.getElementById('saveInjury').disabled = false;
       document.getElementById('saveInjury').style.pointerEvents = 'auto';
-      document.getElementById('saveInjury').style.opacity = '0';
+      document.getElementById('saveInjury').style.opacity = '1';
       document.getElementById('removeInjury').disabled = false;
       document.getElementById('removeInjury').style.pointerEvents = 'auto';
-      document.getElementById('removeInjury').style.opacity = '0';
+      document.getElementById('removeInjury').style.opacity = '1';
 
       // Disabled if match locked
       if (player.disciplinarilypunished == true || player.wasinjured == true || player.islocked){
@@ -476,10 +476,10 @@
       document.getElementById('banenddate').disabled = false;
       document.getElementById('saveBan').disabled = false;
       document.getElementById('saveBan').style.pointerEvents = 'auto';
-      document.getElementById('saveBan').style.opacity = '0';
+      document.getElementById('saveBan').style.opacity = '1';
       document.getElementById('removeBan').disabled = false;
       document.getElementById('removeBan').style.pointerEvents = 'auto';
-      document.getElementById('removeBan').style.opacity = '0';
+      document.getElementById('removeBan').style.opacity = '1';
 
       // Disable fields if the match is locked
       if (player.disciplinarilypunished == true || player.wasinjured == true || player.islocked){
