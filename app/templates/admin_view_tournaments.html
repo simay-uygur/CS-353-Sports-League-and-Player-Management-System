@@ -87,6 +87,12 @@
                                         <span class="score">{{ round_data.awayteamscore if round_data.awayteamscore is not none else '-' }}</span>
                                     </div>
                                     <p class="match-time">{{ round_data.matchstartdatetime.strftime('%Y-%m-%d %H:%M') if round_data.matchstartdatetime else 'TBD' }}</p>
+                                    <div class="match-actions" style="margin-top: 0.5rem;">
+                                        <a href="{{ url_for('admin.match_referee_assignment', match_id=round_data.matchid) }}"
+                                           class="btn small solid">
+                                            Assign Referee
+                                        </a>
+                                    </div>
                                 </div>
                                 {% else %}
                                 <div class="round-empty">

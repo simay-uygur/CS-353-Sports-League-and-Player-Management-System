@@ -1902,7 +1902,7 @@ SELECT
 FROM (SELECT UsersID, ROW_NUMBER() OVER (ORDER BY UsersID) as rn FROM Users WHERE Email LIKE '%@troy.com' AND Role='player') u;
 
 -- ==================================================================
--- 4. CREATE MATCH (Date: 2025-06-15)
+-- 4. CREATE MATCH (Date: CURRENT_DATE - scheduled for today at 20:00)
 -- ==================================================================
 
 INSERT INTO Match (
@@ -1913,8 +1913,8 @@ INSERT INTO Match (
 VALUES (
     (SELECT TeamID FROM Team WHERE TeamName='Spartans FC'),
     (SELECT TeamID FROM Team WHERE TeamName='Trojans United'),
-    '2025-06-15 20:00:00',
-    '2025-06-15 22:00:00',
+    CURRENT_DATE + INTERVAL '20 hours',
+    CURRENT_DATE + INTERVAL '22 hours',
     'Thermopylae Arena',
     'Spartans FC',
     'Trojans United',
@@ -1934,6 +1934,16 @@ VALUES (
     1,
     '2025-01-01'
 );
+
+-- Assign an admin to the Ancient League season so it appears in admin views
+INSERT INTO SeasonModeration (LeagueID, SeasonNo, SeasonYear, AdminID)
+VALUES (
+    (SELECT LeagueID FROM League WHERE Name='Ancient League' LIMIT 1),
+    1,
+    '2025-01-01',
+    (SELECT UsersID FROM Users WHERE Email='a1@gmail.com' LIMIT 1)
+)
+ON CONFLICT DO NOTHING;
 
 -- ==================================================================
 -- 5. INJECT OVERLAPPING INJURIES AND BANS
@@ -1974,5 +1984,11 @@ VALUES (
     (SELECT MAX(MatchID) FROM Match),
     (SELECT UsersID FROM Users WHERE Email='ref_test@example.com')
 );
+INSERT INTO RefereeMatchAttendance (MatchID, RefereeID)
+VALUES (
+    (SELECT MAX(MatchID) FROM Match),
+    (SELECT UsersID FROM Users WHERE Email='r1@gmail.com')
+)
+ON CONFLICT DO NOTHING;
 
 COMMIT;
