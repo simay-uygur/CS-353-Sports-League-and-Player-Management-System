@@ -62,7 +62,7 @@
                     <h3 id="selectedPlayerName">Player Statistics</h3>
                     <p class="entry-hint">Select a player from the roster to enter their match statistics</p>
                 </div>
-                
+
                 <form id="playForm" onsubmit="event.preventDefault(); savePlay();">
                     <input type="hidden" id="selectedPlayID">
 
@@ -119,7 +119,7 @@
                         </div>
                     </div>
 
-                    <button type="submit" class="btn solid full-width-button">
+                    <button id="playSave" type="submit" class="btn solid full-width-button">
                         💾 Save Player Statistics
                     </button>
                 </form>
@@ -170,10 +170,10 @@
                     </div>
 
                     <div class="form-actions-injury">
-                        <button id="saveInjury" class="btn solid" onclick="event.preventDefault(); submitInjury();" disabled>
+                        <button id="saveInjury" class="btn solid" onclick="event.preventDefault(); submitInjury();">
                             💾 Save Injury Record
                         </button>
-                        <button id="removeInjury" class="btn ghost hidden" onclick="event.preventDefault(); deleteInjury();">
+                        <button id="removeInjury" class="btn ghost hidden" onclick="event.preventDefault(); deleteInjury();" style="display: none;">
                             🗑️ Remove Injury Record
                         </button>
                     </div>
@@ -201,15 +201,18 @@
                     </div>
 
                     <div class="form-actions-ban">
-                        <button id="saveBan" class="btn solid" onclick="event.preventDefault(); submitBan();" disabled>
+                        <button id="saveBan" class="btn solid" onclick="event.preventDefault(); submitBan();">
                             ⚠️ Submit Disciplinary Punishment
                         </button>
-                        <button id="removeBan" class="btn ghost hidden" onclick="event.preventDefault(); deleteBan();">
+                        <button id="removeBan" class="btn ghost hidden" onclick="event.preventDefault(); deleteBan();" style="display: none;">
                             🗑️ Remove Disciplinary Punishment
                         </button>
                     </div>
                 </form>
             </div>
+        </div>
+        <div id="lockAll">
+          <button id="lockButton" onclick="lockMatch();"> Lock match with all submitted data</button>
         </div>
     </div>
 </main>
@@ -218,6 +221,9 @@
     const API_BASE = ''; // Relative path since we serve from same Flask app
     const MATCH_ID = {{match_id}};
     let currentTab = 'stats';
+    let playLockState = false;
+    let injuredLockState = false;
+    let banLockState = false;
 
     function switchTab(tab) {
         currentTab = tab;
@@ -264,6 +270,12 @@
       const awayRes = await fetch(`${API_BASE}/match/${MATCH_ID}/roster/away`);
       const awayData = await awayRes.json();
       renderRosterList(awayData, 'awayRoster');
+
+      if (homeData[0].islocked || awayData[0].islocked){
+        document.getElementById('lockButton').disabled = true;
+        document.getElementById('lockButton').style.pointerEvents = 'none';
+        document.getElementById('lockButton').style.opacity = '0.5';
+      }
 
       if (homeData && homeData.length > 0){
           // Update header with Match Info
@@ -332,18 +344,36 @@
       document.getElementById('isSubstituted').checked = isSub;
       toggleSubDropdown();
 
-      if (play.disciplinarilypunished == true || play.wasinjured == true){
-        document.getElementById('goals').method = "readonly";
-        document.getElementById('assists').method = "readonly";
-        document.getElementById('saves').method = "readonly";
-        document.getElementById('passes').method = "readonly";
-        document.getElementById('passes').method = "readonly";
-        document.getElementById('stopTime').method = "readonly";
-        document.getElementById('yellow').method = "readonly";
-        document.getElementById('red').method = "readonly";
-        document.getElementById('passes').method = "readonly";
-        document.getElementById('isSubstituted').method = "readonly";
-        document.getElementById('substituteDropdown').method = "readonly";
+      document.getElementById('goals').disabled = false;
+      document.getElementById('assists').disabled = false;
+      document.getElementById('saves').disabled = false;
+      document.getElementById('passes').disabled = false;
+      document.getElementById('passes').disabled = false;
+      document.getElementById('startTime').disabled = false;
+      document.getElementById('stopTime').disabled = false;
+      document.getElementById('yellow').disabled = false;
+      document.getElementById('red').disabled = false;
+      document.getElementById('passes').disabled = false;
+      document.getElementById('penalties').disabled = false;
+      document.getElementById('substituteDropdown').disabled = false;
+      document.getElementById('playSave').disabled = false;
+      document.getElementById('removeInjury').style.pointerEvents = 'auto';
+      document.getElementById('removeInjury').style.opacity = '0';
+
+      if (play.disciplinarilypunished == true || play.wasinjured == true || play.islocked){
+        document.getElementById('goals').disabled = true;
+        document.getElementById('assists').disabled = true;
+        document.getElementById('saves').disabled = true;
+        document.getElementById('passes').disabled = true;
+        document.getElementById('passes').disabled = true;
+        document.getElementById('startTime').disabled = true;
+        document.getElementById('stopTime').disabled = true;
+        document.getElementById('yellow').disabled = true;
+        document.getElementById('red').disabled = true;
+        document.getElementById('passes').disabled = true;
+        document.getElementById('penalties').disabled = true;
+        document.getElementById('substituteDropdown').disabled = true;
+        document.getElementById('playSave').disabled = true;
       }
     }
 
@@ -386,9 +416,35 @@
 
       document.getElementById('injuryplayerid').value = player.usersid || '';
       document.getElementById('injurydate').value = dateFormatter(player.matchstartdatetime);
+
+      document.getElementById('injuryid').disabled = false;
+      document.getElementById('injurytype').disabled = false;
+      document.getElementById('recoverydate').disabled = false;
+      document.getElementById('description').disabled = false;
       document.getElementById('saveInjury').disabled = false;
+      document.getElementById('saveInjury').disabled = false;
+      document.getElementById('saveInjury').style.pointerEvents = 'auto';
+      document.getElementById('saveInjury').style.opacity = '0';
+      document.getElementById('removeInjury').disabled = false;
+      document.getElementById('removeInjury').style.pointerEvents = 'auto';
+      document.getElementById('removeInjury').style.opacity = '0';
+
+      // Disabled if match locked
+      if (player.disciplinarilypunished == true || player.wasinjured == true || player.islocked){
+        document.getElementById('injuryid').disabled = true;
+        document.getElementById('injurytype').disabled = true;
+        document.getElementById('recoverydate').disabled = true;
+        document.getElementById('description').disabled = true;
+        document.getElementById('saveInjury').disabled = true;
+        document.getElementById('saveInjury').style.pointerEvents = 'none';
+        document.getElementById('saveInjury').style.opacity = '0.5';
+        document.getElementById('removeInjury').disabled = true;
+        document.getElementById('removeInjury').style.pointerEvents = 'none';
+        document.getElementById('removeInjury').style.opacity = '0.5';
+      }
+
       if(!data){
-        document.getElementById('removeInjury').classList.add('hidden');
+        document.getElementById('removeInjury').style.display = "none";
         document.getElementById('injuryid').value = '';
         document.getElementById('injurytype').value = '';
         document.getElementById('recoverydate').value = '';
@@ -396,7 +452,7 @@
         return;
       };
 
-      document.getElementById('removeInjury').classList.remove('hidden');
+      document.getElementById('removeInjury').style.display = "block";
 
       document.getElementById('injuryid').value = data.injuryid;
       document.getElementById('injurytype').value = data.injurytype;
@@ -416,15 +472,34 @@
 
       document.getElementById('banplayerid').value = player.usersid || '';
       document.getElementById('banstartdate').value = startDate;
+      
+      document.getElementById('banenddate').disabled = false;
       document.getElementById('saveBan').disabled = false;
+      document.getElementById('saveBan').style.pointerEvents = 'auto';
+      document.getElementById('saveBan').style.opacity = '0';
+      document.getElementById('removeBan').disabled = false;
+      document.getElementById('removeBan').style.pointerEvents = 'auto';
+      document.getElementById('removeBan').style.opacity = '0';
+
+      // Disable fields if the match is locked
+      if (player.disciplinarilypunished == true || player.wasinjured == true || player.islocked){
+        document.getElementById('banenddate').disabled = true;
+        document.getElementById('saveBan').disabled = true;
+        document.getElementById('saveBan').style.pointerEvents = 'none';
+        document.getElementById('saveBan').style.opacity = '0.5';
+        document.getElementById('removeBan').disabled = true;
+        document.getElementById('removeBan').style.pointerEvents = 'none';
+        document.getElementById('removeBan').style.opacity = '0.5';
+      }
+
       if (!data){
-        document.getElementById('removeBan').classList.add('hidden');
+        document.getElementById('removeBan').style.display = "none";
         document.getElementById('banid').value = '';
         document.getElementById('banenddate').value = '';
         return;
       }
 
-      document.getElementById('removeBan').classList.remove('hidden');
+      document.getElementById('removeBan').style.display = "block";
 
       document.getElementById('banid').value = data.banid || '';
       document.getElementById('banenddate').value = dateFormatter(data.banenddate);
@@ -444,6 +519,8 @@
       });
       if (hasNegative) return alert("Negative values are not allowed");
 
+      // The value check actually doesnt effect it because the value is ''
+      // when None is chosen. Still this is javascript and I don't trust it
       if (document.getElementById("isSubstituted").checked == true && 
         document.getElementById("substituteDropdown").value == "None"
       ) hasEmpty = true;
@@ -478,10 +555,10 @@
           });
 
           if (res.ok) {
-              alert("Saved successfully");
+              alert("Stats saved successfully");
               loadRosters(); // Reload to update any status changes
           } else {
-              alert("Error saving data");
+              alert("Error saving stats");
           }
       } catch (e) {
           console.error(e);
@@ -493,18 +570,24 @@
       const pid = document.getElementById('injuryplayerid').value;
       if (!pid) return alert("Select a player first");
 
-      const form = document.getElementById('injuryInputs');
-      const children = form.querySelectorAll("input")
+      const form = document.getElementById('injuryForm');
+      inputs = form.querySelectorAll("input");
+      selectOpt = document.getElementById("injurytype");
+      description = document.getElementById("description");
+      children = [...inputs, selectOpt, description];
       hasEmpty = false;
       children.forEach(child => {
-          if ( !(child.value) ) hasEmpty = true;
+          if ( (!(child.value) || child.value == '') && (child.id != "injuryid") ) hasEmpty = true;
       });
-      if (hasEmpty || document.getElementById('injurytype').value == ''){
 
+      if (hasEmpty == true){
         return alert("Everything must be filled/chosen");
       }
 
-      if (document.getElementById('recoverydate').value <= document.getElementById('injurydate').value) return alert("The recovery date must be at a later date");
+      recoveryDate = document.getElementById('recoverydate').value;
+      const formattedRecovery = new Date(recoveryDate);
+      const tomorrow = new Date(new Date().setHours(24, 0, 0, 0));
+      if (recoveryDate <= document.getElementById('injurydate').value || formattedRecovery < tomorrow) return alert("Set a later recovery date");
 
       const payload = {
         injuryid: document.getElementById('injuryid').value,
@@ -525,11 +608,11 @@
           });
 
           if (res.ok) {
-              alert("Saved successfully");
+              alert("Saved injury successfully");
               loadRosters(); // Reload to update any status changes
-              document.getElementById('removeInjury').classList.remove('hidden');
+              document.getElementById('removeInjury').style.display = 'block';
           } else {
-              alert("Error saving data");
+              alert("Error saving injury");
           }
       } catch (e) {
           console.error(e);
@@ -541,15 +624,21 @@
       const pid = document.getElementById('banplayerid').value;
       if (!pid) return alert("Select a player first");
 
-      const form = document.getElementById('banInputs');
-      const children = form.querySelectorAll("input")
-      hasEmpty = false;
-      children.forEach(child => {
-          if ( !(child.value) ) hasEmpty = true;
-      });
-      if (hasEmpty) return alert("Everything must be filled/chosen");
-      
-      if (document.getElementById('banenddate').value <= document.getElementById('banstartdate').value) return alert("The end date must be at a later date");
+      //const form = document.getElementById('banForm');
+      //const children = form.querySelectorAll("input")
+      //hasEmpty = false;
+      //children.forEach(child => {
+      //    if ( !(child.value) ) hasEmpty = true;
+      //});
+      //if (hasEmpty) return alert("Everything must be filled/chosen");
+
+      benddate = document.getElementById('banenddate').value;
+
+      if (benddate == null || benddate == '') return alert("The ban end date must be filled");
+
+      const formattedRecovery = new Date(benddate);
+      const tomorrow = new Date(new Date().setHours(24, 0, 0, 0));
+      if (benddate <= document.getElementById('banstartdate').value || formattedRecovery < tomorrow) return alert("The end date must be at a later date");
 
       const payload = {
         banid: document.getElementById('banid').value,
@@ -566,11 +655,11 @@
           });
 
           if (res.ok) {
-              alert("Saved successfully");
+              alert("Banned player successfully");
               loadRosters(); // Reload to update any status changes
-              document.getElementById('removeBan').classList.remove('hidden');
+              document.getElementById('removeBan').style.display = 'block';
           } else {
-              alert("Error saving data");
+              alert("Error banning player");
           }
       } catch (e) {
           console.error(e);
@@ -585,18 +674,17 @@
       const iid = document.getElementById('injuryid').value;
       if (!iid) return alert("This player doesnt have an injury to delete");
 
-      console.log(iid);
       try {
         const res = await fetch(`${API_BASE}/injury?injuryid=${iid}`, {
               method: 'DELETE',
           });
 
           if (res.ok) {
-              alert("Saved successfully");
+              alert("Removed injury successfully");
               loadRosters(); // Reload to update any status changes
-              document.getElementById('removeInjury').classList.add('hidden');
+              document.getElementById('removeInjury').style.display = 'none';
           } else {
-              alert("Error saving data");
+              alert("Error removing injury");
           }
       } catch (e) {
           console.error(e);
@@ -621,11 +709,11 @@
           });
 
           if (res.ok) {
-              alert("Saved successfully");
+              alert("Removed ban successfully");
               loadRosters(); // Reload to update any status changes
-              document.getElementById('removeBan').classList.add('hidden');
+              document.getElementById('removeBan').style.display = 'none';
           } else {
-              alert("Error saving data");
+              alert("Error removing ban");
           }
       } catch (e) {
           console.error(e);
@@ -633,6 +721,32 @@
       }
     }
 
+    async function lockMatch(){
+      if ((!{{session["user_id"]}}) || (!MATCH_ID)) return alert("If you are seeing this you did something you should not have");
+
+      const payload = {
+        matchid: MATCH_ID,
+        refereeid: {{ session["user_id"] }}
+      };
+
+      try {
+          const res = await fetch(`${API_BASE}/match/lock`, {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify(payload)
+          });
+
+          if (res.ok) {
+              alert("Locked successfully");
+              loadRosters(); // Reload to update any status changes
+          } else {
+              alert("Error locking match");
+          }
+      } catch (e) {
+          console.error(e);
+          alert("Network error");
+      }
+    }
 
     function dateFormatter(inputDate){
       //return (new Date(inputDate)).toISOString();
@@ -644,6 +758,12 @@
       const formattedDay = String(day).padStart(2, '0');
       const yyyyMmDdFormat = `${year}-${formattedMonth}-${formattedDay}`;
       return yyyyMmDdFormat;
+    }
+
+    function initialize(){
+      document.getElementById('playForm').reset();
+      document.getElementById('injuryForm').reset();
+      document.getElementById('banForm').reset();
     }
 
     //function clearForms() {
@@ -669,6 +789,7 @@
 
     switchTab(currentTab);
     loadRosters();
+    initialize();
 </script>
 </body>
 </html>

@@ -56,7 +56,7 @@
 
   async function toggleLock(mid) {
     // Calls API Source [1386]
-    const res = await fetch(`${API_BASE}/admin/match/lock`, {
+    const res = await fetch(`${API_BASE}/match/lock`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({matchid: mid, adminid: ADMIN_ID})
