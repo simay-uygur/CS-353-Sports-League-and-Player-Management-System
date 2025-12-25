@@ -639,12 +639,12 @@ def fetch_transferable_players(filters, coachid):
             name_parts = stripped_name.split()
             if len(name_parts) == 2:
                 conditions.append("(u.firstname ILIKE %s AND u.lastname ILIKE %s)")
-                params.append(name_parts[0])
-                params.append(name_parts[1])
+                params.append(f"%{name_parts[0]}%")
+                params.append(f"%{name_parts[1]}%")
             else:
                 conditions.append("(u.firstname ILIKE %s OR u.lastname ILIKE %s)")
-                params.append(stripped_name)
-                params.append(stripped_name)
+                params.append(f"%{stripped_name}%")
+                params.append(f"%{stripped_name}%")
         if nationality:
             conditions.append("u.nationality = %s")
             params.append(nationality)
