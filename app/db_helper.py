@@ -608,6 +608,33 @@ def fetch_matches_grouped(tournament_id):
     return dict(sorted(grouped.items()))
 
 
+def check_coach_can_make_transfer_offer(coachid):
+    """
+    A coach can make an offer if their team has less than 30 players
+    currently employed.
+    """
+    conn = get_connection()
+    MAX_PLAYER_PER_TEAM = 30
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(*) AS count
+                FROM Player p 
+                JOIN Employee e ON p.UsersID = e.UsersID
+                JOIN Team t ON e.TeamID = t.TeamID
+                WHERE t.TeamID = (SELECT t.TeamID 
+                      FROM Team t
+                      JOIN Employee e ON t.TeamID = e.TeamID
+                      WHERE e.UsersID = %s)
+                """,
+                (coachid,),
+            )
+            result = cur.fetchone()
+            return result[0] < MAX_PLAYER_PER_TEAM 
+    finally:
+        conn.close()
+
 def fetch_transferable_players(filters, coachid):
     conn = get_connection()
     try:

@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 import psycopg2
 
 from db_helper import (
+    check_coach_can_make_transfer_offer,
     fetch_transferable_players,
     fetch_all_nationalities,
     fetch_all_positions,
@@ -106,6 +107,10 @@ def transfer_offer(player_id):
         if not error_message:
             try:
                 coach_id = session["user_id"]
+                can_make_transfer = check_coach_can_make_transfer_offer(coach_id)
+                if not can_make_transfer:
+                    error_message = "You have reached the maximum number of active transfer offers allowed."
+                    return render_template("coach_transfer_offer.html", player=player, error_message=error_message)
                 make_transfer_offer(
                     player_id, coach_id, amount_int, available_until, offered_end_date
                 )
