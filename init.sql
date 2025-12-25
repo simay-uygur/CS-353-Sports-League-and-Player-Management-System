@@ -631,13 +631,13 @@ BEGIN
     END IF;
 
     ----------------------------------------------------------------
-    -- 6. Check if both children have winners
+    -- 6. Check if both children have winners AND are locked
     ----------------------------------------------------------------
     SELECT winnerteam INTO child1_winner
-    FROM AllTournamentMatchInfo WHERE matchid = child1_match;
+    FROM AllTournamentMatchInfo WHERE matchid = child1_match AND islocked = TRUE;
 
     SELECT winnerteam INTO child2_winner
-    FROM AllTournamentMatchInfo WHERE matchid = child2_match;
+    FROM AllTournamentMatchInfo WHERE matchid = child2_match AND islocked = TRUE;
 
     IF child1_winner IS NULL OR child2_winner IS NULL THEN
         RETURN NULL;
@@ -806,18 +806,13 @@ FOR EACH ROW
 EXECUTE FUNCTION handle_substitution_change();
 
 
--- trigger to update scores on play insert, excluding tournament matches
+-- trigger to update scores on play insert
 CREATE OR REPLACE FUNCTION update_all_after_play_insertion()
 RETURNS TRIGGER AS $$
 DECLARE
     player_team_id INT;
     match_time TIMESTAMP;
 BEGIN
--- if it is a tournament match, do nothing - SKIP 
-    IF EXISTS (SELECT 1 FROM TournamentMatch WHERE MatchID = NEW.MatchID) THEN
-        RETURN NULL;
-    END IF;
-
     IF NEW.StartTime IS NULL THEN
         RETURN NULL;
     END IF;
@@ -856,7 +851,7 @@ AFTER INSERT ON Play
 FOR EACH ROW
 EXECUTE FUNCTION update_all_after_play_insertion();
 
--- trigger to update scores on play update, excluding tournament matches
+-- trigger to update scores on play update
 CREATE OR REPLACE FUNCTION update_all_after_play_update()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -864,10 +859,6 @@ DECLARE
     match_time TIMESTAMP;
     goal_delta INT;
 BEGIN
-    IF EXISTS (SELECT 1 FROM TournamentMatch WHERE MatchID = NEW.MatchID) THEN
-        RETURN NULL;
-    END IF;
-
     IF NEW.StartTime IS NULL THEN
         RETURN NULL;
     END IF;
@@ -911,14 +902,10 @@ AFTER UPDATE ON Play
 FOR EACH ROW
 EXECUTE FUNCTION update_all_after_play_update();
 
--- trigger to update match winner when scores change, excluding tournament matches
+-- trigger to update match winner when scores change
 CREATE OR REPLACE FUNCTION update_match_winner()
 RETURNS TRIGGER AS $$
 BEGIN
-    IF EXISTS (SELECT 1 FROM TournamentMatch WHERE MatchID = NEW.MatchID) THEN
-        RETURN NULL;
-    END IF;
-
     IF NEW.HomeTeamScore IS NULL OR NEW.AwayTeamScore IS NULL THEN
         RETURN NULL;
     END IF;
@@ -1243,32 +1230,6 @@ WHEN (NEW.SessionDate <= NOW())
 EXECUTE FUNCTION auto_mark_training_skipped();
 
 
-
--- Function to process existing trainings that have passed
-CREATE OR REPLACE FUNCTION process_past_trainings()
-RETURNS void AS $$
-BEGIN
-    -- Mark all players as NULL for trainings that have passed and don't have attendance records
-    INSERT INTO TrainingAttendance (SessionID, PlayerID, Status)
-    SELECT DISTINCT
-        ts.SessionID,
-        e_player.UsersID,
-        NULL  -- Status NULL = Not set yet
-    FROM TrainingSession ts
-    JOIN Employee e_coach ON ts.CoachID = e_coach.UsersID
-    JOIN Employee e_player ON e_coach.TeamID = e_player.TeamID
-    JOIN Player p ON e_player.UsersID = p.UsersID
-    WHERE ts.SessionDate <= NOW()
-      AND e_player.UsersID != e_coach.UsersID
-      AND NOT EXISTS (
-          SELECT 1 
-          FROM TrainingAttendance ta 
-          WHERE ta.SessionID = ts.SessionID 
-          AND ta.PlayerID = e_player.UsersID
-      )
-    ON CONFLICT (SessionID, PlayerID) DO NOTHING;
-END;
-$$ LANGUAGE plpgsql;
 
 -- sample data ---------------------------------------------------------------
 INSERT INTO Users (
