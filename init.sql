@@ -912,35 +912,111 @@ FOR EACH ROW
 EXECUTE FUNCTION update_all_after_play_update();
 
 -- trigger to update match winner when scores change, excluding tournament matches
+-- CREATE OR REPLACE FUNCTION update_match_winner()
+-- RETURNS TRIGGER AS $$
+-- BEGIN
+--     IF EXISTS (SELECT 1 FROM TournamentMatch WHERE MatchID = NEW.MatchID) THEN
+--         RETURN NULL;
+--     END IF;
+-- 
+--     IF NEW.HomeTeamScore IS NULL OR NEW.AwayTeamScore IS NULL THEN
+--         RETURN NULL;
+--     END IF;
+-- 
+--     IF NEW.HomeTeamScore <> OLD.HomeTeamScore OR NEW.AwayTeamScore <> OLD.AwayTeamScore THEN
+--         UPDATE Match M
+--         SET WinnerTeam = CASE
+--             WHEN NEW.HomeTeamScore > NEW.AwayTeamScore THEN NEW.HomeTeamName
+--             WHEN NEW.HomeTeamScore < NEW.AwayTeamScore THEN NEW.AwayTeamName
+--             ELSE NULL
+--         END
+--         WHERE M.MatchID = NEW.MatchID;
+--     END IF;
+-- 
+--     RETURN NULL;
+-- END;
+-- $$ LANGUAGE plpgsql;
+
 CREATE OR REPLACE FUNCTION update_match_winner()
 RETURNS TRIGGER AS $$
+DECLARE
+    total_home_penalties INT := 0;
+    total_away_penalties INT := 0;
 BEGIN
+    -- 0. Ignore matches that are part of tournaments (as per original logic)
     IF EXISTS (SELECT 1 FROM TournamentMatch WHERE MatchID = NEW.MatchID) THEN
-        RETURN NULL;
+        RETURN NEW;
     END IF;
 
+    -- 1. Ensure scores are not NULL
     IF NEW.HomeTeamScore IS NULL OR NEW.AwayTeamScore IS NULL THEN
-        RETURN NULL;
+        NEW.WinnerTeam := NULL;
+        RETURN NEW;
     END IF;
 
-    IF NEW.HomeTeamScore <> OLD.HomeTeamScore OR NEW.AwayTeamScore <> OLD.AwayTeamScore THEN
-        UPDATE Match M
-        SET WinnerTeam = CASE
-            WHEN NEW.HomeTeamScore > NEW.AwayTeamScore THEN NEW.HomeTeamName
-            WHEN NEW.HomeTeamScore < NEW.AwayTeamScore THEN NEW.AwayTeamName
-            ELSE NULL
-        END
-        WHERE M.MatchID = NEW.MatchID;
+    -- 2. Decide Winner based on main scores
+    IF NEW.HomeTeamScore > NEW.AwayTeamScore THEN
+        NEW.WinnerTeam := NEW.HomeTeamName;
+    ELSIF NEW.AwayTeamScore > NEW.HomeTeamScore THEN
+        NEW.WinnerTeam := NEW.AwayTeamName;
+    ELSE
+        -- 3. It's a TIE: Culmination of penalty scores logic
+        
+        -- Calculate total penalties for the Home Team
+        SELECT COALESCE(SUM(COALESCE(P.PenaltiesScored, 0)), 0)
+        INTO total_home_penalties
+        FROM Play P
+        JOIN AllEmploymentInfo AE ON P.PlayerID = AE.UsersID
+        WHERE P.MatchID = NEW.MatchID 
+          AND AE.TeamID = NEW.HomeTeamID
+          AND NEW.matchstartdatetime >= AE.StartDate
+          AND (NEW.matchstartdatetime <= AE.EndDate OR AE.EndDate IS NULL);
+
+        -- Calculate total penalties for the Away Team
+        SELECT COALESCE(SUM(COALESCE(P.PenaltiesScored, 0)), 0)
+        INTO total_away_penalties
+        FROM Play P
+        JOIN AllEmploymentInfo AE ON P.PlayerID = AE.UsersID
+        WHERE P.MatchID = NEW.MatchID
+          AND AE.TeamID = NEW.AwayTeamID
+          AND NEW.matchstartdatetime >= AE.StartDate
+          AND (NEW.matchstartdatetime <= AE.EndDate OR AE.EndDate IS NULL);
+
+        -- Decide winner based on penalties
+        IF COALESCE(total_home_penalties, 0) > COALESCE(total_away_penalties, 0) THEN
+            NEW.WinnerTeam := NEW.HomeTeamName;
+        ELSIF COALESCE(total_away_penalties, 0) > COALESCE(total_home_penalties, 0) THEN
+            NEW.WinnerTeam := NEW.AwayTeamName;
+        ELSE
+            -- Still a tie after penalties
+            NEW.WinnerTeam := NULL;
+        END IF;
     END IF;
 
-    RETURN NULL;
+    RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER match_update
-AFTER UPDATE ON Match
+BEFORE UPDATE ON Match
 FOR EACH ROW
 EXECUTE FUNCTION update_match_winner();
+
+-- Trigger to trigger match winner update trigger when a play is updated
+CREATE OR REPLACE FUNCTION trigger_match_recalc_from_play()
+RETURNS TRIGGER AS $$
+BEGIN
+    UPDATE Match 
+    SET MatchID = MatchID -- A "no-op" update that still fires triggers
+    WHERE MatchID = COALESCE(NEW.MatchID, OLD.MatchID);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER play_change_recalc
+AFTER INSERT OR UPDATE OR DELETE ON Play
+FOR EACH ROW
+EXECUTE FUNCTION trigger_match_recalc_from_play();
 
 -- trigger to update a player's employment after accepting an offer ----------
 CREATE OR REPLACE FUNCTION handle_accepted_transfer_offer()

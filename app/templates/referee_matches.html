@@ -141,6 +141,7 @@
         // Hardcoded Referee ID for demo purposes (using session from Flask)
         const REF_ID = {{ session["user_id"] }};
         const API_BASE = '';
+        document.getElementById('date-toggle').checked = true;
 
         // Function to clear filters
         function clearFilters() {
