@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash
 from datetime import datetime, timedelta
+import psycopg2
 
 from db_helper import (
     fetch_transferable_players,
@@ -84,23 +85,43 @@ def view_transfer_market():
 def transfer_offer(player_id):
     if not player_id:
         return redirect(url_for(".view_transfer_market"))
+    
+    player = fetch_player_by_id(player_id)
+    error_message = None
+    
     if request.method == "POST":
         amount = request.form.get("amount")
         available_until = request.form.get("availableUntil")
         offered_end_date = request.form.get("offeredEndDate")
 
-        coach_id = session["user_id"]
-        make_transfer_offer(
-            player_id, coach_id, amount, available_until, offered_end_date
-        )
-        return redirect(
-            url_for(
-                ".view_transfer_market", message="Transfer offer made successfully."
-            )
-        )
+        # Validate offer amount format
+        try:
+            # Try to convert to int - this will fail if it contains periods or other invalid characters
+            amount_int = int(float(str(amount).replace(',', '').replace(' ', '')))
+            if amount_int < 0:
+                error_message = "Offer amount must be a positive number."
+        except (ValueError, TypeError):
+            error_message = "Offer amount format is wrong. Please enter a valid number (e.g., 100000 instead of 100.000)."
+        
+        if not error_message:
+            try:
+                coach_id = session["user_id"]
+                make_transfer_offer(
+                    player_id, coach_id, amount_int, available_until, offered_end_date
+                )
+                return redirect(
+                    url_for(
+                        ".view_transfer_market", message="Transfer offer made successfully."
+                    )
+                )
+            except (psycopg2.DataError, psycopg2.ProgrammingError, ValueError) as e:
+                # Catch database errors related to invalid data format
+                error_message = "Offer amount format is wrong. Please enter a valid number (e.g., 100000 instead of 100.000)."
+            except Exception as e:
+                # Catch any other unexpected errors
+                error_message = f"An error occurred: {str(e)}"
 
-    player = fetch_player_by_id(player_id)
-    return render_template("coach_transfer_offer.html", player=player)
+    return render_template("coach_transfer_offer.html", player=player, error_message=error_message)
 
 
 @coach_bp.route("/view_transfer_offers")
@@ -249,19 +270,23 @@ def create_training():
 @coach_bp.route("/log_injury/<int:player_id>", methods=["GET", "POST"])
 def log_injury(player_id):
     if request.method == "POST":
-        injury_type = request.form.get("injury_type")
-        description = request.form.get("description")
-        recovery_date = request.form.get("recovery_date")
+        try:
+            injury_type = request.form.get("injury_type")
+            description = request.form.get("description")
+            recovery_date = request.form.get("recovery_date")
 
-        log_player_injury_db(
-            player_id,
-            None,  # match_id (antrenmanda olduğu varsayılıyor)
-            None,  # training_id
-            datetime.now(),
-            injury_type,
-            description,
-            recovery_date,
-        )
+            log_player_injury_db(
+                player_id,
+                None,  # match_id (antrenmanda olduğu varsayılıyor)
+                None,  # training_id
+                datetime.now(),
+                injury_type,
+                description,
+                recovery_date,
+            )
+            flash("Injury logged successfully!", "success")
+        except Exception as e:
+            flash(f"Error logging injury: {str(e)}", "error")
         return redirect(url_for("coach.view_team"))
 
     player = fetch_player_by_id(player_id)

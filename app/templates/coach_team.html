@@ -10,18 +10,18 @@
     {% include "_banner.html" %}
     <main class="dashboard-container">
         
+        <!-- Success/Error Popup Notification -->
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
-            <div class="flash-messages" style="margin-bottom: 20px;">
-              {% for category, message in messages %}
-                <div class="alert {{ category }}" style="padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; font-weight: bold;
-                     background-color: {{ '#fee2e2' if category == 'error' else '#dcfce7' }}; 
-                     color: {{ '#991b1b' if category == 'error' else '#166534' }};
-                     border: 1px solid {{ '#f87171' if category == 'error' else '#86efac' }};">
-                  {{ message }}
+            {% for category, message in messages %}
+              <div id="notification-popup" class="notification-popup show {{ category }}">
+                <div class="notification-popup-content">
+                  <div class="notification-popup-icon">{{ '✓' if category == 'success' else '✕' }}</div>
+                  <div class="notification-popup-message">{{ message }}</div>
+                  <button class="notification-popup-close" onclick="closeNotificationPopup()">×</button>
                 </div>
-              {% endfor %}
-            </div>
+              </div>
+            {% endfor %}
           {% endif %}
         {% endwith %}
         <header class="admin-header">
@@ -153,5 +153,139 @@
         </div>
         {% endif %}
     </main>
+    
+    <script>
+        // Notification popup functionality
+        function closeNotificationPopup() {
+            const popup = document.getElementById('notification-popup');
+            if (popup) {
+                popup.classList.remove('show');
+                setTimeout(() => {
+                    popup.remove();
+                }, 300);
+            }
+        }
+        
+        // Auto-dismiss popup after 5 seconds
+        document.addEventListener('DOMContentLoaded', function() {
+            const popup = document.getElementById('notification-popup');
+            if (popup) {
+                setTimeout(() => {
+                    closeNotificationPopup();
+                }, 5000);
+            }
+        });
+    </script>
+    
+    <style>
+        .notification-popup {
+            position: fixed;
+            top: 100px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px);
+            z-index: 10000;
+            opacity: 0;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            pointer-events: none;
+            width: 100%;
+            max-width: 500px;
+            padding: 0 20px;
+            box-sizing: border-box;
+        }
+        
+        .notification-popup.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+            pointer-events: all;
+        }
+        
+        .notification-popup-content {
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            width: 100%;
+            animation: slideDown 0.3s ease;
+        }
+        
+        .notification-popup.success .notification-popup-content {
+            background: linear-gradient(135deg, #10b981, #059669);
+            box-shadow: 0 10px 25px rgba(16, 185, 129, 0.3);
+        }
+        
+        .notification-popup.error .notification-popup-content {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            box-shadow: 0 10px 25px rgba(239, 68, 68, 0.3);
+        }
+        
+        @keyframes slideDown {
+            from {
+                transform: translateY(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        .notification-popup-icon {
+            background: rgba(255, 255, 255, 0.2);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+        
+        .notification-popup-message {
+            flex: 1;
+            font-weight: 600;
+            font-size: 1rem;
+        }
+        
+        .notification-popup-close {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s ease;
+            flex-shrink: 0;
+        }
+        
+        .notification-popup-close:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        @media (max-width: 768px) {
+            .notification-popup {
+                top: 90px;
+                padding: 0 15px;
+            }
+            
+            .notification-popup-content {
+                padding: 0.85rem 1.25rem;
+            }
+            
+            .notification-popup-icon {
+                width: 35px;
+                height: 35px;
+                font-size: 1.3rem;
+            }
+        }
+    </style>
 </body>
 </html>
