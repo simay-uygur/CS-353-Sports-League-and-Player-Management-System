@@ -3632,17 +3632,3 @@ def update_expired_injuries():
                 )
     finally:
         conn.close()
-
-
-def process_past_trainings():
-    """
-    Call the database function to create TrainingAttendance records
-    for all past training sessions that don't have attendance records yet.
-    """
-    conn = get_connection()
-    try:
-        with conn.cursor() as cur:
-            cur.execute("SELECT process_past_trainings();")
-            conn.commit()
-    finally:
-        conn.close()
