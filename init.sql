@@ -1047,7 +1047,7 @@ BEGIN
       
       -- Create new employment record with OfferedEndDate
       INSERT INTO Employment (StartDate, EndDate, Salary)
-      VALUES (NOW(), NEW.OfferedEndDate, COALESCE(v_current_employment_salary, 60000))
+      VALUES (NOW(), NEW.OfferedEndDate, NEW.OfferAmount)
       RETURNING EmploymentID INTO v_new_employment_id;
       
       -- Create new employed record
