@@ -360,7 +360,12 @@
       document.getElementById('removeInjury').style.pointerEvents = 'auto';
       document.getElementById('removeInjury').style.opacity = '0';
 
-      if (play.disciplinarilypunished == true || play.wasinjured == true || play.islocked){
+      // Disabled on conditions
+      const formattedRecovery = new Date(play.matchstartdatetime);
+      const tomorrow = new Date(new Date().setHours(24, 0, 0, 0));
+      let check = false;
+      if (formattedRecovery >= tomorrow) check = true;
+      if (play.disciplinarilypunished == true || play.wasinjured == true || play.islocked || check){
         document.getElementById('goals').disabled = true;
         document.getElementById('assists').disabled = true;
         document.getElementById('saves').disabled = true;
@@ -430,7 +435,11 @@
       document.getElementById('removeInjury').style.opacity = '1';
 
       // Disabled if match locked
-      if (player.disciplinarilypunished == true || player.wasinjured == true || player.islocked){
+      const formattedRecovery = new Date(player.matchstartdatetime);
+      const tomorrow = new Date(new Date().setHours(24, 0, 0, 0));
+      let check = false;
+      if (formattedRecovery >= tomorrow) check = true;
+      if (player.disciplinarilypunished == true || player.wasinjured == true || player.islocked || check){
         document.getElementById('injuryid').disabled = true;
         document.getElementById('injurytype').disabled = true;
         document.getElementById('recoverydate').disabled = true;
@@ -482,7 +491,11 @@
       document.getElementById('removeBan').style.opacity = '1';
 
       // Disable fields if the match is locked
-      if (player.disciplinarilypunished == true || player.wasinjured == true || player.islocked){
+      const formattedRecovery = new Date(player.matchstartdatetime);
+      const tomorrow = new Date(new Date().setHours(24, 0, 0, 0));
+      let check = false;
+      if (formattedRecovery >= tomorrow) check = true;
+      if (player.disciplinarilypunished == true || player.wasinjured == true || player.islocked || check){
         document.getElementById('banenddate').disabled = true;
         document.getElementById('saveBan').disabled = true;
         document.getElementById('saveBan').style.pointerEvents = 'none';

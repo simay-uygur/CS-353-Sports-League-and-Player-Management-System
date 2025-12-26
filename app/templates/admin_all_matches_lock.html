@@ -184,7 +184,7 @@
                                         {% endif %}
                                     </td>
                                     <td class="match-action">
-                                        {% if (true || group_data.type == 'league') %}
+                                        {% if group_data.type == 'league' %}
                                             <!-- Only show lock/unlock button for league matches -->
                                             <form method="POST" class="action-form">
                                                 {% if match.islocked %}
@@ -201,10 +201,10 @@
                                                     </button>
                                                 {% endif %}
                                             </form>
-                                        <!--{% else %}
-                                            <-- No action for tournament matches ->
+                                        {% else %}
+                                            <!-- No action for tournament matches -->
                                             <span class="text-muted">View Only</span>
-                                        {% endif %}-->
+                                        {% endif %}
                                     </td>
                                 </tr>
                                 {% endfor %}
