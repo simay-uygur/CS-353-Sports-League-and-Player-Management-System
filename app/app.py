@@ -36,19 +36,17 @@ app.register_blueprint(artunsPart)
 
 @app.route('/referee/match/<int:match_id>')
 def view_match_entry(match_id):
-    # Corresponds to Figure 9, 10, 11
     return render_template('match_entry.html', match_id=match_id)
 
 
+#Should be a development artifact
 @app.route('/ui/admin')
 def view_admin_dashboard():
-    # Corresponds to Figure 12
     return render_template('admin.html')
 
-
+#Should be a development artifact
 @app.route('/ui/stats')
 def view_stats():
-    # Corresponds to Figure 13
     return render_template('stats.html')
 
 # ========================================================================
@@ -219,8 +217,8 @@ def login():
         remember = request.form.get("remember") == "on"
         
         try:
-            #user = _authenticate_user(email, password)
-            user = _authenticate_user_bypass(email, password)
+            user = _authenticate_user(email, password)
+            #user = _authenticate_user_bypass(email, password)
             session["user_id"] = user["id"]
             session["role"] = user["role"]
 
