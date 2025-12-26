@@ -62,7 +62,7 @@
                 <div class="bracket-card">
                     {% for level, rounds in matches_by_round.items()|sort %}
                     <div class="bracket-level">
-                        <h3>Level {{ level }}{% if level == 1 %} (Root){% endif %}</h3>
+                        <h3>Level {{ level }}</h3>
                         <div class="level-rounds">
                             {% for round_data in rounds %}
                             <div class="round-box">
