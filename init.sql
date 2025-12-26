@@ -1631,17 +1631,17 @@ WITH new_players AS (
     INSERT INTO Users (FirstName, LastName, Email, HashedPassword, Salt, BirthDate, Role, Nationality)
     VALUES 
     -- Red Team Players
-    ('John', 'Striker', 'p_red1@example.com', 'hash', 'salt', '1998-01-01', 'player', 'USA'),
-    ('Mike', 'Mid', 'p_red2@example.com', 'hash', 'salt', '1999-01-01', 'player', 'USA'),
-    ('Steve', 'Defender', 'p_red3@example.com', 'hash', 'salt', '1997-01-01', 'player', 'USA'),
-    ('Dave', 'Goalie', 'p_red4@example.com', 'hash', 'salt', '1996-01-01', 'player', 'USA'),
-    ('Tom', 'Bench', 'p_red5@example.com', 'hash', 'salt', '2000-01-01', 'player', 'USA'),
+    ('John', 'Striker', 'p_red1@example.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1998-01-01', 'player', 'USA'),
+    ('Mike', 'Mid', 'p_red2@example.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1999-01-01', 'player', 'USA'),
+    ('Steve', 'Defender', 'p_red3@example.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1997-01-01', 'player', 'USA'),
+    ('Dave', 'Goalie', 'p_red4@example.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1996-01-01', 'player', 'USA'),
+    ('Tom', 'Bench', 'p_red5@example.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '2000-01-01', 'player', 'USA'),
     -- Blue Team Players
-    ('Alex', 'Forward', 'p_blue1@example.com', 'hash', 'salt', '1998-05-01', 'player', 'UK'),
-    ('Ben', 'Winger', 'p_blue2@example.com', 'hash', 'salt', '1999-05-01', 'player', 'UK'),
-    ('Chris', 'Back', 'p_blue3@example.com', 'hash', 'salt', '1997-05-01', 'player', 'UK'),
-    ('Dan', 'Keeper', 'p_blue4@example.com', 'hash', 'salt', '1996-05-01', 'player', 'UK'),
-    ('Eric', 'Sub', 'p_blue5@example.com', 'hash', 'salt', '2000-05-01', 'player', 'UK')
+    ('Alex', 'Forward', 'p_blue1@example.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1998-05-01', 'player', 'UK'),
+    ('Ben', 'Winger', 'p_blue2@example.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1999-05-01', 'player', 'UK'),
+    ('Chris', 'Back', 'p_blue3@example.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1997-05-01', 'player', 'UK'),
+    ('Dan', 'Keeper', 'p_blue4@example.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1996-05-01', 'player', 'UK'),
+    ('Eric', 'Sub', 'p_blue5@example.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '2000-05-01', 'player', 'UK')
     RETURNING UsersID, Email
 ),
 -- Insert into Player Subtype
@@ -1802,8 +1802,8 @@ BEGIN;
 
 INSERT INTO Users (FirstName, LastName, Email, HashedPassword, Salt, BirthDate, Role, Nationality)
 VALUES 
-('Leonidas', 'Sparta', 'owner.sparta@test.com', 'hash', 'salt', '1980-01-01', 'team_owner', 'Greece'),
-('Priam', 'Troy', 'owner.troy@test.com', 'hash', 'salt', '1980-01-01', 'team_owner', 'Turkey')
+('Leonidas', 'Sparta', 'owner.sparta@test.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1980-01-01', 'team_owner', 'Greece'),
+('Priam', 'Troy', 'owner.troy@test.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1980-01-01', 'team_owner', 'Turkey')
 ON CONFLICT (Email) DO NOTHING;
 
 INSERT INTO TeamOwner (UsersID, NetWorth)
@@ -1824,31 +1824,31 @@ ON CONFLICT (TeamName) DO NOTHING;
 
 -- --- SPARTANS (Home) ---
 INSERT INTO Users (FirstName, LastName, Email, HashedPassword, Salt, BirthDate, Role, Nationality) VALUES 
-('Achilles', 'Hero', 'achilles@sparta.com', 'hash', 'salt', '1998-01-01', 'player', 'Greece'),
-('Odysseus', 'Tactician', 'odysseus@sparta.com', 'hash', 'salt', '1998-01-01', 'player', 'Greece'),
-('Ajax', 'Greater', 'ajax1@sparta.com', 'hash', 'salt', '1995-01-01', 'player', 'Greece'),
-('Menelaus', 'King', 'menelaus@sparta.com', 'hash', 'salt', '1994-01-01', 'player', 'Greece'),
-('Agamemnon', 'Commander', 'agamemnon@sparta.com', 'hash', 'salt', '1993-01-01', 'player', 'Greece'),
-('Patroclus', 'Loyal', 'patroclus@sparta.com', 'hash', 'salt', '1996-01-01', 'player', 'Greece'),
-('Diomedes', 'Strong', 'diomedes@sparta.com', 'hash', 'salt', '1997-01-01', 'player', 'Greece'),
-('Nestor', 'Elder', 'nestor@sparta.com', 'hash', 'salt', '1980-01-01', 'player', 'Greece'),
-('Teucer', 'Archer', 'teucer@sparta.com', 'hash', 'salt', '1998-01-01', 'player', 'Greece'),
-('Antilochus', 'Swift', 'antilochus@sparta.com', 'hash', 'salt', '1999-01-01', 'player', 'Greece'),
-('Idomeneus', 'Spear', 'idomeneus@sparta.com', 'hash', 'salt', '1992-01-01', 'player', 'Greece');
+('Achilles', 'Hero', 'achilles@sparta.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1998-01-01', 'player', 'Greece'),
+('Odysseus', 'Tactician', 'odysseus@sparta.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1998-01-01', 'player', 'Greece'),
+('Ajax', 'Greater', 'ajax1@sparta.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1995-01-01', 'player', 'Greece'),
+('Menelaus', 'King', 'menelaus@sparta.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1994-01-01', 'player', 'Greece'),
+('Agamemnon', 'Commander', 'agamemnon@sparta.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1993-01-01', 'player', 'Greece'),
+('Patroclus', 'Loyal', 'patroclus@sparta.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1996-01-01', 'player', 'Greece'),
+('Diomedes', 'Strong', 'diomedes@sparta.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1997-01-01', 'player', 'Greece'),
+('Nestor', 'Elder', 'nestor@sparta.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1980-01-01', 'player', 'Greece'),
+('Teucer', 'Archer', 'teucer@sparta.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1998-01-01', 'player', 'Greece'),
+('Antilochus', 'Swift', 'antilochus@sparta.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1999-01-01', 'player', 'Greece'),
+('Idomeneus', 'Spear', 'idomeneus@sparta.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1992-01-01', 'player', 'Greece');
 
 -- --- TROJANS (Away) ---
 INSERT INTO Users (FirstName, LastName, Email, HashedPassword, Salt, BirthDate, Role, Nationality) VALUES 
-('Hector', 'Prince', 'hector@troy.com', 'hash', 'salt', '1998-01-01', 'player', 'Turkey'),
-('Paris', 'Archer', 'paris@troy.com', 'hash', 'salt', '1998-01-01', 'player', 'Turkey'),
-('Aeneas', 'Founder', 'aeneas@troy.com', 'hash', 'salt', '1995-01-01', 'player', 'Turkey'),
-('Sarpedon', 'Leader', 'sarpedon@troy.com', 'hash', 'salt', '1994-01-01', 'player', 'Turkey'),
-('Glaucus', 'Noble', 'glaucus@troy.com', 'hash', 'salt', '1997-01-01', 'player', 'Turkey'),
-('Pandarus', 'Bowman', 'pandarus@troy.com', 'hash', 'salt', '1998-01-01', 'player', 'Turkey'),
-('Helenus', 'Seer', 'helenus@troy.com', 'hash', 'salt', '1990-01-01', 'player', 'Turkey'),
-('Deiphobus', 'Warrior', 'deiphobus@troy.com', 'hash', 'salt', '1993-01-01', 'player', 'Turkey'),
-('Polydamas', 'Wise', 'polydamas@troy.com', 'hash', 'salt', '1996-01-01', 'player', 'Turkey'),
-('Agenor', 'Stout', 'agenor@troy.com', 'hash', 'salt', '1997-01-01', 'player', 'Turkey'),
-('Dolon', 'Spy', 'dolon@troy.com', 'hash', 'salt', '1999-01-01', 'player', 'Turkey');
+('Hector', 'Prince', 'hector@troy.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1998-01-01', 'player', 'Turkey'),
+('Paris', 'Archer', 'paris@troy.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1998-01-01', 'player', 'Turkey'),
+('Aeneas', 'Founder', 'aeneas@troy.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1995-01-01', 'player', 'Turkey'),
+('Sarpedon', 'Leader', 'sarpedon@troy.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1994-01-01', 'player', 'Turkey'),
+('Glaucus', 'Noble', 'glaucus@troy.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1997-01-01', 'player', 'Turkey'),
+('Pandarus', 'Bowman', 'pandarus@troy.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1998-01-01', 'player', 'Turkey'),
+('Helenus', 'Seer', 'helenus@troy.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1990-01-01', 'player', 'Turkey'),
+('Deiphobus', 'Warrior', 'deiphobus@troy.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1993-01-01', 'player', 'Turkey'),
+('Polydamas', 'Wise', 'polydamas@troy.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1996-01-01', 'player', 'Turkey'),
+('Agenor', 'Stout', 'agenor@troy.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1997-01-01', 'player', 'Turkey'),
+('Dolon', 'Spy', 'dolon@troy.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1999-01-01', 'player', 'Turkey');
 
 -- Link all to Employee and Team
 INSERT INTO Employee (UsersID, TeamID) 
@@ -1952,7 +1952,7 @@ VALUES ((SELECT UsersID FROM Users WHERE Email='paris@troy.com'), '2025-06-15', 
 -- 6. SETUP REFEREE
 -- ==================================================================
 INSERT INTO Users (FirstName, LastName, Email, HashedPassword, Salt, BirthDate, Role, Nationality)
-VALUES ('Homer', 'Referee', 'ref.ancient@test.com', 'hash', 'salt', '1985-05-20', 'referee', 'Ionia')
+VALUES ('Homer', 'Referee', 'ref.ancient@test.com', 'pbkdf2:sha256:260000$95IYv4bepWZLuX57$13e40434069c1e720f75f2b24a069f2adc2d345f0ba40bc2ea1e5aa3591db283', 'dd7ba3ba3009ae20ca6c8c4be0d22d3e', '1985-05-20', 'referee', 'Ionia')
 ON CONFLICT (Email) DO NOTHING;
 
 INSERT INTO Referee (UsersID, Certification)
