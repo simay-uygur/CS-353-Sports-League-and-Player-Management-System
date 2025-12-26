@@ -1898,8 +1898,8 @@ INSERT INTO Match (
 VALUES (
     (SELECT TeamID FROM Team WHERE TeamName='Spartans FC'),
     (SELECT TeamID FROM Team WHERE TeamName='Trojans United'),
-    CURRENT_DATE + INTERVAL '20 hours',
-    CURRENT_DATE + INTERVAL '22 hours',
+    '2025-06-15'::TIMESTAMP + INTERVAL '20 hours',
+    '2025-06-15'::TIMESTAMP + INTERVAL '22 hours',
     'Thermopylae Arena',
     'Spartans FC',
     'Trojans United',

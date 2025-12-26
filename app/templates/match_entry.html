@@ -530,6 +530,7 @@
       if (document.getElementById('startTime').value < 0 || document.getElementById('startTime').value > 90 ) return alert("Start time should be larger than -1 and less than 91");
       if (document.getElementById('stopTime').value < 0 || document.getElementById('stopTime').value > 90 ) return alert("Stop time should be larger than -1 and less than 91");
       if (document.getElementById('startTime').value > document.getElementById('stopTime').value ) return alert("Stop time needs to come after start time");
+      if (document.getElementById('red').value > 1) return alert('Player cannot have multiple red cards');
 
 
       const payload = {
@@ -588,6 +589,7 @@
       const formattedRecovery = new Date(recoveryDate);
       const tomorrow = new Date(new Date().setHours(24, 0, 0, 0));
       if (recoveryDate <= document.getElementById('injurydate').value || formattedRecovery < tomorrow) return alert("Set a later recovery date");
+
 
       const payload = {
         injuryid: document.getElementById('injuryid').value,
