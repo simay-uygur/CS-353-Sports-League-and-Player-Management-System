@@ -633,11 +633,11 @@ BEGIN
     ----------------------------------------------------------------
     -- 6. Check if both children have winners AND are locked
     ----------------------------------------------------------------
-    SELECT winnerteam INTO child1_winner
-    FROM AllTournamentMatchInfo WHERE matchid = child1_match AND islocked = TRUE;
+    SELECT WinnerTeam INTO child1_winner
+    FROM Match WHERE MatchID = child1_match AND IsLocked = TRUE;
 
-    SELECT winnerteam INTO child2_winner
-    FROM AllTournamentMatchInfo WHERE matchid = child2_match AND islocked = TRUE;
+    SELECT WinnerTeam INTO child2_winner
+    FROM Match WHERE MatchID = child2_match AND IsLocked = TRUE;
 
     IF child1_winner IS NULL OR child2_winner IS NULL THEN
         RETURN NULL;
@@ -656,7 +656,7 @@ BEGIN
         (SELECT TeamID FROM Team WHERE TeamName = child2_winner),
         NOW() + INTERVAL '1 week',
         child1_winner, child2_winner,
-        NULL, NULL, NULL, TRUE
+        NULL, NULL, NULL, FALSE
     )
     RETURNING MatchID INTO new_parent_match_id;
 
@@ -680,7 +680,7 @@ $$ LANGUAGE plpgsql;
 
 
 CREATE TRIGGER trg_fill_parent_match
-AFTER UPDATE OF winnerteam ON Match
+AFTER UPDATE OF winnerteam, islocked ON Match
 FOR EACH ROW
 EXECUTE FUNCTION fill_parent_match();
 
@@ -1050,6 +1050,7 @@ DECLARE
     v_player_id INT;
     v_team_id INT;
 BEGIN
+
     -- Only process if EndDate is being set to NOW() or a past date
     -- and it wasn't already in the past
     IF NEW.EndDate <= NOW() AND (OLD.EndDate IS NULL OR OLD.EndDate > NOW()) THEN
@@ -1060,6 +1061,10 @@ BEGIN
         WHERE em.EmploymentID = NEW.EmploymentID
         LIMIT 1;
         
+        IF v_player_id NOT IN (SELECT UsersID FROM Player) THEN
+            RETURN NEW; -- Not a player, nothing to do
+        END IF;
+
         -- Only proceed if we found the employment record
         IF v_player_id IS NOT NULL AND v_team_id IS NOT NULL THEN
             -- Delete Play records for future matches where the player was on this team
@@ -1102,6 +1107,10 @@ BEGIN
     
     v_player_id := NEW.UsersID;
     v_team_id := NEW.TeamID;
+
+    IF v_player_id NOT IN (SELECT UsersID FROM Player) THEN
+        RETURN NEW; -- Not a player, nothing to do
+    END IF;
     
     -- Only process if employment is active (not in the past)
     IF v_start_date IS NOT NULL AND v_end_date IS NOT NULL AND v_end_date >= NOW() THEN
